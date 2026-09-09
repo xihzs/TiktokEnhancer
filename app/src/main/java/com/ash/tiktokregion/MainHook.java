@@ -13,8 +13,10 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -28,6 +30,17 @@ public class MainHook implements IXposedHookLoadPackage {
 
     private static final String TAG = "TikTokRegion";
     public static final String MODULE_PACKAGE = "com.ash.tiktokregion";
+
+    public static void log(String msg) {
+        Log.i(TAG, msg);
+        try {
+            XposedBridge.log(TAG + ": " + msg);
+        } catch (Throwable ignored) {}
+    }
+
+    public static void logD(String msg) {
+        Log.d(TAG, msg);
+    }
 
     public static final String PACKAGE_GLOBAL = "com.zhiliaoapp.musically";
     public static final String PACKAGE_ASIA = "com.ss.android.ugc.trill";
@@ -135,11 +148,13 @@ public class MainHook implements IXposedHookLoadPackage {
         if (!isChina) {
             hookCronetNetworkStack(lpparam.classLoader);
             hookClientAIFeatures(lpparam.classLoader);
+            hookNetworkCommonParams(lpparam.classLoader);
             hookTelephonyManager(lpparam.classLoader);
             hookSubscriptionManager(lpparam.classLoader);
             hookSubscriptionInfo(lpparam.classLoader);
             hookSystemProperties(lpparam.classLoader);
             hookLocale(lpparam.classLoader);
+            hookUrlQueryParams(lpparam.classLoader);
         } else {
             XposedBridge.log(TAG + ": TikTok China (Douyin) detected - skipping telephony, locale, and network region spoofing");
         }
@@ -162,10 +177,10 @@ public class MainHook implements IXposedHookLoadPackage {
                                 param.setResult(true);
                             }
                         });
-                Log.i(TAG, "Hooked isModuleActive() -> true");
+                log("Hooked isModuleActive() -> true");
             }
         } catch (Throwable t) {
-            Log.e(TAG, "Failed hooking isModuleActive", t);
+            logD("Failed hooking isModuleActive: " + t.getMessage());
         }
     }
 
@@ -272,6 +287,8 @@ public class MainHook implements IXposedHookLoadPackage {
             hookSettingServiceImplClass(clazz);
         } else if ("X.03IJ".equals(name) || "LX.03IJ".equals(name)) {
             hookParamMapClass(clazz);
+        } else if ("X.03im".equals(name) || "LX.03im".equals(name)) {
+            hookNetworkCommonParamsClass(clazz);
         } else if ("com.ss.android.ugc.aweme.watermark.WaterMarkServiceImpl".equals(name)
                 || "com.ss.android.ugc.aweme.services.watermark.WaterMarkBuilder".equals(name)) {
             WatermarkHook.hookWatermarkServiceClass(clazz);
@@ -280,10 +297,25 @@ public class MainHook implements IXposedHookLoadPackage {
         } else if ("com.ss.android.ugc.aweme.feed.model.FeedItemList".equals(name)) {
             AdsHook.hookFeedItemListClass(clazz);
         } else if ("com.ss.android.ugc.aweme.feed.panel.BaseListFragmentPanel".equals(name)
-                || "com.ss.android.ugc.aweme.feed.panel.FullFeedFragmentPanel".equals(name)) {
+                || "com.ss.android.ugc.aweme.feed.panel.FullFeedFragmentPanel".equals(name)
+                || "com.ss.android.ugc.aweme.feed.panel.RecommendFeedFragmentPanel".equals(name)
+                || "com.ss.android.ugc.aweme.feed.panel.FollowFeedFragmentPanelMT".equals(name)
+                || "com.ss.android.ugc.aweme.stemfeed.panel.StemFeedFragmentPanel".equals(name)
+                || "com.ss.android.ugc.aweme.repostfeed.feed.RepostFeedPanel".equals(name)) {
             AdsHook.hookFeedPanel(clazz.getClassLoader());
         } else if ("com.ss.android.ugc.aweme.feed.model.Aweme".equals(name)) {
             WatermarkHook.hookAwemeClass(clazz);
+        } else if ("com.ss.android.ugc.aweme.follow.presenter.FollowFeedList".equals(name)) {
+            AdsHook.hookFollowFeedListClass(clazz);
+        } else if ("com.ss.android.ugc.aweme.friendstab.api.FriendsFeedResponse".equals(name)) {
+            AdsHook.hookFriendsFeedResponseClass(clazz);
+        } else if (!isChinaPackage()) {
+            if (!sParamMapHooked) {
+                tryHookAsParamMapClass(clazz);
+            }
+            if (!sNetworkParamsHooked) {
+                tryHookAsNetworkParamsClass(clazz);
+            }
         }
     }
 
@@ -293,6 +325,8 @@ public class MainHook implements IXposedHookLoadPackage {
         if (!isChina) {
             hookCronetNetworkStack(classLoader);
             hookClientAIFeatures(classLoader);
+            hookNetworkCommonParams(classLoader);
+            hookUrlQueryParams(classLoader);
         }
         WatermarkHook.hook(classLoader);
         AdsHook.hook(classLoader);
@@ -343,7 +377,7 @@ public class MainHook implements IXposedHookLoadPackage {
                     sBlockCountries = bundle.getBoolean(ConfigProvider.KEY_BLOCK_COUNTRIES, false);
                     sBlockedCountries = parseIsoSet(bundle.getString(ConfigProvider.KEY_BLOCKED_COUNTRY_LIST, ""));
 
-                    Log.i(TAG, "Config loaded via ContentProvider IPC: enabled=" + sEnabled
+                    log("Config loaded via ContentProvider IPC: enabled=" + sEnabled
                             + ", country=" + sCountryIso + ", op=" + sOperatorName + " (" + sOperatorMccMnc + ")"
                             + ", forceRegion=" + sForceRegion + ", strictForceRegion=" + sStrictForceRegion
                             + ", blockCountries=" + sBlockCountries + " (" + sBlockedCountries.size() + ")"
@@ -415,7 +449,7 @@ public class MainHook implements IXposedHookLoadPackage {
             sLocaleCountry = preset.getLocaleCountry();
             sCachedSpoofedLocale = new Locale(sLocaleLang, sLocaleCountry);
 
-            Log.i(TAG, "Config loaded via XSharedPreferences: enabled=" + sEnabled
+            log("Config loaded via XSharedPreferences: enabled=" + sEnabled
                     + ", country=" + sCountryIso + ", forceRegion=" + sForceRegion
                     + ", blockCountries=" + sBlockCountries + " (" + sBlockedCountries.size() + ")");
         } catch (Throwable t) {
@@ -496,18 +530,18 @@ public class MainHook implements IXposedHookLoadPackage {
                                 Object original = param.args[0];
                                 if (!Proxy.isProxyClass(original.getClass())) {
                                     param.args[0] = createCronetProxy(original, providerInterface);
-                                    Log.i(TAG, "Wrapped TTNetInit.setCronetDepend in dynamic proxy");
+                                    log("Wrapped TTNetInit.setCronetDepend in dynamic proxy");
                                 }
                             }
                         }
                     });
                     sTTNetInitHooked = true;
-                    Log.i(TAG, "Hooked TTNetInit.setCronetDepend successfully");
+                    log("Hooked TTNetInit.setCronetDepend successfully");
                 }
             }
             checkAndProxyExistingCronetProvider(ttnetInitClass);
         } catch (Throwable t) {
-            Log.d(TAG, "hookTTNetInitClass failed: " + t.getMessage());
+            logD("hookTTNetInitClass failed: " + t.getMessage());
         }
     }
 
@@ -520,7 +554,7 @@ public class MainHook implements IXposedHookLoadPackage {
                 if (current != null && !Proxy.isProxyClass(current.getClass())) {
                     Class<?> providerInterface = f.getType();
                     f.set(null, createCronetProxy(current, providerInterface));
-                    Log.i(TAG, "Replaced existing TTNetInit.sCronetProvider with dynamic proxy");
+                    log("Replaced existing TTNetInit.sCronetProvider with dynamic proxy");
                 }
             }
         } catch (Throwable ignored) {}
@@ -560,6 +594,36 @@ public class MainHook implements IXposedHookLoadPackage {
 
     private static volatile boolean sFeatureProducerHooked = false;
     private static volatile boolean sParamMapHooked = false;
+    private static volatile boolean sNetworkParamsHooked = false;
+
+    // Known obfuscated class names for the param map across TikTok versions
+    private static final String[] PARAM_MAP_CLASS_NAMES = {
+            "X.03IJ", "LX.03IJ",
+            "X.04IJ", "LX.04IJ",
+            "X.03IK", "LX.03IK",
+            "X.04IK", "LX.04IK",
+            "X.03IL", "LX.03IL",
+            "X.04IL", "LX.04IL",
+    };
+
+    // Known obfuscated class names for TTNet network common parameter builders
+    private static final String[] NETWORK_COMMON_PARAMS_CLASSES = {
+            "X.03im", "LX.03im",
+            "X.04im", "LX.04im",
+            "X.03in", "LX.03in",
+            "X.04in", "LX.04in",
+    };
+
+    public static void hookNetworkCommonParams(ClassLoader classLoader) {
+        if (classLoader == null || sNetworkParamsHooked) return;
+        for (String className : NETWORK_COMMON_PARAMS_CLASSES) {
+            Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
+            if (clazz != null) {
+                hookNetworkCommonParamsClass(clazz);
+                if (sNetworkParamsHooked) break;
+            }
+        }
+    }
 
     public static void hookClientAIFeatures(ClassLoader classLoader) {
         if (classLoader == null) return;
@@ -574,12 +638,18 @@ public class MainHook implements IXposedHookLoadPackage {
             hookSettingServiceImplClass(settingServiceClass);
         }
 
-        Class<?> paramMapClass = XposedHelpers.findClassIfExists("X.03IJ", classLoader);
-        if (paramMapClass == null) {
-            paramMapClass = XposedHelpers.findClassIfExists("LX.03IJ", classLoader);
+        if (!sParamMapHooked) {
+            for (String className : PARAM_MAP_CLASS_NAMES) {
+                Class<?> paramMapClass = XposedHelpers.findClassIfExists(className, classLoader);
+                if (paramMapClass != null) {
+                    hookParamMapClass(paramMapClass);
+                    if (sParamMapHooked) break;
+                }
+            }
         }
-        if (paramMapClass != null) {
-            hookParamMapClass(paramMapClass);
+
+        if (!sNetworkParamsHooked) {
+            hookNetworkCommonParams(classLoader);
         }
     }
 
@@ -598,73 +668,604 @@ public class MainHook implements IXposedHookLoadPackage {
                         }
                     }
                     if (featureKey != null) {
-                        if ("f_global_carrier_region_v2".equals(featureKey)
-                                || "f_global_sys_region".equals(featureKey)
-                                || "f_global_account_region".equals(featureKey)
-                                || "f_global_residence".equals(featureKey)) {
-                            param.setResult(sCountryIso.toUpperCase(Locale.ROOT));
-                        } else if ("f_global_mcc_mnc".equals(featureKey)) {
-                            param.setResult(sOperatorMccMnc);
+                        String upper = sCountryIso.toUpperCase(Locale.ROOT);
+                        switch (featureKey) {
+                            // Region keys — all return target country ISO
+                            case "f_global_carrier_region":
+                            case "f_global_carrier_region_v2":
+                            case "f_global_sys_region":
+                            case "f_global_account_region":
+                            case "f_global_residence":
+                            case "f_global_region":
+                            case "f_global_op_region":
+                            case "f_global_current_region":
+                            case "f_global_store_region":
+                                param.setResult(upper);
+                                break;
+                            // MCC/MNC
+                            case "f_global_mcc_mnc":
+                                param.setResult(sOperatorMccMnc);
+                                break;
+                            // Anti-spoof detection — return empty to suppress
+                            case "f_global_fake_region":
+                                param.setResult("");
+                                break;
+                            // Timezone spoofing
+                            case "f_global_timezone":
+                            case "f_global_timezone_name":
+                            case "f_global_timezone_display":
+                                String tz = getTimezoneForCountry(sCountryIso);
+                                if (tz != null) param.setResult(tz);
+                                break;
+                            case "f_global_timezone_offset":
+                                String tzOff = getTimezoneOffsetForCountry(sCountryIso);
+                                if (tzOff != null) param.setResult(tzOff);
+                                break;
+                            // Language keys — spoof if locale spoofing enabled
+                            case "f_global_language":
+                            case "f_global_app_language":
+                            case "f_global_content_language":
+                            case "f_global_keyboard_language":
+                                if (sSpoofLocale) {
+                                    param.setResult(sLocaleLang);
+                                }
+                                break;
+                            case "f_global_locale":
+                                if (sSpoofLocale) {
+                                    param.setResult(sLocaleLang + "-" + sLocaleCountry);
+                                }
+                                break;
                         }
                     }
                 }
             };
 
             for (Method m : fpClass.getDeclaredMethods()) {
-                if (m.getName().startsWith("getStringFeature")) {
+                if (m.getName().startsWith("getStringFeature") || m.getName().startsWith("getFeature")) {
                     XposedBridge.hookMethod(m, featureHook);
                 }
             }
             sFeatureProducerHooked = true;
-            Log.i(TAG, "Hooked FeatureProducer.getStringFeature for ClientAI parameters");
+            log("Hooked FeatureProducer for ClientAI parameters (region + timezone + language)");
         } catch (Throwable t) {
-            Log.d(TAG, "hookFeatureProducerClass failed: " + t.getMessage());
+            logD("hookFeatureProducerClass failed: " + t.getMessage());
         }
     }
 
+    private static volatile boolean sSettingServiceHooked = false;
+
     public static void hookSettingServiceImplClass(Class<?> settingServiceClass) {
-        if (settingServiceClass == null) return;
+        if (settingServiceClass == null || sSettingServiceHooked) return;
+        sSettingServiceHooked = true;
         try {
             for (Method m : settingServiceClass.getDeclaredMethods()) {
                 if ("installCommonParams".equals(m.getName()) && m.getParameterTypes().length == 0) {
                     XposedBridge.hookMethod(m, new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) {
-                            // Handled by LX.03IJ map hook
+                            if (!sParamMapHooked) {
+                                try {
+                                    discoverParamMapFromSettingService(param.thisObject);
+                                } catch (Throwable t) {
+                                    logD("Dynamic param map discovery failed: " + t.getMessage());
+                                }
+                            }
+                            if (!sNetworkParamsHooked && param.thisObject != null) {
+                                ClassLoader cl = param.thisObject.getClass().getClassLoader();
+                                if (cl != null) {
+                                    hookNetworkCommonParams(cl);
+                                }
+                            }
                         }
                     });
+                    log("Hooked SettingServiceImpl.installCommonParams for dynamic param map discovery");
                 }
             }
         } catch (Throwable ignored) {}
     }
 
+    private static void discoverParamMapFromSettingService(Object settingService) {
+        if (settingService == null || sParamMapHooked) return;
+        try {
+            // Scan all fields of the SettingServiceImpl for objects that contain
+            // a method with (String, String) params — this is the param map.
+            Class<?> serviceClass = settingService.getClass();
+            for (Field field : serviceClass.getDeclaredFields()) {
+                field.setAccessible(true);
+                Object fieldValue = field.get(settingService);
+                if (fieldValue == null) continue;
+                Class<?> fieldClass = fieldValue.getClass();
+                // Check ALL methods (static and instance) with (String, String) signature
+                for (Method m : fieldClass.getDeclaredMethods()) {
+                    if (m.getParameterTypes().length == 2
+                            && m.getParameterTypes()[0] == String.class
+                            && m.getParameterTypes()[1] == String.class) {
+                        hookParamMapMethod(fieldClass, m.getName());
+                        if (sParamMapHooked) {
+                            log("Dynamically discovered param map class: " + fieldClass.getName() + "." + m.getName());
+                            return;
+                        }
+                    }
+                }
+            }
+            // Also check static fields on the service class itself
+            for (Field field : serviceClass.getDeclaredFields()) {
+                if (!java.lang.reflect.Modifier.isStatic(field.getModifiers())) continue;
+                field.setAccessible(true);
+                Object fieldValue = field.get(null);
+                if (fieldValue == null) continue;
+                Class<?> fieldClass = fieldValue.getClass();
+                for (Method m : fieldClass.getDeclaredMethods()) {
+                    if (m.getParameterTypes().length == 2
+                            && m.getParameterTypes()[0] == String.class
+                            && m.getParameterTypes()[1] == String.class) {
+                        hookParamMapMethod(fieldClass, m.getName());
+                        if (sParamMapHooked) {
+                            log("Dynamically discovered param map class (static): " + fieldClass.getName() + "." + m.getName());
+                            return;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            logD("discoverParamMapFromSettingService error: " + t.getMessage());
+        }
+    }
+
+    public static void injectSpoofedNetworkParams(Map<String, String> map) {
+        if (map == null || !sEnabled) return;
+        String upper = sCountryIso.toUpperCase(Locale.ROOT);
+        map.put("carrier_region", upper);
+        map.put("carrier_region1", upper);
+        map.put("carrier_region_v2", upper);
+        map.put("sys_region", upper);
+        map.put("account_region", upper);
+        map.put("residence", upper);
+        map.put("region", upper);
+        map.put("app_region", upper);
+        map.put("device_region", upper);
+        map.put("user_region", upper);
+        map.put("current_region", upper);
+        map.put("op_region", upper);
+        map.put("store_region", upper);
+        map.put("mcc_mnc", sOperatorMccMnc);
+
+        String tz = getTimezoneForCountry(sCountryIso);
+        if (tz != null) map.put("timezone_name", tz);
+        String tzOff = getTimezoneOffsetForCountry(sCountryIso);
+        if (tzOff != null) map.put("timezone_offset", tzOff);
+
+        if (sSpoofLocale) {
+            map.put("language", sLocaleLang);
+            map.put("app_language", sLocaleLang);
+            map.put("content_language", sLocaleLang);
+        }
+    }
+
+    public static void hookNetworkCommonParamsClass(Class<?> clazz) {
+        if (clazz == null || sNetworkParamsHooked) return;
+        try {
+            for (Method m : clazz.getDeclaredMethods()) {
+                Class<?>[] pTypes = m.getParameterTypes();
+                // Match LIZIZ(Context, boolean, Map, ...) - TTNet common params population
+                if (pTypes.length >= 3
+                        && Context.class.isAssignableFrom(pTypes[0])
+                        && (pTypes[1] == boolean.class || pTypes[1] == Boolean.class)
+                        && Map.class.isAssignableFrom(pTypes[2])) {
+                    XposedBridge.hookMethod(m, new XC_MethodHook() {
+                        @Override
+                        @SuppressWarnings("unchecked")
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (!sEnabled) return;
+                            try {
+                                Map<String, String> map = (Map<String, String>) param.args[2];
+                                if (map != null) {
+                                    injectSpoofedNetworkParams(map);
+                                }
+                            } catch (Throwable ignored) {}
+                        }
+                    });
+                    sNetworkParamsHooked = true;
+                    log("Hooked TTNet common params: " + clazz.getName() + "." + m.getName() + "(Context, boolean, Map, ...)");
+                }
+
+                // Match LIZ(Context, StringBuilder, boolean, ...) - TTNet URL builder
+                if (pTypes.length >= 3
+                        && Context.class.isAssignableFrom(pTypes[0])
+                        && StringBuilder.class.isAssignableFrom(pTypes[1])
+                        && (pTypes[2] == boolean.class || pTypes[2] == Boolean.class)
+                        && m.getReturnType() == String.class) {
+                    XposedBridge.hookMethod(m, new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (!sEnabled) return;
+                            try {
+                                String resultUrl = (String) param.getResult();
+                                if (resultUrl != null && !resultUrl.isEmpty()) {
+                                    String rewritten = rewriteQueryString(resultUrl);
+                                    if (!resultUrl.equals(rewritten)) {
+                                        param.setResult(rewritten);
+                                        StringBuilder sb = (StringBuilder) param.args[1];
+                                        if (sb != null) {
+                                            sb.delete(0, sb.length());
+                                            sb.append(rewritten);
+                                        }
+                                    }
+                                }
+                            } catch (Throwable ignored) {}
+                        }
+                    });
+                    log("Hooked TTNet URL builder: " + clazz.getName() + "." + m.getName() + "(Context, StringBuilder, ...)");
+                }
+            }
+        } catch (Throwable t) {
+            logD("hookNetworkCommonParamsClass failed for " + clazz.getName() + ": " + t.getMessage());
+        }
+    }
+
+    private static void tryHookAsNetworkParamsClass(Class<?> clazz) {
+        if (clazz == null || sNetworkParamsHooked) return;
+        String name = clazz.getName();
+        if (name.length() > 12) return;
+        if (!name.startsWith("X.") && !name.startsWith("LX.")) {
+            if (name.contains(".") && name.indexOf('.') > 3) return;
+            if (!name.contains(".")) return;
+        }
+        try {
+            for (Method m : clazz.getDeclaredMethods()) {
+                Class<?>[] pTypes = m.getParameterTypes();
+                if (pTypes.length >= 3
+                        && Context.class.isAssignableFrom(pTypes[0])
+                        && (pTypes[1] == boolean.class || pTypes[1] == Boolean.class)
+                        && Map.class.isAssignableFrom(pTypes[2])) {
+                    hookNetworkCommonParamsClass(clazz);
+                    return;
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    /**
+     * Try to detect if a class loaded via the classloader hook is the obfuscated param map class.
+     * Called from onClassLoaded for unrecognized classes when the param map is not yet hooked.
+     * Checks for ANY method with (String, String) params — the method name is obfuscated
+     * and changes between TikTok versions.
+     */
+    private static void tryHookAsParamMapClass(Class<?> clazz) {
+        if (clazz == null || sParamMapHooked) return;
+        String name = clazz.getName();
+        // Only check short obfuscated names — X.xxxx, LX.xxxx, or single-segment short names
+        if (name.length() > 12) return;
+        if (!name.startsWith("X.") && !name.startsWith("LX.")) {
+            // Also allow other short obfuscated patterns like A0.xxxx
+            if (name.contains(".") && name.indexOf('.') > 3) return;
+            if (!name.contains(".")) return;
+        }
+        try {
+            for (Method m : clazz.getDeclaredMethods()) {
+                if (m.getParameterTypes().length == 2
+                        && m.getParameterTypes()[0] == String.class
+                        && m.getParameterTypes()[1] == String.class) {
+                    // Verify this is likely the param map by checking the method count
+                    // and class characteristics — param map classes are typically small
+                    // with only a few methods
+                    Method[] allMethods = clazz.getDeclaredMethods();
+                    if (allMethods.length > 20) continue; // Too many methods, not the param map
+                    hookParamMapMethod(clazz, m.getName());
+                    if (sParamMapHooked) {
+                        log("Auto-detected param map class via classloader: " + name + "." + m.getName());
+                    }
+                    return;
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    private static final XC_MethodHook PARAM_MAP_HOOK = new XC_MethodHook() {
+        @Override
+        protected void beforeHookedMethod(MethodHookParam param) {
+            if (!sEnabled) return;
+            String key = (String) param.args[0];
+            if (key == null) return;
+            switch (key) {
+                // Region keys — spoof to target country
+                case "carrier_region":
+                case "carrier_region1":
+                case "carrier_region_v2":
+                case "sys_region":
+                case "account_region":
+                case "residence":
+                case "region":
+                case "app_region":
+                case "device_region":
+                case "user_region":
+                case "current_region":
+                case "op_region":
+                case "store_region":
+                    param.args[1] = sCountryIso.toUpperCase(Locale.ROOT);
+                    break;
+                // MCC/MNC
+                case "mcc_mnc":
+                    param.args[1] = sOperatorMccMnc;
+                    break;
+                // Timezone
+                case "timezone_name": {
+                    String tz = getTimezoneForCountry(sCountryIso);
+                    if (tz != null) param.args[1] = tz;
+                    break;
+                }
+                case "timezone_offset": {
+                    String tzOff = getTimezoneOffsetForCountry(sCountryIso);
+                    if (tzOff != null) param.args[1] = tzOff;
+                    break;
+                }
+                // Language (only if locale spoofing enabled)
+                case "language":
+                case "content_language":
+                    if (sSpoofLocale) {
+                        param.args[1] = sLocaleLang;
+                    }
+                    break;
+            }
+        }
+    };
+
     public static void hookParamMapClass(Class<?> paramMapClass) {
+        if (paramMapClass == null || sParamMapHooked) return;
+        hookParamMapMethod(paramMapClass, "LIZ");
+
+        // Also hook Map/StringBuilder bulk methods on paramMapClass (like C03IJ.LIZLLL / LIZIZ)
+        try {
+            for (Method m : paramMapClass.getDeclaredMethods()) {
+                Class<?>[] pTypes = m.getParameterTypes();
+                if (pTypes.length >= 2 && Map.class.isAssignableFrom(pTypes[0])
+                        && (pTypes[1] == boolean.class || pTypes[1] == Boolean.class)) {
+                    XposedBridge.hookMethod(m, new XC_MethodHook() {
+                        @Override
+                        @SuppressWarnings("unchecked")
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (!sEnabled) return;
+                            try {
+                                Map<String, String> map = (Map<String, String>) param.args[0];
+                                if (map != null) {
+                                    injectSpoofedNetworkParams(map);
+                                }
+                            } catch (Throwable ignored) {}
+                        }
+                    });
+                    log("Hooked param map builder: " + paramMapClass.getName() + "." + m.getName() + "(Map, boolean, ...)");
+                }
+                if (pTypes.length >= 2 && StringBuilder.class.isAssignableFrom(pTypes[0])
+                        && (pTypes[1] == boolean.class || pTypes[1] == Boolean.class)) {
+                    XposedBridge.hookMethod(m, new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (!sEnabled) return;
+                            try {
+                                StringBuilder sb = (StringBuilder) param.args[0];
+                                if (sb != null && sb.length() > 0) {
+                                    String rewritten = rewriteQueryString(sb.toString());
+                                    if (!sb.toString().equals(rewritten)) {
+                                        sb.delete(0, sb.length());
+                                        sb.append(rewritten);
+                                    }
+                                }
+                            } catch (Throwable ignored) {}
+                        }
+                    });
+                    log("Hooked param map URL builder: " + paramMapClass.getName() + "." + m.getName() + "(StringBuilder, boolean, ...)");
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    private static void hookParamMapMethod(Class<?> paramMapClass, String methodName) {
         if (paramMapClass == null || sParamMapHooked) return;
         try {
             for (Method m : paramMapClass.getDeclaredMethods()) {
-                if ("LIZ".equals(m.getName()) && m.getParameterTypes().length == 2
+                if (m.getName().equals(methodName) && m.getParameterTypes().length == 2
                         && m.getParameterTypes()[0] == String.class && m.getParameterTypes()[1] == String.class) {
-                    XposedBridge.hookMethod(m, new XC_MethodHook() {
+                    XposedBridge.hookMethod(m, PARAM_MAP_HOOK);
+                    sParamMapHooked = true;
+                    log("Hooked param map: " + paramMapClass.getName() + "." + methodName + " for network common parameters");
+                    return;
+                }
+            }
+        } catch (Throwable t) {
+            logD("hookParamMapMethod failed for " + paramMapClass.getName() + ": " + t.getMessage());
+        }
+    }
+
+    /**
+     * Returns a timezone ID appropriate for the given country ISO code.
+     */
+    static String getTimezoneForCountry(String countryIso) {
+        if (countryIso == null) return null;
+        switch (countryIso.toLowerCase(Locale.ROOT)) {
+            case "us": return "America/New_York";
+            case "gb": return "Europe/London";
+            case "jp": return "Asia/Tokyo";
+            case "kr": return "Asia/Seoul";
+            case "de": return "Europe/Berlin";
+            case "fr": return "Europe/Paris";
+            case "br": return "America/Sao_Paulo";
+            case "in": return "Asia/Kolkata";
+            case "au": return "Australia/Sydney";
+            case "ca": return "America/Toronto";
+            case "mx": return "America/Mexico_City";
+            case "id": return "Asia/Jakarta";
+            case "ru": return "Europe/Moscow";
+            case "tr": return "Europe/Istanbul";
+            case "sa": return "Asia/Riyadh";
+            case "ae": return "Asia/Dubai";
+            case "eg": return "Africa/Cairo";
+            case "th": return "Asia/Bangkok";
+            case "vn": return "Asia/Ho_Chi_Minh";
+            case "ph": return "Asia/Manila";
+            case "sg": return "Asia/Singapore";
+            case "my": return "Asia/Kuala_Lumpur";
+            case "il": return "Asia/Jerusalem";
+            case "pk": return "Asia/Karachi";
+            case "bd": return "Asia/Dhaka";
+            case "ng": return "Africa/Lagos";
+            case "ar": return "America/Argentina/Buenos_Aires";
+            case "co": return "America/Bogota";
+            case "cl": return "America/Santiago";
+            case "it": return "Europe/Rome";
+            case "es": return "Europe/Madrid";
+            case "nl": return "Europe/Amsterdam";
+            case "pl": return "Europe/Warsaw";
+            case "se": return "Europe/Stockholm";
+            case "no": return "Europe/Oslo";
+            case "fi": return "Europe/Helsinki";
+            case "dk": return "Europe/Copenhagen";
+            case "at": return "Europe/Vienna";
+            case "ch": return "Europe/Zurich";
+            case "pt": return "Europe/Lisbon";
+            case "be": return "Europe/Brussels";
+            case "ie": return "Europe/Dublin";
+            case "nz": return "Pacific/Auckland";
+            case "za": return "Africa/Johannesburg";
+            case "tw": return "Asia/Taipei";
+            case "hk": return "Asia/Hong_Kong";
+            case "cn": return "Asia/Shanghai";
+            default: return null;
+        }
+    }
+
+    /**
+     * Returns a timezone offset string (seconds) for the given country.
+     */
+    static String getTimezoneOffsetForCountry(String countryIso) {
+        String tzId = getTimezoneForCountry(countryIso);
+        if (tzId == null) return null;
+        try {
+            java.util.TimeZone tz = java.util.TimeZone.getTimeZone(tzId);
+            int offsetMs = tz.getRawOffset();
+            return String.valueOf(offsetMs / 1000);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    // --- URL-level region param interception ---
+    // This is the most reliable approach: intercepts ALL region-related query parameters
+    // at the Uri.Builder level, regardless of which class/method set them.
+    private static volatile boolean sUrlQueryParamsHooked = false;
+
+    private static final Set<String> URL_REGION_PARAMS = new HashSet<>(Arrays.asList(
+            "carrier_region", "carrier_region1", "carrier_region_v2",
+            "sys_region", "account_region", "residence", "region",
+            "app_region", "device_region", "user_region", "current_region",
+            "op_region", "store_region"
+    ));
+
+    private static void hookUrlQueryParams(ClassLoader classLoader) {
+        if (sUrlQueryParamsHooked) return;
+        sUrlQueryParamsHooked = true;
+
+        // Hook android.net.Uri.Builder.appendQueryParameter(String key, String value)
+        try {
+            XposedHelpers.findAndHookMethod(
+                    Uri.Builder.class,
+                    "appendQueryParameter",
+                    String.class, String.class,
+                    new XC_MethodHook() {
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) {
                             if (!sEnabled) return;
                             String key = (String) param.args[0];
-                            if ("carrier_region".equals(key)
-                                    || "carrier_region_v2".equals(key)
-                                    || "sys_region".equals(key)
-                                    || "account_region".equals(key)
-                                    || "residence".equals(key)) {
+                            if (key == null) return;
+
+                            if (URL_REGION_PARAMS.contains(key)) {
                                 param.args[1] = sCountryIso.toUpperCase(Locale.ROOT);
                             } else if ("mcc_mnc".equals(key)) {
                                 param.args[1] = sOperatorMccMnc;
+                            } else if ("timezone_name".equals(key)) {
+                                String tz = getTimezoneForCountry(sCountryIso);
+                                if (tz != null) param.args[1] = tz;
+                            } else if ("timezone_offset".equals(key)) {
+                                String tzOff = getTimezoneOffsetForCountry(sCountryIso);
+                                if (tzOff != null) param.args[1] = tzOff;
+                            } else if (sSpoofLocale && ("language".equals(key) || "content_language".equals(key))) {
+                                param.args[1] = sLocaleLang;
                             }
                         }
-                    });
-                    sParamMapHooked = true;
-                    Log.i(TAG, "Hooked LX.03IJ.LIZ for network common parameter map");
-                }
+                    }
+            );
+            log("Hooked Uri.Builder.appendQueryParameter for URL-level region param interception");
+        } catch (Throwable t) {
+            logD("Uri.Builder.appendQueryParameter hook failed: " + t.getMessage());
+        }
+
+        // Also hook the encoded variant
+        try {
+            XposedHelpers.findAndHookMethod(
+                    "android.net.Uri$Builder", classLoader,
+                    "encodedQuery",
+                    String.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            if (!sEnabled || param.args == null || param.args[0] == null) return;
+                            String query = (String) param.args[0];
+                            param.args[0] = rewriteQueryString(query);
+                        }
+                    }
+            );
+        } catch (Throwable ignored) {}
+
+        // Hook okhttp3.HttpUrl.Builder if available (some TikTok versions use OkHttp)
+        try {
+            Class<?> httpUrlBuilder = XposedHelpers.findClassIfExists("okhttp3.HttpUrl$Builder", classLoader);
+            if (httpUrlBuilder != null) {
+                XposedHelpers.findAndHookMethod(httpUrlBuilder, "addQueryParameter",
+                        String.class, String.class,
+                        new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) {
+                                if (!sEnabled) return;
+                                String key = (String) param.args[0];
+                                if (key == null) return;
+
+                                if (URL_REGION_PARAMS.contains(key)) {
+                                    param.args[1] = sCountryIso.toUpperCase(Locale.ROOT);
+                                } else if ("mcc_mnc".equals(key)) {
+                                    param.args[1] = sOperatorMccMnc;
+                                }
+                            }
+                        }
+                );
+                log("Hooked okhttp3.HttpUrl.Builder.addQueryParameter for URL-level region param interception");
             }
         } catch (Throwable ignored) {}
+    }
+
+    /**
+     * Rewrites region-related query params in an already-encoded query string.
+     */
+    public static String rewriteQueryString(String query) {
+        if (query == null || query.isEmpty()) return query;
+        String upper = sCountryIso.toUpperCase(Locale.ROOT);
+        for (String param : URL_REGION_PARAMS) {
+            // Match param=VALUE& or param=VALUE$ (end of string)
+            query = query.replaceAll("(?<=[?&]|^)" + param + "=[^&]*", param + "=" + upper);
+        }
+        query = query.replaceAll("(?<=[?&]|^)mcc_mnc=[^&]*", "mcc_mnc=" + sOperatorMccMnc);
+        String tz = getTimezoneForCountry(sCountryIso);
+        if (tz != null) {
+            query = query.replaceAll("(?<=[?&]|^)timezone_name=[^&]*", "timezone_name=" + tz);
+        }
+        String tzOff = getTimezoneOffsetForCountry(sCountryIso);
+        if (tzOff != null) {
+            query = query.replaceAll("(?<=[?&]|^)timezone_offset=[^&]*", "timezone_offset=" + tzOff);
+        }
+        if (sSpoofLocale) {
+            query = query.replaceAll("(?<=[?&]|^)language=[^&]*", "language=" + sLocaleLang);
+            query = query.replaceAll("(?<=[?&]|^)content_language=[^&]*", "content_language=" + sLocaleLang);
+            query = query.replaceAll("(?<=[?&]|^)app_language=[^&]*", "app_language=" + sLocaleLang);
+        }
+        return query;
     }
 
     private void hookTelephonyManager(ClassLoader classLoader) {
