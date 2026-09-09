@@ -63,7 +63,19 @@ public class WatermarkHook {
     private static final Set<Object> sCleanedFeedLists = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
     private static final Set<Object> sCleanedUrlModels = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
 
+    private static volatile boolean sAwemeFlagsHooked = false;
+    private static volatile boolean sVideoModelHooked = false;
+    private static volatile boolean sUrlModelHooked = false;
+    private static volatile boolean sWatermarkServiceHooked = false;
+    private static volatile boolean sWatermarkBuilderHooked = false;
+    private static volatile boolean sACLShareHooked = false;
+    private static volatile boolean sDownloadRestrictionsHooked = false;
+    private static volatile boolean sStoryDownloadHooked = false;
+    private static volatile boolean sShareSheetHooked = false;
+    private static volatile boolean sDouyinDownloadHooked = false;
+
     public static void hook(ClassLoader classLoader) {
+        if (classLoader == null) return;
         hookAwemeDownloadFlags(classLoader);
         hookVideoModel(classLoader);
         hookUrlModel(classLoader);
@@ -237,13 +249,13 @@ public class WatermarkHook {
         } catch (Throwable ignored) {}
     }
 
-    private static void hookAwemeDownloadFlags(ClassLoader classLoader) {
-        final String awemeClass = "com.ss.android.ugc.aweme.feed.model.Aweme";
+    public static synchronized void hookAwemeClass(Class<?> awemeClass) {
+        if (awemeClass == null || sAwemeFlagsHooked) return;
+        sAwemeFlagsHooked = true;
 
         try {
             XposedHelpers.findAndHookMethod(
                     awemeClass,
-                    classLoader,
                     "getDownloadWithoutWatermark",
                     new XC_MethodHook() {
                         @Override
@@ -254,7 +266,7 @@ public class WatermarkHook {
                         }
                     }
             );
-            XposedBridge.log(TAG + ": Hooked Aweme.getDownloadWithoutWatermark() -> true");
+            Log.i(TAG, "Hooked Aweme.getDownloadWithoutWatermark() -> true");
         } catch (Throwable t) {
             Log.d(TAG, "getDownloadWithoutWatermark hook failed: " + t.getMessage());
         }
@@ -262,7 +274,36 @@ public class WatermarkHook {
         try {
             XposedHelpers.findAndHookMethod(
                     awemeClass,
-                    classLoader,
+                    "isPreventDownload",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            if (MainHook.isBypassDownloadRestrictionEnabled()) {
+                                param.setResult(false);
+                            }
+                        }
+                    }
+            );
+        } catch (Throwable ignored) {}
+
+        try {
+            XposedHelpers.findAndHookMethod(
+                    awemeClass,
+                    "needTTSWatermarkWhenDownload",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            if (MainHook.isNoWatermarkEnabled()) {
+                                param.setResult(false);
+                            }
+                        }
+                    }
+            );
+        } catch (Throwable ignored) {}
+
+        try {
+            XposedHelpers.findAndHookMethod(
+                    awemeClass,
                     "getVideo",
                     new XC_MethodHook() {
                         @Override
@@ -298,7 +339,6 @@ public class WatermarkHook {
         try {
             XposedHelpers.findAndHookMethod(
                     awemeClass,
-                    classLoader,
                     "getFieldVideo",
                     new XC_MethodHook() {
                         @Override
@@ -315,52 +355,18 @@ public class WatermarkHook {
         } catch (Throwable ignored) {}
 
         try {
-            Class<?> videoClass = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.feed.model.Video", classLoader);
-            if (videoClass != null) {
-                XposedHelpers.findAndHookMethod(
-                        awemeClass,
-                        classLoader,
-                        "setVideo",
-                        videoClass,
-                        new XC_MethodHook() {
-                            @Override
-                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                                if (param.args != null && param.args.length > 0 && param.args[0] != null && MainHook.isNoWatermarkEnabled()) {
-                                    if (!sCleanedVideos.contains(param.args[0])) {
-                                        cleanVideo(param.args[0]);
-                                    }
+            for (Method m : awemeClass.getDeclaredMethods()) {
+                if ("setVideo".equals(m.getName()) && m.getParameterTypes().length == 1) {
+                    XposedBridge.hookMethod(m, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            if (param.args != null && param.args.length > 0 && param.args[0] != null && MainHook.isNoWatermarkEnabled()) {
+                                if (!sCleanedVideos.contains(param.args[0])) {
+                                    cleanVideo(param.args[0]);
                                 }
                             }
                         }
-                );
-            }
-        } catch (Throwable ignored) {}
-
-        try {
-            Class<?> feedItemListClass = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.feed.model.FeedItemList", classLoader);
-            if (feedItemListClass != null) {
-                XC_MethodHook feedHook = new XC_MethodHook() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        if (!MainHook.isNoWatermarkEnabled()) return;
-                        if (param.thisObject != null) {
-                            if (sCleanedFeedLists.contains(param.thisObject)) return;
-                            sCleanedFeedLists.add(param.thisObject);
-                        }
-                        Object res = param.getResult();
-                        if (res instanceof List) {
-                            for (Object item : (List<?>) res) {
-                                if (item != null && !sCleanedAwemes.contains(item)) {
-                                    cleanAweme(item);
-                                }
-                            }
-                        }
-                    }
-                };
-                for (Method m : feedItemListClass.getDeclaredMethods()) {
-                    if (("getItems".equals(m.getName()) || "getAwemeList".equals(m.getName())) && m.getParameterTypes().length == 0) {
-                        XposedBridge.hookMethod(m, feedHook);
-                    }
+                    });
                 }
             }
         } catch (Throwable ignored) {}
@@ -368,7 +374,6 @@ public class WatermarkHook {
         try {
             XposedHelpers.findAndHookMethod(
                     awemeClass,
-                    classLoader,
                     "getVideoControl",
                     new XC_MethodHook() {
                         @Override
@@ -393,7 +398,6 @@ public class WatermarkHook {
         try {
             XposedHelpers.findAndHookMethod(
                     awemeClass,
-                    classLoader,
                     "getAwemeControl",
                     new XC_MethodHook() {
                         @Override
@@ -401,11 +405,15 @@ public class WatermarkHook {
                             Object control = param.getResult();
                             if (control == null && param.thisObject != null) {
                                 try {
-                                    control = XposedHelpers.newInstance(
-                                            XposedHelpers.findClass("com.ss.android.ugc.aweme.feed.model.AwemeControl", classLoader)
-                                    );
-                                    param.setResult(control);
-                                    try { XposedHelpers.setObjectField(param.thisObject, "awemeControl", control); } catch (Throwable ignored) {}
+                                    ClassLoader cl = awemeClass.getClassLoader();
+                                    if (cl != null) {
+                                        Class<?> acClass = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.feed.model.AwemeControl", cl);
+                                        if (acClass != null) {
+                                            control = XposedHelpers.newInstance(acClass);
+                                            param.setResult(control);
+                                            XposedHelpers.setObjectField(param.thisObject, "awemeControl", control);
+                                        }
+                                    }
                                 } catch (Throwable ignored) {}
                             }
                             if (control != null) {
@@ -423,7 +431,6 @@ public class WatermarkHook {
         try {
             XposedHelpers.findAndHookMethod(
                     awemeClass,
-                    classLoader,
                     "getImageInfos",
                     new XC_MethodHook() {
                         @Override
@@ -442,7 +449,6 @@ public class WatermarkHook {
         try {
             XposedHelpers.findAndHookMethod(
                     awemeClass,
-                    classLoader,
                     "getPhotoModeImageInfo",
                     new XC_MethodHook() {
                         @Override
@@ -459,7 +465,18 @@ public class WatermarkHook {
         } catch (Throwable ignored) {}
     }
 
+    private static void hookAwemeDownloadFlags(ClassLoader classLoader) {
+        if (sAwemeFlagsHooked || classLoader == null) return;
+        Class<?> clazz = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.feed.model.Aweme", classLoader);
+        if (clazz != null) {
+            hookAwemeClass(clazz);
+        }
+    }
+
     private static void hookVideoModel(ClassLoader classLoader) {
+        if (sVideoModelHooked || classLoader == null) return;
+        sVideoModelHooked = true;
+
         final String videoClass = "com.ss.android.ugc.aweme.feed.model.Video";
 
         XC_MethodHook trackPlayHook = new XC_MethodHook() {
@@ -519,13 +536,13 @@ public class WatermarkHook {
         }
     }
 
-    private static void hookUrlModel(ClassLoader classLoader) {
-        final String urlModelClass = "com.ss.android.ugc.aweme.base.model.UrlModel";
+    public static synchronized void hookUrlModelClass(Class<?> urlModelClass) {
+        if (urlModelClass == null || sUrlModelHooked) return;
+        sUrlModelHooked = true;
 
         try {
             XposedHelpers.findAndHookMethod(
                     urlModelClass,
-                    classLoader,
                     "getUrlList",
                     new XC_MethodHook() {
                         @Override
@@ -581,7 +598,7 @@ public class WatermarkHook {
                         }
                     }
             );
-            XposedBridge.log(TAG + ": Hooked UrlModel.getUrlList() for stream cleaning");
+            Log.i(TAG, "Hooked UrlModel.getUrlList() for stream cleaning");
         } catch (Throwable t) {
             Log.d(TAG, "UrlModel.getUrlList() hook failed: " + t.getMessage());
         }
@@ -589,7 +606,6 @@ public class WatermarkHook {
         try {
             XposedHelpers.findAndHookMethod(
                     urlModelClass,
-                    classLoader,
                     "getUri",
                     new XC_MethodHook() {
                         @Override
@@ -611,9 +627,54 @@ public class WatermarkHook {
         } catch (Throwable ignored) {}
     }
 
-    private static void hookWatermarkService(ClassLoader classLoader) {
-        final String serviceClass = "com.ss.android.ugc.aweme.watermark.WaterMarkServiceImpl";
-        final String builderClass = "com.ss.android.ugc.aweme.services.watermark.WaterMarkBuilder";
+    private static void hookUrlModel(ClassLoader classLoader) {
+        if (sUrlModelHooked || classLoader == null) return;
+        Class<?> clazz = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.base.model.UrlModel", classLoader);
+        if (clazz != null) {
+            hookUrlModelClass(clazz);
+        }
+    }
+
+    public static synchronized void hookWatermarkServiceClass(Class<?> clazz) {
+        if (clazz == null) return;
+        String name = clazz.getName();
+        if ("com.ss.android.ugc.aweme.watermark.WaterMarkServiceImpl".equals(name)) {
+            if (sWatermarkServiceHooked) return;
+            sWatermarkServiceHooked = true;
+            hookWaterMarkServiceImplInternal(clazz);
+        } else if ("com.ss.android.ugc.aweme.services.watermark.WaterMarkBuilder".equals(name)) {
+            if (sWatermarkBuilderHooked) return;
+            sWatermarkBuilderHooked = true;
+            hookWaterMarkBuilderInternal(clazz);
+        }
+    }
+
+    private static void hookWaterMarkBuilderInternal(Class<?> builderClazz) {
+        if (builderClazz == null) return;
+        try {
+            for (Method m : builderClazz.getDeclaredMethods()) {
+                String mName = m.getName();
+                if ("setAddEndMark".equals(mName) || "setAddInterMark".equals(mName) || "setAiChatWatermark".equals(mName)) {
+                    if (m.getParameterTypes().length == 1 && m.getParameterTypes()[0] == boolean.class) {
+                        XposedBridge.hookMethod(m, new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) {
+                                if (MainHook.isNoWatermarkEnabled()) {
+                                    param.args[0] = false;
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+            Log.i(TAG, "Hooked WaterMarkBuilder flags (setAddEndMark, setAddInterMark, setAiChatWatermark)");
+        } catch (Throwable t) {
+            Log.d(TAG, "hookWaterMarkBuilderInternal failed: " + t.getMessage());
+        }
+    }
+
+    private static void hookWaterMarkServiceImplInternal(Class<?> serviceClazz) {
+        if (serviceClazz == null) return;
 
         XC_MethodHook globalWaterMarkHook = new XC_MethodHook() {
             @Override
@@ -629,6 +690,9 @@ public class WatermarkHook {
                 } catch (Throwable ignored) {}
                 try {
                     XposedHelpers.callMethod(builder, "setAddInterMark", false);
+                } catch (Throwable ignored) {}
+                try {
+                    XposedHelpers.callMethod(builder, "setAiChatWatermark", false);
                 } catch (Throwable ignored) {}
 
                 try {
@@ -671,230 +735,220 @@ public class WatermarkHook {
             }
         };
 
-        try {
-            Class<?> builderClazz = XposedHelpers.findClass(builderClass, classLoader);
-            XposedHelpers.findAndHookMethod(serviceClass, classLoader, "waterMark", builderClazz, globalWaterMarkHook);
-            XposedBridge.log(TAG + ": Hooked WaterMarkServiceImpl.waterMark() [Global]");
-        } catch (Throwable ignored) {}
+        XC_MethodHook douyinI5Hook = new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                if (!MainHook.isNoWatermarkEnabled()) return;
+                Object builder = param.args[0];
+                if (builder == null) return;
 
-        try {
-            Class<?> builderClazz = XposedHelpers.findClass(builderClass, classLoader);
-            XposedHelpers.findAndHookMethod(serviceClass, classLoader, "watermarkForTikTokNow", builderClazz, globalWaterMarkHook);
-        } catch (Throwable ignored) {}
+                try { XposedHelpers.setBooleanField(builder, "LJ", false); } catch (Throwable ignored) {}
+                try { XposedHelpers.setBooleanField(builder, "LJFF", false); } catch (Throwable ignored) {}
+                try { XposedHelpers.setBooleanField(builder, "LJII", false); } catch (Throwable ignored) {}
+                try { XposedHelpers.callMethod(builder, "setAddEndMark", false); } catch (Throwable ignored) {}
+                try { XposedHelpers.callMethod(builder, "setAddInterMark", false); } catch (Throwable ignored) {}
 
-        try {
-            Class<?> serviceClazz = XposedHelpers.findClass(serviceClass, classLoader);
-            for (Method method : serviceClazz.getDeclaredMethods()) {
-                if (method.getName().equals("i5") && method.getParameterTypes().length == 1) {
-                    XposedBridge.hookMethod(method, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            if (!MainHook.isNoWatermarkEnabled()) return;
-                            Object builder = param.args[0];
-                            if (builder == null) return;
+                String inPath = null;
+                String outPath = null;
+                Object listener = null;
 
-                            try { XposedHelpers.setBooleanField(builder, "LJ", false); } catch (Throwable ignored) {}
-                            try { XposedHelpers.setBooleanField(builder, "LJFF", false); } catch (Throwable ignored) {}
-                            try { XposedHelpers.setBooleanField(builder, "LJII", false); } catch (Throwable ignored) {}
-                            try { XposedHelpers.callMethod(builder, "setAddEndMark", false); } catch (Throwable ignored) {}
-                            try { XposedHelpers.callMethod(builder, "setAddInterMark", false); } catch (Throwable ignored) {}
+                try { inPath = (String) XposedHelpers.getObjectField(builder, "LIZ"); } catch (Throwable ignored) {}
+                try { outPath = (String) XposedHelpers.getObjectField(builder, "LIZIZ"); } catch (Throwable ignored) {}
+                try { listener = XposedHelpers.getObjectField(builder, "LJI"); } catch (Throwable ignored) {}
 
-                            String inPath = null;
-                            String outPath = null;
-                            Object listener = null;
+                if (inPath == null || outPath == null) {
+                    for (java.lang.reflect.Field f : builder.getClass().getDeclaredFields()) {
+                        if (f.getType() == String.class) {
+                            try {
+                                f.setAccessible(true);
+                                String val = (String) f.get(builder);
+                                if (val != null && val.length() > 0) {
+                                    if (new File(val).exists()) {
+                                        inPath = val;
+                                    } else if (outPath == null) {
+                                        outPath = val;
+                                    }
+                                }
+                            } catch (Throwable ignored) {}
+                        }
+                    }
+                }
 
-                            try { inPath = (String) XposedHelpers.getObjectField(builder, "LIZ"); } catch (Throwable ignored) {}
-                            try { outPath = (String) XposedHelpers.getObjectField(builder, "LIZIZ"); } catch (Throwable ignored) {}
-                            try { listener = XposedHelpers.getObjectField(builder, "LJI"); } catch (Throwable ignored) {}
-
-                            if (inPath == null || outPath == null) {
-                                for (java.lang.reflect.Field f : builder.getClass().getDeclaredFields()) {
-                                    if (f.getType() == String.class) {
-                                        try {
-                                            f.setAccessible(true);
-                                            String val = (String) f.get(builder);
-                                            if (val != null && val.length() > 0) {
-                                                if (new File(val).exists()) {
-                                                    inPath = val;
-                                                } else if (outPath == null) {
-                                                    outPath = val;
-                                                }
-                                            }
-                                        } catch (Throwable ignored) {}
+                if (listener == null) {
+                    for (java.lang.reflect.Field f : builder.getClass().getDeclaredFields()) {
+                        try {
+                            f.setAccessible(true);
+                            Object obj = f.get(builder);
+                            if (obj != null) {
+                                for (Method m : obj.getClass().getDeclaredMethods()) {
+                                    if (m.getName().equals("onSuccess") || m.getName().equals("LIZ")) {
+                                        listener = obj;
+                                        break;
                                     }
                                 }
                             }
+                        } catch (Throwable ignored) {}
+                        if (listener != null) break;
+                    }
+                }
 
-                            if (listener == null) {
-                                for (java.lang.reflect.Field f : builder.getClass().getDeclaredFields()) {
+                if (inPath != null && outPath != null) {
+                    File src = new File(inPath);
+                    if (src.exists() && src.length() > 0) {
+                        File dst = new File(outPath);
+                        if (dst.exists()) dst.delete();
+                        boolean copied = copyFile(src, dst);
+                        if (copied) {
+                            XposedBridge.log(TAG + ": Douyin i5 watermark bypassed via direct clean video copy!");
+                            if (listener != null) {
+                                try {
+                                    Method onProg = listener.getClass().getMethod("onProgress", int.class);
+                                    onProg.invoke(listener, 100);
+                                } catch (Throwable ignored) {}
+                                boolean notified = false;
+                                try {
+                                    Method onSucc = listener.getClass().getMethod("onSuccess", String.class);
+                                    onSucc.invoke(listener, outPath);
+                                    notified = true;
+                                } catch (Throwable ignored) {}
+                                if (!notified) {
                                     try {
-                                        f.setAccessible(true);
-                                        Object obj = f.get(builder);
-                                        if (obj != null) {
-                                            for (Method m : obj.getClass().getDeclaredMethods()) {
-                                                if (m.getName().equals("onSuccess") || m.getName().equals("LIZ")) {
-                                                    listener = obj;
-                                                    break;
-                                                }
-                                            }
-                                        }
+                                        Method onSucc = listener.getClass().getMethod("onSuccess");
+                                        onSucc.invoke(listener);
+                                        notified = true;
                                     } catch (Throwable ignored) {}
-                                    if (listener != null) break;
+                                }
+                                if (!notified) {
+                                    try {
+                                        Method liz = listener.getClass().getMethod("LIZ", int.class);
+                                        liz.invoke(listener, 0);
+                                    } catch (Throwable ignored) {}
                                 }
                             }
+                            param.setResult(null);
+                        }
+                    }
+                }
+            }
+        };
 
-                            if (inPath != null && outPath != null) {
-                                File src = new File(inPath);
-                                if (src.exists() && src.length() > 0) {
-                                    File dst = new File(outPath);
-                                    if (dst.exists()) dst.delete();
-                                    boolean copied = copyFile(src, dst);
-                                    if (copied) {
-                                        XposedBridge.log(TAG + ": Douyin i5 watermark bypassed via direct clean video copy!");
-                                        if (listener != null) {
-                                            try {
-                                                Method onProg = listener.getClass().getMethod("onProgress", int.class);
-                                                onProg.invoke(listener, 100);
-                                            } catch (Throwable ignored) {}
-                                            boolean notified = false;
-                                            try {
-                                                Method onSucc = listener.getClass().getMethod("onSuccess", String.class);
-                                                onSucc.invoke(listener, outPath);
-                                                notified = true;
-                                            } catch (Throwable ignored) {}
-                                            if (!notified) {
-                                                try {
-                                                    Method onSucc = listener.getClass().getMethod("onSuccess");
-                                                    onSucc.invoke(listener);
-                                                    notified = true;
-                                                } catch (Throwable ignored) {}
-                                            }
-                                            if (!notified) {
-                                                try {
-                                                    Method liz = listener.getClass().getMethod("LIZ", int.class);
-                                                    liz.invoke(listener, 0);
-                                                } catch (Throwable ignored) {}
-                                            }
+        XC_MethodHook douyinS2Hook = new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                if (!MainHook.isNoWatermarkEnabled()) return;
+                String inPath = (String) param.args[1];
+                String outPath = (String) param.args[2];
+                Object callback = param.args[4];
+
+                if (inPath != null && outPath != null) {
+                    File src = new File(inPath);
+                    if (src.exists() && src.length() > 0) {
+                        File dst = new File(outPath);
+                        if (dst.exists()) dst.delete();
+                        boolean copied = copyFile(src, dst);
+                        if (copied) {
+                            XposedBridge.log(TAG + ": Douyin s2 watermark bypassed via direct clean video copy!");
+                            if (callback != null) {
+                                try {
+                                    Method m = callback.getClass().getMethod("LIZ", int.class);
+                                    m.invoke(callback, 0);
+                                } catch (Throwable t) {
+                                    for (Method m : callback.getClass().getDeclaredMethods()) {
+                                        if (m.getParameterTypes().length == 1 &&
+                                                (m.getParameterTypes()[0] == int.class || m.getParameterTypes()[0] == Integer.class)) {
+                                            m.setAccessible(true);
+                                            m.invoke(callback, 0);
+                                            break;
                                         }
-                                        param.setResult(null);
-                                        return;
                                     }
                                 }
                             }
+                            param.setResult(null);
                         }
-                    });
-                    XposedBridge.log(TAG + ": Hooked WaterMarkServiceImpl.i5() [Douyin]");
-                    break;
+                    }
                 }
             }
-        } catch (Throwable t) {
-            Log.d(TAG, "WaterMarkServiceImpl.i5() hook failed: " + t.getMessage());
-        }
+        };
 
-        try {
-            Class<?> serviceClazz = XposedHelpers.findClass(serviceClass, classLoader);
-            for (Method method : serviceClazz.getDeclaredMethods()) {
-                if (method.getName().equals("s2") && method.getParameterTypes().length == 5) {
-                    XposedBridge.hookMethod(method, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            if (!MainHook.isNoWatermarkEnabled()) return;
-                            String inPath = (String) param.args[1];
-                            String outPath = (String) param.args[2];
-                            Object callback = param.args[4];
+        XC_MethodHook douyinLizizHook = new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                if (!MainHook.isNoWatermarkEnabled()) return;
+                String inPath = (String) param.args[0];
+                String outPath = (String) param.args[1];
+                Object callback = param.args[4];
 
-                            if (inPath != null && outPath != null) {
-                                File src = new File(inPath);
-                                if (src.exists() && src.length() > 0) {
-                                    File dst = new File(outPath);
-                                    if (dst.exists()) dst.delete();
-                                    boolean copied = copyFile(src, dst);
-                                    if (copied) {
-                                        XposedBridge.log(TAG + ": Douyin s2 watermark bypassed via direct clean video copy!");
-                                        if (callback != null) {
-                                            try {
-                                                Method m = callback.getClass().getMethod("LIZ", int.class);
-                                                m.invoke(callback, 0);
-                                            } catch (Throwable t) {
-                                                for (Method m : callback.getClass().getDeclaredMethods()) {
-                                                    if (m.getParameterTypes().length == 1 &&
-                                                            (m.getParameterTypes()[0] == int.class || m.getParameterTypes()[0] == Integer.class)) {
-                                                        m.setAccessible(true);
-                                                        m.invoke(callback, 0);
-                                                        break;
-                                                    }
-                                                }
-                                            }
+                if (inPath != null && outPath != null) {
+                    File src = new File(inPath);
+                    if (src.exists() && src.length() > 0) {
+                        File dst = new File(outPath);
+                        if (dst.exists()) dst.delete();
+                        boolean copied = copyFile(src, dst);
+                        if (copied) {
+                            XposedBridge.log(TAG + ": Douyin LIZIZ watermark bypassed via direct clean video copy!");
+                            if (callback != null) {
+                                try {
+                                    Method m = callback.getClass().getMethod("LIZ", int.class);
+                                    m.invoke(callback, 0);
+                                } catch (Throwable t) {
+                                    for (Method m : callback.getClass().getDeclaredMethods()) {
+                                        if (m.getParameterTypes().length == 1 &&
+                                                (m.getParameterTypes()[0] == int.class || m.getParameterTypes()[0] == Integer.class)) {
+                                            m.setAccessible(true);
+                                            m.invoke(callback, 0);
+                                            break;
                                         }
-                                        param.setResult(null);
-                                        return;
                                     }
                                 }
                             }
+                            param.setResult(null);
                         }
-                    });
-                    XposedBridge.log(TAG + ": Hooked WaterMarkServiceImpl.s2() [Douyin]");
-                    break;
+                    }
                 }
             }
-        } catch (Throwable t) {
-            Log.d(TAG, "WaterMarkServiceImpl.s2() hook failed: " + t.getMessage());
-        }
+        };
 
         try {
-            Class<?> serviceClazz = XposedHelpers.findClass(serviceClass, classLoader);
             for (Method method : serviceClazz.getDeclaredMethods()) {
-                if (method.getName().equals("LIZIZ") && method.getParameterTypes().length == 5
+                String name = method.getName();
+                if (("waterMark".equals(name) || "watermarkForTikTokNow".equals(name) || "prepareDataForI18n".equals(name))
+                        && method.getParameterTypes().length == 1) {
+                    XposedBridge.hookMethod(method, globalWaterMarkHook);
+                    Log.i(TAG, "Hooked WaterMarkServiceImpl." + name + "()");
+                } else if ("i5".equals(name) && method.getParameterTypes().length == 1) {
+                    XposedBridge.hookMethod(method, douyinI5Hook);
+                    Log.i(TAG, "Hooked WaterMarkServiceImpl.i5()");
+                } else if ("s2".equals(name) && method.getParameterTypes().length == 5) {
+                    XposedBridge.hookMethod(method, douyinS2Hook);
+                    Log.i(TAG, "Hooked WaterMarkServiceImpl.s2()");
+                } else if ("LIZIZ".equals(name) && method.getParameterTypes().length == 5
                         && method.getParameterTypes()[0] == String.class
                         && method.getParameterTypes()[1] == String.class) {
-                    XposedBridge.hookMethod(method, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            if (!MainHook.isNoWatermarkEnabled()) return;
-                            String inPath = (String) param.args[0];
-                            String outPath = (String) param.args[1];
-                            Object callback = param.args[4];
-
-                            if (inPath != null && outPath != null) {
-                                File src = new File(inPath);
-                                if (src.exists() && src.length() > 0) {
-                                    File dst = new File(outPath);
-                                    if (dst.exists()) dst.delete();
-                                    boolean copied = copyFile(src, dst);
-                                    if (copied) {
-                                        XposedBridge.log(TAG + ": Douyin LIZIZ watermark bypassed via direct clean video copy!");
-                                        if (callback != null) {
-                                            try {
-                                                Method m = callback.getClass().getMethod("LIZ", int.class);
-                                                m.invoke(callback, 0);
-                                            } catch (Throwable t) {
-                                                for (Method m : callback.getClass().getDeclaredMethods()) {
-                                                    if (m.getParameterTypes().length == 1 &&
-                                                            (m.getParameterTypes()[0] == int.class || m.getParameterTypes()[0] == Integer.class)) {
-                                                        m.setAccessible(true);
-                                                        m.invoke(callback, 0);
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        param.setResult(null);
-                                        return;
-                                    }
-                                }
-                            }
-                        }
-                    });
-                    XposedBridge.log(TAG + ": Hooked WaterMarkServiceImpl.LIZIZ() [Douyin]");
-                    break;
+                    XposedBridge.hookMethod(method, douyinLizizHook);
+                    Log.i(TAG, "Hooked WaterMarkServiceImpl.LIZIZ()");
                 }
             }
         } catch (Throwable t) {
-            Log.d(TAG, "WaterMarkServiceImpl.LIZIZ() hook failed: " + t.getMessage());
+            Log.d(TAG, "hookWaterMarkServiceImplInternal failed: " + t.getMessage());
+        }
+    }
+
+    private static void hookWatermarkService(ClassLoader classLoader) {
+        if (classLoader == null) return;
+        Class<?> serviceClazz = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.watermark.WaterMarkServiceImpl", classLoader);
+        if (serviceClazz != null) {
+            hookWatermarkServiceClass(serviceClazz);
+        }
+        Class<?> builderClazz = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.services.watermark.WaterMarkBuilder", classLoader);
+        if (builderClazz != null) {
+            hookWatermarkServiceClass(builderClazz);
         }
     }
 
     private static void hookACLShare(ClassLoader classLoader) {
+        if (sACLShareHooked || classLoader == null) return;
+        sACLShareHooked = true;
+
         final String aclCommonShareClass = "com.ss.android.ugc.aweme.feed.model.ACLCommonShare";
         final String awemeAclShareClass = "com.ss.android.ugc.aweme.feed.model.AwemeACLShare";
 
@@ -1017,6 +1071,9 @@ public class WatermarkHook {
     }
 
     private static void hookDownloadRestrictions(ClassLoader classLoader) {
+        if (sDownloadRestrictionsHooked || classLoader == null) return;
+        sDownloadRestrictionsHooked = true;
+
         final String awemeClass = "com.ss.android.ugc.aweme.feed.model.Aweme";
         final String awemeControlClass = "com.ss.android.ugc.aweme.feed.model.AwemeControl";
 
@@ -1216,6 +1273,9 @@ public class WatermarkHook {
     }
 
     private static void hookStoryDownload(ClassLoader classLoader) {
+        if (sStoryDownloadHooked || classLoader == null) return;
+        sStoryDownloadHooked = true;
+
         final String userStoryClass = "com.ss.android.ugc.aweme.feed.model.story.UserStory";
 
         try {
@@ -1565,6 +1625,9 @@ public class WatermarkHook {
     }
 
     private static void hookShareSheetDialog(ClassLoader classLoader) {
+        if (sShareSheetHooked || classLoader == null) return;
+        sShareSheetHooked = true;
+
         XC_MethodHook dialogHook = new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -1587,6 +1650,9 @@ public class WatermarkHook {
     }
 
     private static void hookDouyinDownload(ClassLoader classLoader) {
+        if (sDouyinDownloadHooked || classLoader == null) return;
+        sDouyinDownloadHooked = true;
+
         final String multiStateHolderClass = "com.ss.android.ugc.aweme.share.socialpanel.viewholder.MultiStateDownloadViewHolder";
         final String socialAdapterClass = "com.ss.android.ugc.aweme.share.socialpanel.adapter.SocialActionsAdapter";
         final String socialVMClass = "com.ss.android.ugc.aweme.share.socialpanel.viewmodel.SocialActionsPanelVM";

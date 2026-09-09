@@ -1,11 +1,17 @@
 package com.ash.tiktokregion;
 
+import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 
+import android.content.ContextWrapper;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Locale;
@@ -124,11 +130,11 @@ public class MainHook implements IXposedHookLoadPackage {
         loadConfigFromPrefs();
 
         hookApplicationLifecycle(lpparam.classLoader);
+        hookClassLoader(lpparam.classLoader);
 
         if (!isChina) {
-
             hookCronetNetworkStack(lpparam.classLoader);
-
+            hookClientAIFeatures(lpparam.classLoader);
             hookTelephonyManager(lpparam.classLoader);
             hookSubscriptionManager(lpparam.classLoader);
             hookSubscriptionInfo(lpparam.classLoader);
@@ -139,10 +145,9 @@ public class MainHook implements IXposedHookLoadPackage {
         }
 
         WatermarkHook.hook(lpparam.classLoader);
-
         AdsHook.hook(lpparam.classLoader);
 
-        XposedBridge.log(TAG + ": All hooks successfully installed for " + lpparam.packageName);
+        XposedBridge.log(TAG + ": All initial hooks dispatched for " + lpparam.packageName);
     }
 
     private void hookSelfStatus(ClassLoader classLoader) {
@@ -165,25 +170,31 @@ public class MainHook implements IXposedHookLoadPackage {
     }
 
     private void hookApplicationLifecycle(ClassLoader classLoader) {
+        XC_MethodHook appAttachHook = new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) {
+                Context context = null;
+                if (param.args != null && param.args.length > 0 && param.args[0] instanceof Context) {
+                    context = (Context) param.args[0];
+                }
+                if (param.thisObject instanceof Application) {
+                    sAppContext = (Application) param.thisObject;
+                }
+                final Context ctx = (context != null) ? context : sAppContext;
+                if (ctx != null) {
+                    installDeferredHooks(ctx.getClassLoader());
+                    new Thread(() -> refreshConfig(ctx), "TikTokEnhancer-ConfigRefresh").start();
+                }
+            }
+        };
+
         try {
-            XposedHelpers.findAndHookMethod(
-                    Application.class,
-                    "attach",
-                    Context.class,
-                    new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            if (param.args[0] instanceof Context) {
-                                sAppContext = (Context) param.args[0];
-                                final Context ctx = sAppContext;
-                                new Thread(() -> refreshConfig(ctx), "TikTokEnhancer-ConfigRefresh").start();
-                            }
-                        }
-                    }
-            );
-        } catch (Throwable t) {
-            Log.d(TAG, "Application.attach hook not available: " + t.getMessage());
-        }
+            XposedHelpers.findAndHookMethod(ContextWrapper.class, "attachBaseContext", Context.class, appAttachHook);
+        } catch (Throwable ignored) {}
+
+        try {
+            XposedHelpers.findAndHookMethod(Application.class, "attach", Context.class, appAttachHook);
+        } catch (Throwable ignored) {}
 
         try {
             XposedHelpers.findAndHookMethod(
@@ -192,16 +203,108 @@ public class MainHook implements IXposedHookLoadPackage {
                     new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) {
-                            if (sAppContext == null && param.thisObject instanceof Application) {
+                            if (param.thisObject instanceof Application) {
                                 sAppContext = (Application) param.thisObject;
                             }
                             final Context ctx = sAppContext;
-                            new Thread(() -> refreshConfig(ctx), "TikTokEnhancer-ConfigRefresh").start();
+                            if (ctx != null) {
+                                installDeferredHooks(ctx.getClassLoader());
+                                new Thread(() -> refreshConfig(ctx), "TikTokEnhancer-ConfigRefresh").start();
+                            }
                         }
                     }
             );
-        } catch (Throwable t) {
-            Log.d(TAG, "Application.onCreate hook not available: " + t.getMessage());
+        } catch (Throwable ignored) {}
+
+        try {
+            XposedHelpers.findAndHookMethod(
+                    Activity.class,
+                    "onResume",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (param.thisObject instanceof Activity) {
+                                Activity act = (Activity) param.thisObject;
+                                if (sAppContext == null) {
+                                    sAppContext = act.getApplication();
+                                }
+                                checkConfigRefreshAsync(act);
+                            }
+                        }
+                    }
+            );
+        } catch (Throwable ignored) {}
+    }
+
+    private static volatile boolean sClassLoaderHooked = false;
+
+    private void hookClassLoader(ClassLoader classLoader) {
+        if (sClassLoaderHooked) return;
+        sClassLoaderHooked = true;
+
+        XC_MethodHook loadClassHook = new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) {
+                Object result = param.getResult();
+                if (result instanceof Class<?>) {
+                    onClassLoaded((Class<?>) result);
+                }
+            }
+        };
+
+        try {
+            XposedHelpers.findAndHookMethod(ClassLoader.class, "loadClass", String.class, boolean.class, loadClassHook);
+        } catch (Throwable ignored) {}
+
+        try {
+            XposedHelpers.findAndHookMethod(ClassLoader.class, "loadClass", String.class, loadClassHook);
+        } catch (Throwable ignored) {}
+    }
+
+    public static void onClassLoaded(Class<?> clazz) {
+        if (clazz == null) return;
+        String name = clazz.getName();
+        if ("com.bytedance.ttnet.TTNetInit".equals(name)) {
+            hookTTNetInitClass(clazz);
+        } else if ("com.ss.ugc.clientai.core.api.FeatureProducer".equals(name)) {
+            hookFeatureProducerClass(clazz);
+        } else if ("com.ss.android.ugc.aweme.setting.services.SettingServiceImpl".equals(name)) {
+            hookSettingServiceImplClass(clazz);
+        } else if ("X.03IJ".equals(name) || "LX.03IJ".equals(name)) {
+            hookParamMapClass(clazz);
+        } else if ("com.ss.android.ugc.aweme.watermark.WaterMarkServiceImpl".equals(name)
+                || "com.ss.android.ugc.aweme.services.watermark.WaterMarkBuilder".equals(name)) {
+            WatermarkHook.hookWatermarkServiceClass(clazz);
+        } else if ("com.ss.android.ugc.aweme.base.model.UrlModel".equals(name)) {
+            WatermarkHook.hookUrlModelClass(clazz);
+        } else if ("com.ss.android.ugc.aweme.feed.model.FeedItemList".equals(name)) {
+            AdsHook.hookFeedItemListClass(clazz);
+        } else if ("com.ss.android.ugc.aweme.feed.panel.BaseListFragmentPanel".equals(name)
+                || "com.ss.android.ugc.aweme.feed.panel.FullFeedFragmentPanel".equals(name)) {
+            AdsHook.hookFeedPanel(clazz.getClassLoader());
+        } else if ("com.ss.android.ugc.aweme.feed.model.Aweme".equals(name)) {
+            WatermarkHook.hookAwemeClass(clazz);
+        }
+    }
+
+    public static void installDeferredHooks(ClassLoader classLoader) {
+        if (classLoader == null) return;
+        boolean isChina = isChinaPackage();
+        if (!isChina) {
+            hookCronetNetworkStack(classLoader);
+            hookClientAIFeatures(classLoader);
+        }
+        WatermarkHook.hook(classLoader);
+        AdsHook.hook(classLoader);
+    }
+
+    public static void checkConfigRefreshAsync(Context context) {
+        long now = System.currentTimeMillis();
+        if (now - sLastConfigFetchTime >= CONFIG_CACHE_MS) {
+            final Context ctx = (context != null) ? context : sAppContext;
+            if (ctx != null) {
+                new Thread(() -> refreshConfig(ctx), "TikTokEnhancer-ConfigRefresh").start();
+            }
         }
     }
 
@@ -320,7 +423,16 @@ public class MainHook implements IXposedHookLoadPackage {
         }
     }
 
-    private void hookCronetNetworkStack(ClassLoader classLoader) {
+    private static volatile boolean sTTNetInitHooked = false;
+
+    private static void hookCronetNetworkStack(ClassLoader classLoader) {
+        if (classLoader == null) return;
+
+        Class<?> ttnetClass = XposedHelpers.findClassIfExists("com.bytedance.ttnet.TTNetInit", classLoader);
+        if (ttnetClass != null) {
+            hookTTNetInitClass(ttnetClass);
+        }
+
         String[] cronetClasses = {
                 "com.bytedance.frameworks.baselib.network.http.cronet.ICronetAppProvider",
                 "com.bytedance.ttnet.cronet.AbsCronetDependAdapter"
@@ -330,21 +442,21 @@ public class MainHook implements IXposedHookLoadPackage {
             hookMethodReturn(classLoader, className, "getRegion", new MethodReturnValue() {
                 @Override
                 public Object getValue() {
-                    return sEnabled ? sCountryIso.toUpperCase() : null;
+                    return sEnabled ? sCountryIso.toUpperCase(Locale.ROOT) : null;
                 }
             });
 
             hookMethodReturn(classLoader, className, "getCarrierRegion", new MethodReturnValue() {
                 @Override
                 public Object getValue() {
-                    return sEnabled ? sCountryIso.toUpperCase() : null;
+                    return sEnabled ? sCountryIso.toUpperCase(Locale.ROOT) : null;
                 }
             });
 
             hookMethodReturn(classLoader, className, "getSysRegion", new MethodReturnValue() {
                 @Override
                 public Object getValue() {
-                    return sEnabled ? sCountryIso.toUpperCase() : null;
+                    return sEnabled ? sCountryIso.toUpperCase(Locale.ROOT) : null;
                 }
             });
 
@@ -355,14 +467,204 @@ public class MainHook implements IXposedHookLoadPackage {
                 }
             });
 
+            hookMethodReturn(classLoader, className, "getNetworkOperator", new MethodReturnValue() {
+                @Override
+                public Object getValue() {
+                    return sEnabled ? sOperatorMccMnc : null;
+                }
+            });
+
             hookMethodReturn(classLoader, className, "getAppInitialRegionInfo", new MethodReturnValue() {
                 @Override
                 public Object getValue() {
-                    return sEnabled ? sCountryIso.toUpperCase() : null;
+                    return sEnabled ? sCountryIso.toUpperCase(Locale.ROOT) : null;
                 }
             });
         }
-        XposedBridge.log(TAG + ": Hooked TTNet/Cronet network stack for HTTP region parameters");
+    }
+
+    public static void hookTTNetInitClass(Class<?> ttnetInitClass) {
+        if (ttnetInitClass == null || sTTNetInitHooked) return;
+        try {
+            for (Method method : ttnetInitClass.getDeclaredMethods()) {
+                if ("setCronetDepend".equals(method.getName()) && method.getParameterTypes().length == 1) {
+                    final Class<?> providerInterface = method.getParameterTypes()[0];
+                    XposedBridge.hookMethod(method, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            if (param.args != null && param.args.length > 0 && param.args[0] != null) {
+                                Object original = param.args[0];
+                                if (!Proxy.isProxyClass(original.getClass())) {
+                                    param.args[0] = createCronetProxy(original, providerInterface);
+                                    Log.i(TAG, "Wrapped TTNetInit.setCronetDepend in dynamic proxy");
+                                }
+                            }
+                        }
+                    });
+                    sTTNetInitHooked = true;
+                    Log.i(TAG, "Hooked TTNetInit.setCronetDepend successfully");
+                }
+            }
+            checkAndProxyExistingCronetProvider(ttnetInitClass);
+        } catch (Throwable t) {
+            Log.d(TAG, "hookTTNetInitClass failed: " + t.getMessage());
+        }
+    }
+
+    private static void checkAndProxyExistingCronetProvider(Class<?> ttnetInitClass) {
+        try {
+            Field f = XposedHelpers.findFieldIfExists(ttnetInitClass, "sCronetProvider");
+            if (f != null) {
+                f.setAccessible(true);
+                Object current = f.get(null);
+                if (current != null && !Proxy.isProxyClass(current.getClass())) {
+                    Class<?> providerInterface = f.getType();
+                    f.set(null, createCronetProxy(current, providerInterface));
+                    Log.i(TAG, "Replaced existing TTNetInit.sCronetProvider with dynamic proxy");
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    private static Object createCronetProxy(final Object originalProvider, final Class<?> providerInterface) {
+        ClassLoader cl = providerInterface.getClassLoader();
+        if (cl == null && originalProvider != null) {
+            cl = originalProvider.getClass().getClassLoader();
+        }
+        if (cl == null) {
+            cl = MainHook.class.getClassLoader();
+        }
+        return Proxy.newProxyInstance(
+                cl,
+                new Class<?>[]{providerInterface},
+                new InvocationHandler() {
+                    @Override
+                    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                        String mName = method.getName();
+                        if (sEnabled) {
+                            if ("getRegion".equals(mName)
+                                    || "getCarrierRegion".equals(mName)
+                                    || "getSysRegion".equals(mName)
+                                    || "getAppInitialRegionInfo".equals(mName)) {
+                                return sCountryIso.toUpperCase(Locale.ROOT);
+                            }
+                            if ("getSimOperator".equals(mName) || "getNetworkOperator".equals(mName)) {
+                                return sOperatorMccMnc;
+                            }
+                        }
+                        return method.invoke(originalProvider, args);
+                    }
+                }
+        );
+    }
+
+    private static volatile boolean sFeatureProducerHooked = false;
+    private static volatile boolean sParamMapHooked = false;
+
+    public static void hookClientAIFeatures(ClassLoader classLoader) {
+        if (classLoader == null) return;
+
+        Class<?> fpClass = XposedHelpers.findClassIfExists("com.ss.ugc.clientai.core.api.FeatureProducer", classLoader);
+        if (fpClass != null) {
+            hookFeatureProducerClass(fpClass);
+        }
+
+        Class<?> settingServiceClass = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.setting.services.SettingServiceImpl", classLoader);
+        if (settingServiceClass != null) {
+            hookSettingServiceImplClass(settingServiceClass);
+        }
+
+        Class<?> paramMapClass = XposedHelpers.findClassIfExists("X.03IJ", classLoader);
+        if (paramMapClass == null) {
+            paramMapClass = XposedHelpers.findClassIfExists("LX.03IJ", classLoader);
+        }
+        if (paramMapClass != null) {
+            hookParamMapClass(paramMapClass);
+        }
+    }
+
+    public static void hookFeatureProducerClass(Class<?> fpClass) {
+        if (fpClass == null || sFeatureProducerHooked) return;
+        try {
+            XC_MethodHook featureHook = new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    if (!sEnabled || param.args == null || param.args.length == 0) return;
+                    String featureKey = null;
+                    for (Object arg : param.args) {
+                        if (arg instanceof String && ((String) arg).startsWith("f_global_")) {
+                            featureKey = (String) arg;
+                            break;
+                        }
+                    }
+                    if (featureKey != null) {
+                        if ("f_global_carrier_region_v2".equals(featureKey)
+                                || "f_global_sys_region".equals(featureKey)
+                                || "f_global_account_region".equals(featureKey)
+                                || "f_global_residence".equals(featureKey)) {
+                            param.setResult(sCountryIso.toUpperCase(Locale.ROOT));
+                        } else if ("f_global_mcc_mnc".equals(featureKey)) {
+                            param.setResult(sOperatorMccMnc);
+                        }
+                    }
+                }
+            };
+
+            for (Method m : fpClass.getDeclaredMethods()) {
+                if (m.getName().startsWith("getStringFeature")) {
+                    XposedBridge.hookMethod(m, featureHook);
+                }
+            }
+            sFeatureProducerHooked = true;
+            Log.i(TAG, "Hooked FeatureProducer.getStringFeature for ClientAI parameters");
+        } catch (Throwable t) {
+            Log.d(TAG, "hookFeatureProducerClass failed: " + t.getMessage());
+        }
+    }
+
+    public static void hookSettingServiceImplClass(Class<?> settingServiceClass) {
+        if (settingServiceClass == null) return;
+        try {
+            for (Method m : settingServiceClass.getDeclaredMethods()) {
+                if ("installCommonParams".equals(m.getName()) && m.getParameterTypes().length == 0) {
+                    XposedBridge.hookMethod(m, new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            // Handled by LX.03IJ map hook
+                        }
+                    });
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    public static void hookParamMapClass(Class<?> paramMapClass) {
+        if (paramMapClass == null || sParamMapHooked) return;
+        try {
+            for (Method m : paramMapClass.getDeclaredMethods()) {
+                if ("LIZ".equals(m.getName()) && m.getParameterTypes().length == 2
+                        && m.getParameterTypes()[0] == String.class && m.getParameterTypes()[1] == String.class) {
+                    XposedBridge.hookMethod(m, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            if (!sEnabled) return;
+                            String key = (String) param.args[0];
+                            if ("carrier_region".equals(key)
+                                    || "carrier_region_v2".equals(key)
+                                    || "sys_region".equals(key)
+                                    || "account_region".equals(key)
+                                    || "residence".equals(key)) {
+                                param.args[1] = sCountryIso.toUpperCase(Locale.ROOT);
+                            } else if ("mcc_mnc".equals(key)) {
+                                param.args[1] = sOperatorMccMnc;
+                            }
+                        }
+                    });
+                    sParamMapHooked = true;
+                    Log.i(TAG, "Hooked LX.03IJ.LIZ for network common parameter map");
+                }
+            }
+        } catch (Throwable ignored) {}
     }
 
     private void hookTelephonyManager(ClassLoader classLoader) {
@@ -686,11 +988,11 @@ public class MainHook implements IXposedHookLoadPackage {
         Object getValue();
     }
 
-    private void hookMethodReturn(ClassLoader classLoader, String className, String methodName, final MethodReturnValue callback) {
+    private static void hookMethodReturn(ClassLoader classLoader, String className, String methodName, final MethodReturnValue callback) {
         hookMethodReturn(classLoader, className, methodName, new Class<?>[0], callback);
     }
 
-    private void hookMethodReturn(ClassLoader classLoader, String className, String methodName, Class<?>[] parameterTypes, final MethodReturnValue callback) {
+    private static void hookMethodReturn(ClassLoader classLoader, String className, String methodName, Class<?>[] parameterTypes, final MethodReturnValue callback) {
         try {
             Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
             if (clazz == null) return;

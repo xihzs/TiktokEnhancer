@@ -601,6 +601,14 @@ public class MainActivity extends AppCompatActivity {
             }
             String joined = sb.toString();
 
+            if (!blockedSet.isEmpty()) {
+                if (mSwitchBlockCountries != null && !mSwitchBlockCountries.isChecked()) {
+                    mSwitchBlockCountries.setChecked(true);
+                }
+                mPrefs.edit().putBoolean(KEY_BLOCK_COUNTRIES, true).apply();
+                saveToDeviceProtectedStorage(KEY_BLOCK_COUNTRIES, true);
+            }
+
             mPrefs.edit().putString(KEY_BLOCKED_COUNTRY_LIST, joined).apply();
             saveToDeviceProtectedStorage(KEY_BLOCKED_COUNTRY_LIST, joined);
             makePrefsWorldReadable();
