@@ -85,7 +85,6 @@ public class MainActivity extends AppCompatActivity {
     private TextView mTvActiveProfilePackage;
     private TextView mTvNoWatermarkTitle;
     private TextView mTvNoWatermarkDesc;
-    private View mBadgeWatermarkBroken;
     private View mLayoutChinaInfo;
     private View mLayoutRegionSection;
 
@@ -146,7 +145,6 @@ public class MainActivity extends AppCompatActivity {
         mTvActiveProfileBadge = findViewById(R.id.tv_active_profile_badge);
         mTvActiveProfilePackage = findViewById(R.id.tv_active_profile_package);
 
-        mBadgeWatermarkBroken = findViewById(R.id.badge_watermark_broken);
         mTvNoWatermarkTitle = findViewById(R.id.tv_no_watermark_title);
         mTvNoWatermarkDesc = findViewById(R.id.tv_no_watermark_desc);
 
@@ -718,7 +716,6 @@ public class MainActivity extends AppCompatActivity {
 
         if (isChina) {
 
-            if (mBadgeWatermarkBroken != null) mBadgeWatermarkBroken.setVisibility(View.VISIBLE);
             if (mTvNoWatermarkTitle != null) mTvNoWatermarkTitle.setText(R.string.feature_no_watermark_douyin);
             if (mTvNoWatermarkDesc != null) mTvNoWatermarkDesc.setText(R.string.feature_no_watermark_douyin_desc);
 
@@ -742,7 +739,6 @@ public class MainActivity extends AppCompatActivity {
             mBtnLaunch.setText("Launch Douyin");
         } else {
 
-            if (mBadgeWatermarkBroken != null) mBadgeWatermarkBroken.setVisibility(View.GONE);
             if (mTvNoWatermarkTitle != null) mTvNoWatermarkTitle.setText(R.string.feature_no_watermark);
             if (mTvNoWatermarkDesc != null) mTvNoWatermarkDesc.setText(R.string.feature_no_watermark_desc);
 

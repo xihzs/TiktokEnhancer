@@ -63,6 +63,150 @@ public class WatermarkHook {
         hookDouyinDownload(classLoader);
     }
 
+    public static Object getCleanPlayAddr(Object video) {
+        if (video == null) return null;
+        Object playAddr = null;
+        try { playAddr = XposedHelpers.getObjectField(video, "playAddr"); } catch (Throwable ignored) {}
+        if (playAddr == null) {
+            try { playAddr = XposedHelpers.callMethod(video, "getPlayAddr"); } catch (Throwable ignored) {}
+        }
+        if (playAddr == null) {
+            try { playAddr = XposedHelpers.getObjectField(video, "a"); } catch (Throwable ignored) {}
+        }
+        if (playAddr == null) {
+            try { playAddr = XposedHelpers.callMethod(video, "LJIILJJIL"); } catch (Throwable ignored) {}
+        }
+        if (playAddr == null) {
+            try { playAddr = XposedHelpers.getObjectField(video, "d"); } catch (Throwable ignored) {}
+        }
+        if (playAddr == null) {
+            try { playAddr = XposedHelpers.callMethod(video, "LJIIIIZZ"); } catch (Throwable ignored) {}
+        }
+        if (playAddr == null) {
+            try { playAddr = XposedHelpers.getObjectField(video, "b"); } catch (Throwable ignored) {}
+        }
+        if (playAddr == null) {
+            try { playAddr = XposedHelpers.callMethod(video, "LJIILIIL"); } catch (Throwable ignored) {}
+        }
+        if (playAddr != null) {
+            sLastPlayedPlayAddr = playAddr;
+            cleanUrlModel(playAddr);
+        }
+        return playAddr;
+    }
+
+    public static Object getCleanPlayAddrFromAweme(Object aweme) {
+        if (aweme == null) return null;
+        try {
+            Object video = null;
+            try { video = XposedHelpers.getObjectField(aweme, "video"); } catch (Throwable ignored) {}
+            if (video == null) {
+                try { video = XposedHelpers.callMethod(aweme, "getVideo"); } catch (Throwable ignored) {}
+            }
+            if (video != null) {
+                return getCleanPlayAddr(video);
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
+    public static void cleanVideo(Object video) {
+        if (video == null) return;
+        if (!MainHook.isNoWatermarkEnabled()) return;
+
+        try {
+            Object playAddr = getCleanPlayAddr(video);
+            if (playAddr != null) {
+                try { XposedHelpers.setObjectField(video, "playAddr", playAddr); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "a", playAddr); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "downloadAddr", playAddr); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "v", playAddr); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "newDownloadAddr", playAddr); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "z", playAddr); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "downloadNoWatermarkAddr", playAddr); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "ui_alike_download_addr", playAddr); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "B", playAddr); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "n", playAddr); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "A", null); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "suffixLogoAddr", null); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "downloadSuffixLogoAddr", null); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "D", null); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "caption_download_addr", null); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "captionDownloadAddr", null); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "H", null); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "misc_download_addrs", null); } catch (Throwable ignored) {}
+                try { XposedHelpers.setObjectField(video, "miscDownloadAddrs", null); } catch (Throwable ignored) {}
+                try { XposedHelpers.setBooleanField(video, "hasWaterMark", false); } catch (Throwable ignored) {}
+                try { XposedHelpers.setBooleanField(video, "w", false); } catch (Throwable ignored) {}
+                try { XposedHelpers.setBooleanField(video, "hasSuffixWaterMark", false); } catch (Throwable ignored) {}
+                try { XposedHelpers.setBooleanField(video, "C", false); } catch (Throwable ignored) {}
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    public static void cleanAweme(Object aweme) {
+        if (aweme == null) return;
+        try {
+            Object video = null;
+            try { video = XposedHelpers.getObjectField(aweme, "video"); } catch (Throwable ignored) {}
+            if (video == null) {
+                try { video = XposedHelpers.callMethod(aweme, "getVideo"); } catch (Throwable ignored) {}
+            }
+            if (video != null) {
+                cleanVideo(video);
+            }
+            try {
+                Object images = XposedHelpers.getObjectField(aweme, "images");
+                if (images instanceof List) {
+                    for (Object img : (List<?>) images) {
+                        if (img != null) {
+                            try {
+                                Object imgVideo = XposedHelpers.getObjectField(img, "video");
+                                if (imgVideo != null) {
+                                    cleanVideo(imgVideo);
+                                }
+                            } catch (Throwable ignored) {}
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {}
+    }
+
+    public static void cleanUrlModel(Object urlModel) {
+        if (urlModel == null) return;
+        try {
+            List<?> list = null;
+            try {
+                list = (List<?>) XposedHelpers.getObjectField(urlModel, "urlList");
+            } catch (Throwable ignored) {}
+            if (list == null) {
+                try {
+                    list = (List<?>) XposedHelpers.callMethod(urlModel, "getUrlList");
+                } catch (Throwable ignored) {}
+            }
+            if (list != null && !list.isEmpty()) {
+                List<String> cleanList = new ArrayList<>(list.size());
+                for (Object item : list) {
+                    if (item instanceof String) {
+                        cleanList.add(cleanDownloadUrl((String) item));
+                    } else if (item != null) {
+                        cleanList.add(cleanDownloadUrl(item.toString()));
+                    }
+                }
+                try {
+                    XposedHelpers.setObjectField(urlModel, "urlList", cleanList);
+                } catch (Throwable ignored) {}
+            }
+            try {
+                String uri = (String) XposedHelpers.getObjectField(urlModel, "uri");
+                if (uri != null) {
+                    XposedHelpers.setObjectField(urlModel, "uri", cleanDownloadUrl(uri));
+                }
+            } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {}
+    }
+
     private static void hookAwemeDownloadFlags(ClassLoader classLoader) {
         final String awemeClass = "com.ss.android.ugc.aweme.feed.model.Aweme";
 
@@ -107,48 +251,75 @@ public class WatermarkHook {
                             if (!MainHook.isNoWatermarkEnabled()) return;
                             if (video == null) return;
 
-                            try {
-                                Object playAddr = null;
-                                try {
-                                    playAddr = XposedHelpers.getObjectField(video, "playAddr");
-                                } catch (Throwable ignored) {}
-                                if (playAddr == null) {
-                                    try {
-                                        playAddr = XposedHelpers.callMethod(video, "getPlayAddr");
-                                    } catch (Throwable ignored) {}
-                                }
-                                if (playAddr == null) {
-                                    try {
-                                        playAddr = XposedHelpers.getObjectField(video, "a");
-                                    } catch (Throwable ignored) {}
-                                }
-                                if (playAddr == null) {
-                                    try {
-                                        playAddr = XposedHelpers.callMethod(video, "LJIILJJIL");
-                                    } catch (Throwable ignored) {}
-                                }
-                                if (playAddr != null) {
-                                    sLastPlayedPlayAddr = playAddr;
-                                    try {
-                                        XposedHelpers.setObjectField(video, "downloadAddr", playAddr);
-                                    } catch (Throwable ignored) {}
-                                    try {
-                                        XposedHelpers.setObjectField(video, "downloadNoWatermarkAddr", playAddr);
-                                    } catch (Throwable ignored) {}
-                                    try {
-                                        XposedHelpers.setObjectField(video, "newDownloadAddr", playAddr);
-                                    } catch (Throwable ignored) {}
-                                    try {
-                                        XposedHelpers.setObjectField(video, "n", playAddr);
-                                    } catch (Throwable ignored) {}
-                                }
-                            } catch (Throwable ignored) {}
+                            cleanVideo(video);
                         }
                     }
             );
         } catch (Throwable t) {
             Log.d(TAG, "Aweme.getVideo() hook failed: " + t.getMessage());
         }
+
+        try {
+            XposedHelpers.findAndHookMethod(
+                    awemeClass,
+                    classLoader,
+                    "getFieldVideo",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                            Object video = param.getResult();
+                            if (video != null && MainHook.isNoWatermarkEnabled()) {
+                                cleanVideo(video);
+                            }
+                        }
+                    }
+            );
+        } catch (Throwable ignored) {}
+
+        try {
+            Class<?> videoClass = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.feed.model.Video", classLoader);
+            if (videoClass != null) {
+                XposedHelpers.findAndHookMethod(
+                        awemeClass,
+                        classLoader,
+                        "setVideo",
+                        videoClass,
+                        new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                if (param.args != null && param.args.length > 0 && param.args[0] != null && MainHook.isNoWatermarkEnabled()) {
+                                    cleanVideo(param.args[0]);
+                                }
+                            }
+                        }
+                );
+            }
+        } catch (Throwable ignored) {}
+
+        try {
+            Class<?> feedItemListClass = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.feed.model.FeedItemList", classLoader);
+            if (feedItemListClass != null) {
+                XC_MethodHook feedHook = new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                        if (!MainHook.isNoWatermarkEnabled()) return;
+                        Object res = param.getResult();
+                        if (res instanceof List) {
+                            for (Object item : (List<?>) res) {
+                                if (item != null) {
+                                    cleanAweme(item);
+                                }
+                            }
+                        }
+                    }
+                };
+                for (Method m : feedItemListClass.getDeclaredMethods()) {
+                    if (("getItems".equals(m.getName()) || "getAwemeList".equals(m.getName())) && m.getParameterTypes().length == 0) {
+                        XposedBridge.hookMethod(m, feedHook);
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
 
         try {
             XposedHelpers.findAndHookMethod(
@@ -249,11 +420,18 @@ public class WatermarkHook {
                 Object res = param.getResult();
                 if (res != null) {
                     sLastPlayedPlayAddr = res;
+                    cleanUrlModel(res);
+                }
+                if (param.thisObject != null && MainHook.isNoWatermarkEnabled()) {
+                    cleanVideo(param.thisObject);
                 }
             }
         };
 
-        String[] playMethods = {"getPlayAddr", "getProperPlayAddr", "getPlayAddrH264", "getH264PlayAddr", "getPlayAddrBytevc1", "LJIILJJIL"};
+        String[] playMethods = {
+                "getPlayAddr", "getProperPlayAddr", "getPlayAddrH264", "getH264PlayAddr",
+                "getPlayAddrBytevc1", "LJIILJJIL", "LJIIIIZZ", "LJIILIIL", "LJIILL", "LJIILLIIL"
+        };
         for (String m : playMethods) {
             try {
                 XposedHelpers.findAndHookMethod(videoClass, classLoader, m, trackPlayHook);
@@ -268,30 +446,15 @@ public class WatermarkHook {
                 Object video = param.thisObject;
                 if (video == null) return;
 
-                try {
-                    Object playAddr = null;
-                    try {
-                        playAddr = XposedHelpers.callMethod(video, "getPlayAddr");
-                    } catch (Throwable ignored) {}
-                    if (playAddr == null) {
-                        try {
-                            playAddr = XposedHelpers.getObjectField(video, "a");
-                        } catch (Throwable ignored) {}
-                    }
-                    if (playAddr == null) {
-                        try {
-                            playAddr = XposedHelpers.callMethod(video, "LJIILJJIL");
-                        } catch (Throwable ignored) {}
-                    }
-                    if (playAddr != null) {
-                        sLastPlayedPlayAddr = playAddr;
-                        param.setResult(playAddr);
-                    }
-                } catch (Throwable ignored) {}
+                cleanVideo(video);
+                Object playAddr = getCleanPlayAddr(video);
+                if (playAddr != null) {
+                    param.setResult(playAddr);
+                }
             }
         };
 
-        String[] methods = {"getDownloadAddr", "getNewDownloadAddr", "getDownloadNoWatermarkAddr", "LJIIJ"};
+        String[] methods = {"getDownloadAddr", "getNewDownloadAddr", "getDownloadNoWatermarkAddr", "getUIAlikeDownloadAddr"};
         for (String method : methods) {
             try {
                 XposedHelpers.findAndHookMethod(videoClass, classLoader, method, redirectHook);
@@ -326,15 +489,11 @@ public class WatermarkHook {
                                 for (Object item : originalList) {
                                     if (item instanceof String) {
                                         String url = (String) item;
-                                        if (url.contains("/playwm/")) {
-                                            cleanList.add(url.replace("/playwm/", "/play/"));
+                                        String cleaned = cleanDownloadUrl(url);
+                                        if (!cleaned.equals(url)) {
                                             modified = true;
-                                        } else if (url.contains("playwm")) {
-                                            cleanList.add(url.replace("playwm", "play"));
-                                            modified = true;
-                                        } else {
-                                            cleanList.add(url);
                                         }
+                                        cleanList.add(cleaned);
                                     } else if (item != null) {
                                         cleanList.add(item.toString());
                                     }
@@ -351,6 +510,28 @@ public class WatermarkHook {
         } catch (Throwable t) {
             Log.d(TAG, "UrlModel.getUrlList() hook failed: " + t.getMessage());
         }
+
+        try {
+            XposedHelpers.findAndHookMethod(
+                    urlModelClass,
+                    classLoader,
+                    "getUri",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                            if (!MainHook.isNoWatermarkEnabled()) return;
+                            Object res = param.getResult();
+                            if (res instanceof String) {
+                                String uri = (String) res;
+                                String cleaned = cleanDownloadUrl(uri);
+                                if (!cleaned.equals(uri)) {
+                                    param.setResult(cleaned);
+                                }
+                            }
+                        }
+                    }
+            );
+        } catch (Throwable ignored) {}
     }
 
     private static void hookWatermarkService(ClassLoader classLoader) {
@@ -1339,6 +1520,158 @@ public class WatermarkHook {
         final String socialVMClass = "com.ss.android.ugc.aweme.share.socialpanel.viewmodel.SocialActionsPanelVM";
 
         try {
+            Class<?> gczClass = XposedHelpers.findClassIfExists("X.0GcZ", classLoader);
+            if (gczClass == null) {
+                gczClass = XposedHelpers.findClassIfExists("LX.0GcZ", classLoader);
+            }
+            if (gczClass != null) {
+                for (Method m : gczClass.getDeclaredMethods()) {
+                    if ("LIZ".equals(m.getName())) {
+                        XposedBridge.hookMethod(m, new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                if (MainHook.isNoWatermarkEnabled()) {
+                                    param.setResult(null);
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        try {
+            Class<?> nyoClass = XposedHelpers.findClassIfExists("X.1Nyo", classLoader);
+            if (nyoClass == null) {
+                nyoClass = XposedHelpers.findClassIfExists("LX.1Nyo", classLoader);
+            }
+            if (nyoClass != null) {
+                for (Method m : nyoClass.getDeclaredMethods()) {
+                    if ("LIZ".equals(m.getName()) && m.getParameterTypes().length == 1 && m.getParameterTypes()[0] == boolean.class) {
+                        XposedBridge.hookMethod(m, new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                if (!MainHook.isNoWatermarkEnabled()) return;
+                                try {
+                                    Object aweme = XposedHelpers.getObjectField(param.thisObject, "LIZ");
+                                    if (aweme != null) {
+                                        cleanAweme(aweme);
+                                    }
+                                } catch (Throwable ignored) {}
+                                try {
+                                    Object nym = XposedHelpers.getObjectField(param.thisObject, "LIZIZ");
+                                    if (nym != null) {
+                                        try { XposedHelpers.setBooleanField(nym, "LJJJJLL", false); } catch (Throwable ignored) {}
+                                        try { XposedHelpers.setBooleanField(nym, "LJJJJZ", false); } catch (Throwable ignored) {}
+                                        try { XposedHelpers.setBooleanField(nym, "LJJJJZI", false); } catch (Throwable ignored) {}
+                                        try {
+                                            Object nymAweme = XposedHelpers.getObjectField(nym, "LJIJI");
+                                            if (nymAweme != null) {
+                                                cleanAweme(nymAweme);
+                                            }
+                                        } catch (Throwable ignored) {}
+                                    }
+                                } catch (Throwable ignored) {}
+                            }
+
+                            @Override
+                            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                                if (!MainHook.isNoWatermarkEnabled()) return;
+                                try {
+                                    Object nym = XposedHelpers.getObjectField(param.thisObject, "LIZIZ");
+                                    if (nym != null) {
+                                        try { XposedHelpers.setBooleanField(nym, "LJJJJLL", false); } catch (Throwable ignored) {}
+                                        try { XposedHelpers.setBooleanField(nym, "LJJJJZ", false); } catch (Throwable ignored) {}
+                                        try { XposedHelpers.setBooleanField(nym, "LJJJJZI", false); } catch (Throwable ignored) {}
+                                        Object aweme = XposedHelpers.getObjectField(param.thisObject, "LIZ");
+                                        Object cleanPlay = getCleanPlayAddrFromAweme(aweme);
+                                        if (cleanPlay != null) {
+                                            cleanUrlModel(cleanPlay);
+                                            try { XposedHelpers.setObjectField(nym, "LJJIL", cleanPlay); } catch (Throwable ignored) {}
+                                        }
+                                    }
+                                } catch (Throwable ignored) {}
+                            }
+                        });
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        try {
+            Class<?> nymClass = XposedHelpers.findClassIfExists("X.1Nym", classLoader);
+            if (nymClass == null) {
+                nymClass = XposedHelpers.findClassIfExists("LX.1Nym", classLoader);
+            }
+            if (nymClass != null) {
+                for (Method m : nymClass.getDeclaredMethods()) {
+                    if ("LJIIIIZZ".equals(m.getName()) && m.getParameterTypes().length == 0) {
+                        XposedBridge.hookMethod(m, new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                if (!MainHook.isNoWatermarkEnabled()) return;
+                                try {
+                                    Object nym = param.thisObject;
+                                    Object aweme = XposedHelpers.getObjectField(nym, "LJIJI");
+                                    if (aweme != null) {
+                                        cleanAweme(aweme);
+                                    }
+                                    Object cleanPlay = getCleanPlayAddrFromAweme(aweme);
+                                    if (cleanPlay != null) {
+                                        cleanUrlModel(cleanPlay);
+                                        try { XposedHelpers.setObjectField(nym, "LJJIL", cleanPlay); } catch (Throwable ignored) {}
+                                    }
+                                    try {
+                                        String dlUrl = (String) XposedHelpers.getObjectField(nym, "LJJIZ");
+                                        if (dlUrl != null) {
+                                            XposedHelpers.setObjectField(nym, "LJJIZ", cleanDownloadUrl(dlUrl));
+                                        }
+                                    } catch (Throwable ignored) {}
+                                    try {
+                                        String origUrl = (String) XposedHelpers.getObjectField(nym, "LJJIIJ");
+                                        if (origUrl != null) {
+                                            XposedHelpers.setObjectField(nym, "LJJIIJ", cleanDownloadUrl(origUrl));
+                                        }
+                                    } catch (Throwable ignored) {}
+                                    try { XposedHelpers.setBooleanField(nym, "LJJJJLL", false); } catch (Throwable ignored) {}
+                                    try { XposedHelpers.setBooleanField(nym, "LJJJJZ", false); } catch (Throwable ignored) {}
+                                    try { XposedHelpers.setBooleanField(nym, "LJJJJZI", false); } catch (Throwable ignored) {}
+                                } catch (Throwable ignored) {}
+                            }
+                        });
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        try {
+            Class<?> nypClass = XposedHelpers.findClassIfExists("X.1Nyp", classLoader);
+            if (nypClass == null) {
+                nypClass = XposedHelpers.findClassIfExists("LX.1Nyp", classLoader);
+            }
+            if (nypClass != null) {
+                for (Method m : nypClass.getDeclaredMethods()) {
+                    if ("LIZ".equals(m.getName()) && m.getParameterTypes().length == 0) {
+                        XposedBridge.hookMethod(m, new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                if (!MainHook.isNoWatermarkEnabled()) return;
+                                try {
+                                    Object nym = XposedHelpers.getObjectField(param.thisObject, "LIZIZ");
+                                    if (nym != null) {
+                                        try { XposedHelpers.setBooleanField(nym, "LJJJJLL", false); } catch (Throwable ignored) {}
+                                        try { XposedHelpers.setBooleanField(nym, "LJJJJZ", false); } catch (Throwable ignored) {}
+                                        try { XposedHelpers.setBooleanField(nym, "LJJJJZI", false); } catch (Throwable ignored) {}
+                                    }
+                                } catch (Throwable ignored) {}
+                            }
+                        });
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        try {
             XposedHelpers.findAndHookMethod(
                     multiStateHolderClass,
                     classLoader,
@@ -2104,6 +2437,17 @@ public class WatermarkHook {
                 } catch (Throwable ignored) {}
             }
             if (video != null) {
+                cleanVideo(video);
+                Object cleanPlay = getCleanPlayAddr(video);
+                if (cleanPlay != null) {
+                    List<String> extracted = getUrlsFromUrlModel(cleanPlay);
+                    if (!extracted.isEmpty()) {
+                        media.isVideo = true;
+                        media.urls.addAll(extracted);
+                        Log.i(TAG, "Extracted clean video URL from Video: " + extracted.get(0));
+                        return media;
+                    }
+                }
 
                 if (sLastPlayedPlayAddr != null) {
                     List<String> extracted = getUrlsFromUrlModel(sLastPlayedPlayAddr);
@@ -2116,15 +2460,16 @@ public class WatermarkHook {
                 }
 
                 String[] addrMethods = {
-                        "getPlayAddr", "getProperPlayAddr", "LJIILJJIL", "LJIILLIIL", "LJIILL", "LJIILIIL", "LJIIIIZZ",
-                        "getPlayAddrH264", "getH264PlayAddr", "getPlayAddrBytevc1", "getDownloadAddr",
-                        "getDownloadNoWatermarkAddr", "getNewDownloadAddr", "getUIAlikeDownloadAddr"
+                        "getPlayAddr", "getProperPlayAddr", "LJIILJJIL", "LJIIIIZZ", "LJIILIIL",
+                        "LJIILL", "LJIILLIIL", "getPlayAddrH264", "getH264PlayAddr", "getPlayAddrBytevc1",
+                        "getDownloadNoWatermarkAddr"
                 };
 
                 for (String m : addrMethods) {
                     try {
                         Object urlModel = XposedHelpers.callMethod(video, m);
                         if (urlModel != null) {
+                            cleanUrlModel(urlModel);
                             List<String> extracted = getUrlsFromUrlModel(urlModel);
                             if (!extracted.isEmpty()) {
                                 media.isVideo = true;
@@ -2136,10 +2481,11 @@ public class WatermarkHook {
                     } catch (Throwable ignored) {}
                 }
 
-                for (String fieldName : new String[]{"a", "b", "d"}) {
+                for (String fieldName : new String[]{"a", "d", "b", "playAddr"}) {
                     try {
                         Object urlModel = XposedHelpers.getObjectField(video, fieldName);
                         if (urlModel != null) {
+                            cleanUrlModel(urlModel);
                             List<String> extracted = getUrlsFromUrlModel(urlModel);
                             if (!extracted.isEmpty()) {
                                 media.isVideo = true;
@@ -2149,24 +2495,6 @@ public class WatermarkHook {
                             }
                         }
                     } catch (Throwable ignored) {}
-                }
-
-                for (java.lang.reflect.Field f : video.getClass().getDeclaredFields()) {
-                    if (f.getType().getName().contains("UrlModel")) {
-                        try {
-                            f.setAccessible(true);
-                            Object urlModel = f.get(video);
-                            if (urlModel != null) {
-                                List<String> extracted = getUrlsFromUrlModel(urlModel);
-                                if (!extracted.isEmpty()) {
-                                    media.isVideo = true;
-                                    media.urls.addAll(extracted);
-                                    Log.i(TAG, "Extracted story video URL from field " + f.getName() + ": " + extracted.get(0));
-                                    return media;
-                                }
-                            }
-                        } catch (Throwable ignored) {}
-                    }
                 }
             }
         } catch (Throwable t) {
@@ -2302,11 +2630,17 @@ public class WatermarkHook {
         }
     }
 
-    private static String cleanDownloadUrl(String url) {
+    public static String cleanDownloadUrl(String url) {
         if (url == null) return null;
         String clean = url.replace("/playwm/", "/play/").replace("playwm", "play");
         if (clean.contains("watermark=")) {
             clean = clean.replaceAll("([&?])watermark=[^&]*", "$1watermark=0");
+        }
+        if (clean.contains("is_watermark=")) {
+            clean = clean.replaceAll("([&?])is_watermark=[^&]*", "$1is_watermark=0");
+        }
+        if (clean.contains("logo_name=")) {
+            clean = clean.replaceAll("([&?])logo_name=[^&]*", "");
         }
         return clean;
     }

@@ -36,8 +36,7 @@
     <string name="feature_no_watermark">Remove Watermarks</string>
     <string name="feature_no_watermark_desc">Saves clean videos without logos or outro card</string>
     <string name="feature_no_watermark_douyin">Remove Watermarks</string>
-    <string name="feature_no_watermark_douyin_desc">Douyin client-side watermark engine is currently broken</string>
-    <string name="tag_broken">BROKEN</string>
+    <string name="feature_no_watermark_douyin_desc">Saves clean Douyin videos without logos or outro card</string>
     <string name="menu_profile_title">Select Target Profile</string>
     <string name="menu_profile_subtitle">Configuring settings for active application</string>
     <string name="feature_hide_ads">Block Sponsored Ads</string>

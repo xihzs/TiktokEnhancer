@@ -689,18 +689,6 @@
                                 android:textColor="@color/text_primary"
                                 android:textSize="14.5sp"
                                 android:textStyle="bold" />
-
-                            <TextView
-                                android:id="@+id/badge_watermark_broken"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="8dp"
-                                android:background="@drawable/bg_broken_badge"
-                                android:text="@string/tag_broken"
-                                android:textColor="@color/china_amber"
-                                android:textSize="10sp"
-                                android:textStyle="bold"
-                                android:visibility="gone" />
                         </LinearLayout>
 
                         <TextView
