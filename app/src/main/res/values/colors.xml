@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <color name="bg_dark">#0A0B0E</color>
+    <color name="surface_card">#13151B</color>
+    <color name="surface_card_secondary">#1B1E26</color>
+    <color name="surface_input">#101116</color>
+
+    <color name="border_subtle">#21242E</color>
+    <color name="border_focused">#3D4355</color>
+    <color name="divider_dark">#1A1D25</color>
+
+    <color name="text_primary">#F4F5F8</color>
+    <color name="text_secondary">#9297A5</color>
+    <color name="text_tertiary">#5E6474</color>
+
+    <color name="accent_silver">#E2E6EE</color>
+    <color name="accent_tint">#282D3B</color>
+    <color name="status_active_dot">#10B981</color>
+    <color name="status_active_bg">#0E231C</color>
+    <color name="status_active_border">#164635</color>
+    <color name="status_inactive_dot">#6B7280</color>
+    <color name="status_inactive_bg">#14161B</color>
+    <color name="status_inactive_border">#222630</color>
+
+    <color name="status_blocked_dot">#EF4444</color>
+    <color name="status_blocked_bg">#251216</color>
+    <color name="status_blocked_border">#66222A</color>
+
+    <color name="switch_thumb_checked">#FFFFFF</color>
+    <color name="switch_thumb_unchecked">#6B7280</color>
+    <color name="switch_track_checked">#384152</color>
+    <color name="switch_track_unchecked">#191B22</color>
+
+    <color name="profile_segment_bg">#101217</color>
+    <color name="profile_segment_border">#21242E</color>
+    <color name="profile_tab_active_bg">#232835</color>
+    <color name="profile_tab_active_border">#384054</color>
+    <color name="profile_tab_text_active">#F4F5F8</color>
+    <color name="profile_tab_text_inactive">#868C9E</color>
+
+    <color name="china_banner_bg">#151410</color>
+    <color name="china_banner_border">#382C18</color>
+    <color name="china_amber">#F59E0B</color>
+</resources>
+

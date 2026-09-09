@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="xposed_scope">
+        <item>com.ash.tiktokregion</item>
+        <item>com.zhiliaoapp.musically</item>
+        <item>com.ss.android.ugc.trill</item>
+        <item>com.ss.android.ugc.aweme</item>
+        <item>com.zhiliaoapp.musically.go</item>
+        <item>com.tiktok.business</item>
+    </string-array>
+</resources>

@@ -1,0 +1,78 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag 1.0.0'
+        required: false
+        default: 'v1.0.0'
+      release_name:
+        description: 'Release name'
+        required: false
+        default: 'Tiktok Enhancer v1.0.0'
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
+
+      - name: Prepare Release Assets
+        id: prepare_assets
+        run: |
+          mkdir -p release_assets
+          TAG="${{ github.event.inputs.tag_name }}"
+          if [ -z "$TAG" ]; then
+            TAG="v1.0.0-$(date +'%Y%m%d%H%M%S')"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk release_assets/TiktokEnhancer-${TAG}.apk
+            cp app/build/outputs/apk/release/app-release.apk release_assets/TiktokEnhancer-release.apk
+          fi
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiktok-enhancer-apks
+          path: release_assets/*
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.prepare_assets.outputs.tag }}
+          name: ${{ github.event.inputs.release_name || steps.prepare_assets.outputs.tag }}
+          draft: false
+          prerelease: ${{ github.event.inputs.prerelease || false }}
+          files: release_assets/*
+          generate_release_notes: true

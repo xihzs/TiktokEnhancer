@@ -1,0 +1,75 @@
+<resources>
+    <string name="app_name">Tiktok Enhancer</string>
+    <string name="app_subtitle">Vector Framework Module</string>
+    <string name="xposed_description">Region changer, watermark removal &amp; ad blocking</string>
+
+    <string name="status_active">Active</string>
+    <string name="status_inactive">Inactive</string>
+
+    <string name="section_profile">TARGET PROFILE</string>
+    <string name="profile_global">Global</string>
+    <string name="profile_asia">Asia</string>
+    <string name="profile_china">China</string>
+    <string name="profile_china_title">TikTok China (Douyin)</string>
+    <string name="profile_china_package">com.ss.android.ugc.aweme</string>
+    <string name="profile_china_desc">Targeting com.ss.android.ugc.aweme. Sponsored ads are disabled and watermark-free video &amp; story downloads are unlocked even when restricted. Telephony and regional routing are bypassed for this profile.</string>
+    <string name="target_app_global">TikTok</string>
+    <string name="target_app_asia">TikTok Asia</string>
+    <string name="target_app_china">Douyin</string>
+
+    <string name="section_region">REGION &amp; CARRIER</string>
+    <string name="btn_change_region">Select Target Region</string>
+    <string name="custom_override">Manual Carrier Override</string>
+
+    <string name="label_sim_country">Country ISO (e.g. us, my)</string>
+    <string name="label_sim_operator">MCC + MNC (e.g. 310260, 50212)</string>
+    <string name="label_carrier_name">Carrier Name (e.g. T-Mobile, Maxis)</string>
+    <string name="btn_save_custom">Apply Custom Carrier</string>
+
+    <string name="section_enhancements">ENHANCEMENTS</string>
+    <string name="feature_force_region">Smart Force Region (New)</string>
+    <string name="feature_force_region_desc">Filters feed videos by region with network error protection</string>
+    <string name="feature_strict_force_region">Strict Force Region (Previous)</string>
+    <string name="feature_strict_force_region_desc">Strictly discards all non-region videos without fallback</string>
+    <string name="feature_download_story">Download Stories</string>
+    <string name="feature_download_story_desc">Save videos and photos from 24-hour stories</string>
+    <string name="feature_no_watermark">Remove Watermarks</string>
+    <string name="feature_no_watermark_desc">Saves clean videos without logos or outro card</string>
+    <string name="feature_no_watermark_douyin">Remove Watermarks</string>
+    <string name="feature_no_watermark_douyin_desc">Douyin client-side watermark engine is currently broken</string>
+    <string name="tag_broken">BROKEN</string>
+    <string name="menu_profile_title">Select Target Profile</string>
+    <string name="menu_profile_subtitle">Configuring settings for active application</string>
+    <string name="feature_hide_ads">Block Sponsored Ads</string>
+    <string name="feature_hide_ads_desc">Filters commercial cards and promotional posts</string>
+    <string name="feature_bypass_download">Unlock Downloads</string>
+    <string name="feature_bypass_download_desc">Allows saving videos even if disabled by author</string>
+    <string name="feature_block_countries">Block Selected Countries</string>
+    <string name="feature_block_countries_desc">Filters out videos and creators from blocked countries</string>
+    <string name="btn_manage_blocked_countries">Manage Blocked Countries</string>
+    <string name="dialog_block_countries_title">Block Countries</string>
+    <string name="dialog_block_countries_subtitle">Select countries to filter out from feeds</string>
+    <string name="search_blocked_country">Search country name or code...</string>
+    <string name="btn_clear_all">Clear All</string>
+    <string name="btn_done">Done</string>
+    <string name="btn_add_custom_iso">Add</string>
+    <string name="hint_custom_iso">Add 2-letter ISO (e.g. cn)</string>
+    <string name="no_countries_blocked">No countries blocked (tap to manage)</string>
+    <string name="blocked_count_format">%d countries blocked</string>
+
+    <string name="section_preferences">PREFERENCES</string>
+    <string name="pref_enable_spoof">SIM Card Spoofing</string>
+    <string name="pref_enable_spoof_desc">Override TelephonyManager and carrier properties</string>
+    <string name="pref_spoof_locale">Match App Locale</string>
+    <string name="pref_spoof_locale_desc">Sync language locale with chosen region</string>
+    <string name="pref_hide_icon">Hide Launcher Icon</string>
+    <string name="pref_hide_icon_desc">Access module from Vector Manager</string>
+
+    <string name="section_actions">QUICK ACTIONS</string>
+    <string name="btn_force_stop_tiktok">Restart TikTok</string>
+    <string name="btn_open_tiktok">Launch</string>
+
+    <string name="pref_saved_notice">Settings updated</string>
+    <string name="icon_hidden_notice">Icon hidden. Open module from Vector Manager</string>
+    <string name="icon_restored_notice">Icon restored to launcher</string>
+</resources>
