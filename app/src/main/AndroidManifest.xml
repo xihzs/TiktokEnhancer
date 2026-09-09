@@ -4,7 +4,6 @@
 
     <queries>
         <package android:name="com.zhiliaoapp.musically" />
-        <package android:name="com.ss.android.ugc.trill" />
         <package android:name="com.ss.android.ugc.aweme" />
         <package android:name="com.zhiliaoapp.musically.go" />
         <package android:name="com.tiktok.business" />

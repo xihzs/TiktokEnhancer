@@ -8,13 +8,11 @@
 
     <string name="section_profile">TARGET PROFILE</string>
     <string name="profile_global">Global</string>
-    <string name="profile_asia">Asia</string>
     <string name="profile_china">China</string>
     <string name="profile_china_title">TikTok China (Douyin)</string>
     <string name="profile_china_package">com.ss.android.ugc.aweme</string>
     <string name="profile_china_desc">Targeting com.ss.android.ugc.aweme. Sponsored ads are disabled and watermark-free video &amp; story downloads are unlocked even when restricted. Telephony and regional routing are bypassed for this profile.</string>
     <string name="target_app_global">TikTok</string>
-    <string name="target_app_asia">TikTok Asia</string>
     <string name="target_app_china">Douyin</string>
 
     <string name="section_region">REGION &amp; CARRIER</string>

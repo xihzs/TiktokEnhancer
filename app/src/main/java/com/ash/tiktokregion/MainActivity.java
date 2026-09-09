@@ -69,11 +69,9 @@ public class MainActivity extends AppCompatActivity {
 
     public static final String KEY_ACTIVE_PROFILE = "active_profile";
     public static final String PROFILE_GLOBAL = "global";
-    public static final String PROFILE_ASIA = "asia";
     public static final String PROFILE_CHINA = "china";
 
     public static final String PACKAGE_GLOBAL = "com.zhiliaoapp.musically";
-    public static final String PACKAGE_ASIA = "com.ss.android.ugc.trill";
     public static final String PACKAGE_CHINA = "com.ss.android.ugc.aweme";
 
     private SharedPreferences mPrefs;
@@ -123,7 +121,6 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String[] TIKTOK_PACKAGES = {
             PACKAGE_GLOBAL,
-            PACKAGE_ASIA,
             PACKAGE_CHINA,
             "com.zhiliaoapp.musically.go",
             "com.tiktok.business"
@@ -197,13 +194,13 @@ public class MainActivity extends AppCompatActivity {
         }
 
         String savedProfile = mPrefs.getString(KEY_ACTIVE_PROFILE, PROFILE_GLOBAL);
-        if (!isAppInstalled(getTargetPackageForProfile(savedProfile))) {
+        if ("asia".equals(savedProfile) || !isAppInstalled(getTargetPackageForProfile(savedProfile))) {
             if (isAppInstalled(PACKAGE_GLOBAL)) {
                 savedProfile = PROFILE_GLOBAL;
-            } else if (isAppInstalled(PACKAGE_ASIA)) {
-                savedProfile = PROFILE_ASIA;
             } else if (isAppInstalled(PACKAGE_CHINA)) {
                 savedProfile = PROFILE_CHINA;
+            } else {
+                savedProfile = PROFILE_GLOBAL;
             }
         }
         setProfile(savedProfile);
@@ -692,7 +689,6 @@ public class MainActivity extends AppCompatActivity {
         makePrefsWorldReadable();
 
         boolean isGlobal = PROFILE_GLOBAL.equals(profile);
-        boolean isAsia = PROFILE_ASIA.equals(profile);
         boolean isChina = PROFILE_CHINA.equals(profile);
 
         if (mTvActiveProfileTitle != null && mTvActiveProfileBadge != null && mTvActiveProfilePackage != null) {
@@ -701,11 +697,6 @@ public class MainActivity extends AppCompatActivity {
                 mTvActiveProfileBadge.setText("CHINA");
                 mTvActiveProfileBadge.setTextColor(ContextCompat.getColor(this, R.color.china_amber));
                 mTvActiveProfilePackage.setText(PACKAGE_CHINA + " · Tap to switch");
-            } else if (isAsia) {
-                mTvActiveProfileTitle.setText("TikTok Asia");
-                mTvActiveProfileBadge.setText("ASIA");
-                mTvActiveProfileBadge.setTextColor(ContextCompat.getColor(this, R.color.text_secondary));
-                mTvActiveProfilePackage.setText(PACKAGE_ASIA + " · Tap to switch");
             } else {
                 mTvActiveProfileTitle.setText("TikTok Global");
                 mTvActiveProfileBadge.setText("GLOBAL");
@@ -758,13 +749,8 @@ public class MainActivity extends AppCompatActivity {
             mRowSpoofLocale.setVisibility(View.VISIBLE);
             mDividerSpoofLocale.setVisibility(View.VISIBLE);
 
-            if (isAsia) {
-                mBtnForceStop.setText("Restart TikTok Asia");
-                mBtnLaunch.setText("Launch");
-            } else {
-                mBtnForceStop.setText(R.string.btn_force_stop_tiktok);
-                mBtnLaunch.setText(R.string.btn_open_tiktok);
-            }
+            mBtnForceStop.setText(R.string.btn_force_stop_tiktok);
+            mBtnLaunch.setText(R.string.btn_open_tiktok);
         }
     }
 
@@ -794,38 +780,30 @@ public class MainActivity extends AppCompatActivity {
         }
 
         View cardGlobal = sheetView.findViewById(R.id.card_profile_global);
-        View cardAsia = sheetView.findViewById(R.id.card_profile_asia);
         View cardChina = sheetView.findViewById(R.id.card_profile_china);
 
         ImageView checkGlobal = sheetView.findViewById(R.id.check_profile_global);
-        ImageView checkAsia = sheetView.findViewById(R.id.check_profile_asia);
         ImageView checkChina = sheetView.findViewById(R.id.check_profile_china);
 
         TextView tvNotice = sheetView.findViewById(R.id.tv_no_installed_notice);
 
         boolean globalInstalled = isAppInstalled(PACKAGE_GLOBAL);
-        boolean asiaInstalled = isAppInstalled(PACKAGE_ASIA);
         boolean chinaInstalled = isAppInstalled(PACKAGE_CHINA);
 
-        boolean anyInstalled = globalInstalled || asiaInstalled || chinaInstalled;
+        boolean anyInstalled = globalInstalled || chinaInstalled;
 
         if (anyInstalled) {
             if (cardGlobal != null) cardGlobal.setVisibility(globalInstalled ? View.VISIBLE : View.GONE);
-            if (cardAsia != null) cardAsia.setVisibility(asiaInstalled ? View.VISIBLE : View.GONE);
             if (cardChina != null) cardChina.setVisibility(chinaInstalled ? View.VISIBLE : View.GONE);
             if (tvNotice != null) tvNotice.setVisibility(View.GONE);
         } else {
             if (cardGlobal != null) cardGlobal.setVisibility(View.VISIBLE);
-            if (cardAsia != null) cardAsia.setVisibility(View.VISIBLE);
             if (cardChina != null) cardChina.setVisibility(View.VISIBLE);
             if (tvNotice != null) tvNotice.setVisibility(View.VISIBLE);
         }
 
         if (checkGlobal != null) {
             checkGlobal.setVisibility(PROFILE_GLOBAL.equals(mCurrentProfile) ? View.VISIBLE : View.GONE);
-        }
-        if (checkAsia != null) {
-            checkAsia.setVisibility(PROFILE_ASIA.equals(mCurrentProfile) ? View.VISIBLE : View.GONE);
         }
         if (checkChina != null) {
             checkChina.setVisibility(PROFILE_CHINA.equals(mCurrentProfile) ? View.VISIBLE : View.GONE);
@@ -834,12 +812,6 @@ public class MainActivity extends AppCompatActivity {
         if (cardGlobal != null) {
             cardGlobal.setOnClickListener(v -> {
                 setProfile(PROFILE_GLOBAL);
-                dialog.dismiss();
-            });
-        }
-        if (cardAsia != null) {
-            cardAsia.setOnClickListener(v -> {
-                setProfile(PROFILE_ASIA);
                 dialog.dismiss();
             });
         }
@@ -867,8 +839,6 @@ public class MainActivity extends AppCompatActivity {
     private String getTargetPackageForProfile(String profile) {
         if (PROFILE_CHINA.equals(profile)) {
             return PACKAGE_CHINA;
-        } else if (PROFILE_ASIA.equals(profile)) {
-            return PACKAGE_ASIA;
         } else {
             return PACKAGE_GLOBAL;
         }
@@ -877,8 +847,6 @@ public class MainActivity extends AppCompatActivity {
     private String getTargetAppNameForProfile(String profile) {
         if (PROFILE_CHINA.equals(profile)) {
             return getString(R.string.target_app_china);
-        } else if (PROFILE_ASIA.equals(profile)) {
-            return getString(R.string.target_app_asia);
         } else {
             return getString(R.string.target_app_global);
         }

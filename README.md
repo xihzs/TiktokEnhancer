@@ -1,6 +1,6 @@
 # Tiktok Enhancer
 
-A clean, modern Vector framework module for TikTok Global, TikTok Asia, and Douyin.
+A clean, modern Vector framework module for TikTok Global and Douyin.
 
 Bypasses SIM card region restrictions, eliminates sponsored feed ads, unlocks unrestricted downloads, and downloads stories and videos without watermarks.
 
@@ -15,7 +15,6 @@ This module requires **[Vector](https://github.com/JingMatrix/Vector)** (the mod
 ## Supported Applications
 
 - **TikTok Global** (`com.zhiliaoapp.musically`)
-- **TikTok Asia** (`com.ss.android.ugc.trill`)
 - **Douyin / TikTok China** (`com.ss.android.ugc.aweme`)
 
 The in-app profile menu automatically detects installed packages and only displays apps present on your device.
@@ -45,7 +44,7 @@ The in-app profile menu automatically detects installed packages and only displa
      ```
 3. **Enable in Vector Manager**:
    - Open **Vector Manager** → **Modules** → Enable **Tiktok Enhancer**.
-   - Under Scope, check the box for your installed app (**TikTok**, **TikTok Asia**, and/or **Douyin**).
+   - Under Scope, check the box for your installed app (**TikTok** and/or **Douyin**).
 4. **Configure Settings**:
    - Open **Tiktok Enhancer** from your launcher or directly from Vector Manager.
    - Tap the hamburger menu in the top app bar to switch active profiles.
