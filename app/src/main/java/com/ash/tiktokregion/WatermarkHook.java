@@ -35,6 +35,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
+import java.util.regex.Pattern;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
@@ -50,6 +52,16 @@ public class WatermarkHook {
     private static final Set<String> sKnownStoryAids = Collections.synchronizedSet(new HashSet<>());
     private static final Set<Object> sKnownStoryAwemes = Collections.newSetFromMap(new java.util.WeakHashMap<>());
     private static final ThreadLocal<Boolean> sIsUnlocking = ThreadLocal.withInitial(() -> Boolean.FALSE);
+
+    private static final Pattern PATTERN_WATERMARK = Pattern.compile("([&?])watermark=[^&]*");
+    private static final Pattern PATTERN_IS_WATERMARK = Pattern.compile("([&?])is_watermark=[^&]*");
+    private static final Pattern PATTERN_LOGO_NAME = Pattern.compile("([&?])logo_name=[^&]*");
+
+    private static final Set<Object> sUnlockedAwemes = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+    private static final Set<Object> sCleanedAwemes = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+    private static final Set<Object> sCleanedVideos = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+    private static final Set<Object> sCleanedFeedLists = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+    private static final Set<Object> sCleanedUrlModels = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
 
     public static void hook(ClassLoader classLoader) {
         hookAwemeDownloadFlags(classLoader);
@@ -113,6 +125,8 @@ public class WatermarkHook {
     public static void cleanVideo(Object video) {
         if (video == null) return;
         if (!MainHook.isNoWatermarkEnabled()) return;
+        if (sCleanedVideos.contains(video)) return;
+        sCleanedVideos.add(video);
 
         try {
             Object playAddr = getCleanPlayAddr(video);
@@ -146,6 +160,8 @@ public class WatermarkHook {
 
     public static void cleanAweme(Object aweme) {
         if (aweme == null) return;
+        if (sCleanedAwemes.contains(aweme)) return;
+        sCleanedAwemes.add(aweme);
         try {
             Object video = null;
             try { video = XposedHelpers.getObjectField(aweme, "video"); } catch (Throwable ignored) {}
@@ -175,6 +191,8 @@ public class WatermarkHook {
 
     public static void cleanUrlModel(Object urlModel) {
         if (urlModel == null) return;
+        if (sCleanedUrlModels.contains(urlModel)) return;
+        sCleanedUrlModels.add(urlModel);
         try {
             List<?> list = null;
             try {
@@ -186,21 +204,33 @@ public class WatermarkHook {
                 } catch (Throwable ignored) {}
             }
             if (list != null && !list.isEmpty()) {
-                List<String> cleanList = new ArrayList<>(list.size());
+                boolean hasTarget = false;
                 for (Object item : list) {
                     if (item instanceof String) {
-                        cleanList.add(cleanDownloadUrl((String) item));
-                    } else if (item != null) {
-                        cleanList.add(cleanDownloadUrl(item.toString()));
+                        String s = (String) item;
+                        if (s.contains("playwm") || s.contains("watermark") || s.contains("logo_name")) {
+                            hasTarget = true;
+                            break;
+                        }
                     }
                 }
-                try {
-                    XposedHelpers.setObjectField(urlModel, "urlList", cleanList);
-                } catch (Throwable ignored) {}
+                if (hasTarget) {
+                    List<String> cleanList = new ArrayList<>(list.size());
+                    for (Object item : list) {
+                        if (item instanceof String) {
+                            cleanList.add(cleanDownloadUrl((String) item));
+                        } else if (item != null) {
+                            cleanList.add(cleanDownloadUrl(item.toString()));
+                        }
+                    }
+                    try {
+                        XposedHelpers.setObjectField(urlModel, "urlList", cleanList);
+                    } catch (Throwable ignored) {}
+                }
             }
             try {
                 String uri = (String) XposedHelpers.getObjectField(urlModel, "uri");
-                if (uri != null) {
+                if (uri != null && (uri.contains("playwm") || uri.contains("watermark") || uri.contains("logo_name"))) {
                     XposedHelpers.setObjectField(urlModel, "uri", cleanDownloadUrl(uri));
                 }
             } catch (Throwable ignored) {}
@@ -238,20 +268,26 @@ public class WatermarkHook {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                             Object video = param.getResult();
-                            if (param.thisObject != null) {
-                                sCurrentAweme = param.thisObject;
-                                unlockAwemeRestrictions(param.thisObject, video);
-                                if (video != null) {
-                                    synchronized (sVideoToAwemeMap) {
-                                        sVideoToAwemeMap.put(video, param.thisObject);
+                            Object aweme = param.thisObject;
+                            if (aweme != null) {
+                                sCurrentAweme = aweme;
+                                boolean awemeUnlocked = sUnlockedAwemes.contains(aweme);
+                                boolean videoCleaned = (video == null || sCleanedVideos.contains(video));
+                                if (!awemeUnlocked || !videoCleaned) {
+                                    unlockAwemeRestrictions(aweme, video);
+                                    if (video != null) {
+                                        synchronized (sVideoToAwemeMap) {
+                                            sVideoToAwemeMap.put(video, aweme);
+                                        }
                                     }
                                 }
                             }
 
-                            if (!MainHook.isNoWatermarkEnabled()) return;
-                            if (video == null) return;
+                            if (!MainHook.isNoWatermarkEnabled() || video == null) return;
 
-                            cleanVideo(video);
+                            if (!sCleanedVideos.contains(video)) {
+                                cleanVideo(video);
+                            }
                         }
                     }
             );
@@ -269,7 +305,9 @@ public class WatermarkHook {
                         protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                             Object video = param.getResult();
                             if (video != null && MainHook.isNoWatermarkEnabled()) {
-                                cleanVideo(video);
+                                if (!sCleanedVideos.contains(video)) {
+                                    cleanVideo(video);
+                                }
                             }
                         }
                     }
@@ -288,7 +326,9 @@ public class WatermarkHook {
                             @Override
                             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                                 if (param.args != null && param.args.length > 0 && param.args[0] != null && MainHook.isNoWatermarkEnabled()) {
-                                    cleanVideo(param.args[0]);
+                                    if (!sCleanedVideos.contains(param.args[0])) {
+                                        cleanVideo(param.args[0]);
+                                    }
                                 }
                             }
                         }
@@ -303,10 +343,14 @@ public class WatermarkHook {
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                         if (!MainHook.isNoWatermarkEnabled()) return;
+                        if (param.thisObject != null) {
+                            if (sCleanedFeedLists.contains(param.thisObject)) return;
+                            sCleanedFeedLists.add(param.thisObject);
+                        }
                         Object res = param.getResult();
                         if (res instanceof List) {
                             for (Object item : (List<?>) res) {
-                                if (item != null) {
+                                if (item != null && !sCleanedAwemes.contains(item)) {
                                     cleanAweme(item);
                                 }
                             }
@@ -386,7 +430,9 @@ public class WatermarkHook {
                         protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                             if (param.thisObject != null) {
                                 sCurrentAweme = param.thisObject;
-                                unlockAwemeRestrictions(param.thisObject);
+                                if (!sUnlockedAwemes.contains(param.thisObject)) {
+                                    unlockAwemeRestrictions(param.thisObject);
+                                }
                             }
                         }
                     }
@@ -403,7 +449,9 @@ public class WatermarkHook {
                         protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                             if (param.thisObject != null) {
                                 sCurrentAweme = param.thisObject;
-                                unlockAwemeRestrictions(param.thisObject);
+                                if (!sUnlockedAwemes.contains(param.thisObject)) {
+                                    unlockAwemeRestrictions(param.thisObject);
+                                }
                             }
                         }
                     }
@@ -420,10 +468,14 @@ public class WatermarkHook {
                 Object res = param.getResult();
                 if (res != null) {
                     sLastPlayedPlayAddr = res;
-                    cleanUrlModel(res);
+                    if (!sCleanedUrlModels.contains(res)) {
+                        cleanUrlModel(res);
+                    }
                 }
                 if (param.thisObject != null && MainHook.isNoWatermarkEnabled()) {
-                    cleanVideo(param.thisObject);
+                    if (!sCleanedVideos.contains(param.thisObject)) {
+                        cleanVideo(param.thisObject);
+                    }
                 }
             }
         };
@@ -446,7 +498,9 @@ public class WatermarkHook {
                 Object video = param.thisObject;
                 if (video == null) return;
 
-                cleanVideo(video);
+                if (!sCleanedVideos.contains(video)) {
+                    cleanVideo(video);
+                }
                 Object playAddr = getCleanPlayAddr(video);
                 if (playAddr != null) {
                     param.setResult(playAddr);
@@ -477,11 +531,31 @@ public class WatermarkHook {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                             if (!MainHook.isNoWatermarkEnabled()) return;
+                            Object urlModel = param.thisObject;
+                            if (urlModel != null && sCleanedUrlModels.contains(urlModel)) {
+                                return;
+                            }
 
                             Object result = param.getResult();
                             if (result instanceof List) {
                                 List<?> originalList = (List<?>) result;
                                 if (originalList.isEmpty()) return;
+
+                                boolean hasCandidate = false;
+                                for (Object item : originalList) {
+                                    if (item instanceof String) {
+                                        String url = (String) item;
+                                        if (url.contains("playwm") || url.contains("watermark") || url.contains("logo_name")) {
+                                            hasCandidate = true;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (!hasCandidate) {
+                                    if (urlModel != null) sCleanedUrlModels.add(urlModel);
+                                    return;
+                                }
 
                                 boolean modified = false;
                                 List<String> cleanList = new ArrayList<>(originalList.size());
@@ -502,6 +576,7 @@ public class WatermarkHook {
                                 if (modified) {
                                     param.setResult(cleanList);
                                 }
+                                if (urlModel != null) sCleanedUrlModels.add(urlModel);
                             }
                         }
                     }
@@ -523,9 +598,11 @@ public class WatermarkHook {
                             Object res = param.getResult();
                             if (res instanceof String) {
                                 String uri = (String) res;
-                                String cleaned = cleanDownloadUrl(uri);
-                                if (!cleaned.equals(uri)) {
-                                    param.setResult(cleaned);
+                                if (uri.contains("playwm") || uri.contains("watermark") || uri.contains("logo_name")) {
+                                    String cleaned = cleanDownloadUrl(uri);
+                                    if (!cleaned.equals(uri)) {
+                                        param.setResult(cleaned);
+                                    }
                                 }
                             }
                         }
@@ -1367,19 +1444,25 @@ public class WatermarkHook {
 
     public static void unlockAwemeRestrictions(Object aweme, Object video) {
         if (aweme == null) return;
+        boolean awemeUnlocked = sUnlockedAwemes.contains(aweme);
+        if (awemeUnlocked && (video == null || sCleanedVideos.contains(video))) {
+            return;
+        }
         if (Boolean.TRUE.equals(sIsUnlocking.get())) return;
         sIsUnlocking.set(Boolean.TRUE);
         try {
-
-            try {
-                XposedHelpers.setBooleanField(aweme, "preventDownload", false);
-            } catch (Throwable ignored) {}
-            try {
-                XposedHelpers.callMethod(aweme, "setPreventDownload", false);
-            } catch (Throwable ignored) {}
-            try {
-                XposedHelpers.setBooleanField(aweme, "canPlay", true);
-            } catch (Throwable ignored) {}
+            if (!awemeUnlocked) {
+                sUnlockedAwemes.add(aweme);
+                try {
+                    XposedHelpers.setBooleanField(aweme, "preventDownload", false);
+                } catch (Throwable ignored) {}
+                try {
+                    XposedHelpers.callMethod(aweme, "setPreventDownload", false);
+                } catch (Throwable ignored) {}
+                try {
+                    XposedHelpers.setBooleanField(aweme, "canPlay", true);
+                } catch (Throwable ignored) {}
+            }
 
             if (video == null) {
                 try {
@@ -1387,23 +1470,12 @@ public class WatermarkHook {
                 } catch (Throwable ignored) {}
             }
 
-            if (video != null) {
-                try {
-                    Object playAddr = null;
-                    try {
-                        playAddr = XposedHelpers.getObjectField(video, "playAddr");
-                    } catch (Throwable ignored) {}
-                    if (playAddr == null) {
-                        try {
-                            playAddr = XposedHelpers.callMethod(video, "getPlayAddr");
-                        } catch (Throwable ignored) {}
-                    }
-                    if (playAddr != null) {
-                        try { XposedHelpers.setObjectField(video, "downloadAddr", playAddr); } catch (Throwable ignored) {}
-                        try { XposedHelpers.setObjectField(video, "downloadNoWatermarkAddr", playAddr); } catch (Throwable ignored) {}
-                        try { XposedHelpers.setObjectField(video, "newDownloadAddr", playAddr); } catch (Throwable ignored) {}
-                    }
-                } catch (Throwable ignored) {}
+            if (video != null && !sCleanedVideos.contains(video)) {
+                cleanVideo(video);
+            }
+
+            if (awemeUnlocked) {
+                return;
             }
 
             try {
@@ -2187,17 +2259,24 @@ public class WatermarkHook {
 
     private static void attachSaveButtonToShareDialog(final Dialog dialog) {
         if (dialog == null) return;
+        String dialogClassName = dialog.getClass().getName();
+        if (dialogClassName.contains("Progress") || dialogClassName.contains("Loading")
+                || dialogClassName.contains("Toast") || dialogClassName.contains("Alert")) {
+            return;
+        }
         final Window window = dialog.getWindow();
         if (window == null) return;
         final View decor = window.getDecorView();
         if (decor == null) return;
 
+        final String tag = "tiktok_enhancer_share_dl_btn";
+
         Runnable attachTask = () -> {
             try {
+                if (!dialog.isShowing()) return;
                 if (!(decor instanceof ViewGroup)) return;
                 final ViewGroup decorGroup = (ViewGroup) decor;
 
-                final String tag = "tiktok_enhancer_share_dl_btn";
                 if (decorGroup.findViewWithTag(tag) != null) return;
 
                 TextView reportTv = findActionTextView(decorGroup);
@@ -2264,11 +2343,14 @@ public class WatermarkHook {
 
         decor.post(attachTask);
         decor.postDelayed(attachTask, 200);
-        decor.postDelayed(attachTask, 500);
     }
 
     private static boolean hasNativeDownloadButton(View view) {
-        if (view == null) return false;
+        return hasNativeDownloadButton(view, 0);
+    }
+
+    private static boolean hasNativeDownloadButton(View view, int depth) {
+        if (view == null || depth > 8) return false;
 
         if (view instanceof TextView && view.getVisibility() == View.VISIBLE) {
             CharSequence text = ((TextView) view).getText();
@@ -2283,9 +2365,11 @@ public class WatermarkHook {
 
                     float alpha = view.getAlpha();
                     View current = view;
-                    while (current.getParent() instanceof View) {
+                    int parentSteps = 0;
+                    while (current.getParent() instanceof View && parentSteps < 5) {
                         current = (View) current.getParent();
                         alpha *= current.getAlpha();
+                        parentSteps++;
                     }
                     if (alpha < 0.8f || !view.isEnabled()) {
                         return false;
@@ -2297,14 +2381,20 @@ public class WatermarkHook {
 
         if (view instanceof ViewGroup) {
             ViewGroup vg = (ViewGroup) view;
-            for (int i = 0; i < vg.getChildCount(); i++) {
-                if (hasNativeDownloadButton(vg.getChildAt(i))) return true;
+            int count = vg.getChildCount();
+            for (int i = 0; i < count; i++) {
+                if (hasNativeDownloadButton(vg.getChildAt(i), depth + 1)) return true;
             }
         }
         return false;
     }
 
     private static TextView findActionTextView(View view) {
+        return findActionTextView(view, 0);
+    }
+
+    private static TextView findActionTextView(View view, int depth) {
+        if (view == null || depth > 8) return null;
         if (view instanceof TextView) {
             CharSequence text = ((TextView) view).getText();
             if (text != null) {
@@ -2320,8 +2410,9 @@ public class WatermarkHook {
         }
         if (view instanceof ViewGroup) {
             ViewGroup vg = (ViewGroup) view;
-            for (int i = 0; i < vg.getChildCount(); i++) {
-                TextView found = findActionTextView(vg.getChildAt(i));
+            int count = vg.getChildCount();
+            for (int i = 0; i < count; i++) {
+                TextView found = findActionTextView(vg.getChildAt(i), depth + 1);
                 if (found != null) return found;
             }
         }
@@ -2632,15 +2723,18 @@ public class WatermarkHook {
 
     public static String cleanDownloadUrl(String url) {
         if (url == null) return null;
+        if (!url.contains("playwm") && !url.contains("watermark") && !url.contains("logo_name")) {
+            return url;
+        }
         String clean = url.replace("/playwm/", "/play/").replace("playwm", "play");
         if (clean.contains("watermark=")) {
-            clean = clean.replaceAll("([&?])watermark=[^&]*", "$1watermark=0");
+            clean = PATTERN_WATERMARK.matcher(clean).replaceAll("$1watermark=0");
         }
         if (clean.contains("is_watermark=")) {
-            clean = clean.replaceAll("([&?])is_watermark=[^&]*", "$1is_watermark=0");
+            clean = PATTERN_IS_WATERMARK.matcher(clean).replaceAll("$1is_watermark=0");
         }
         if (clean.contains("logo_name=")) {
-            clean = clean.replaceAll("([&?])logo_name=[^&]*", "");
+            clean = PATTERN_LOGO_NAME.matcher(clean).replaceAll("");
         }
         return clean;
     }

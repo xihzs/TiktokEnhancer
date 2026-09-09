@@ -54,6 +54,7 @@ public class MainHook implements IXposedHookLoadPackage {
     private static volatile boolean sSpoofLocale = false;
     private static volatile String sLocaleLang = "en";
     private static volatile String sLocaleCountry = "US";
+    private static volatile Locale sCachedSpoofedLocale = new Locale("en", "US");
     private static volatile boolean sNoWatermark = true;
     private static volatile boolean sBypassDownloadRestriction = true;
     private static volatile boolean sHideAds = true;
@@ -229,6 +230,7 @@ public class MainHook implements IXposedHookLoadPackage {
                     sSpoofLocale = bundle.getBoolean(ConfigProvider.KEY_SPOOF_LOCALE, false);
                     sLocaleLang = bundle.getString(ConfigProvider.KEY_LOCALE_LANG, "en");
                     sLocaleCountry = bundle.getString(ConfigProvider.KEY_LOCALE_COUNTRY, "US");
+                    sCachedSpoofedLocale = new Locale(sLocaleLang, sLocaleCountry);
                     sNoWatermark = bundle.getBoolean(ConfigProvider.KEY_NO_WATERMARK, true);
                     sBypassDownloadRestriction = bundle.getBoolean(ConfigProvider.KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
                     sHideAds = bundle.getBoolean(ConfigProvider.KEY_HIDE_ADS, true);
@@ -308,6 +310,7 @@ public class MainHook implements IXposedHookLoadPackage {
 
             sLocaleLang = preset.getLocaleLanguage();
             sLocaleCountry = preset.getLocaleCountry();
+            sCachedSpoofedLocale = new Locale(sLocaleLang, sLocaleCountry);
 
             Log.i(TAG, "Config loaded via XSharedPreferences: enabled=" + sEnabled
                     + ", country=" + sCountryIso + ", forceRegion=" + sForceRegion
@@ -639,7 +642,7 @@ public class MainHook implements IXposedHookLoadPackage {
                 protected void afterHookedMethod(MethodHookParam param) {
                     if (!sEnabled || param.args == null || param.args.length == 0) return;
                     String key = (String) param.args[0];
-                    if (key == null) return;
+                    if (key == null || !key.startsWith("gsm.")) return;
 
                     if (key.startsWith("gsm.sim.operator.iso-country") || key.startsWith("gsm.operator.iso-country")) {
                         param.setResult(sCountryIso.toLowerCase());
@@ -669,7 +672,7 @@ public class MainHook implements IXposedHookLoadPackage {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) {
                             if (sEnabled && sSpoofLocale) {
-                                param.setResult(new Locale(sLocaleLang, sLocaleCountry));
+                                param.setResult(sCachedSpoofedLocale != null ? sCachedSpoofedLocale : new Locale(sLocaleLang, sLocaleCountry));
                             }
                         }
                     }

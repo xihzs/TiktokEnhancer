@@ -196,6 +196,7 @@ public class AdsHook {
         for (Object item : kept) {
             try {
                 WatermarkHook.unlockAwemeRestrictions(item);
+                WatermarkHook.cleanAweme(item);
             } catch (Throwable ignored) {}
         }
 
