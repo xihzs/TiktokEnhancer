@@ -60,6 +60,7 @@ public class MainActivity extends AppCompatActivity {
     public static final String KEY_HIDE_ICON = "hide_app_icon";
     public static final String KEY_NO_WATERMARK = "no_watermark";
     public static final String KEY_BYPASS_DOWNLOAD_RESTRICTION = "bypass_download_restriction";
+    public static final String KEY_HD_UPLOAD = "hd_upload";
     public static final String KEY_HIDE_ADS = "hide_ads";
     public static final String KEY_FORCE_REGION = "force_region";
     public static final String KEY_STRICT_FORCE_REGION = "strict_force_region";
@@ -111,6 +112,9 @@ public class MainActivity extends AppCompatActivity {
     private MaterialSwitch mSwitchHideAds;
     private MaterialSwitch mSwitchNoWatermark;
     private MaterialSwitch mSwitchBypassDownload;
+    private MaterialSwitch mSwitchHDUpload;
+    private View mRowHDUpload;
+    private View mDividerHDUpload;
     private MaterialSwitch mSwitchCustomOverride;
     private LinearLayout mLayoutCustomInputs;
     private TextInputEditText mEtCustomIso;
@@ -182,6 +186,9 @@ public class MainActivity extends AppCompatActivity {
         mSwitchHideAds = findViewById(R.id.switch_hide_ads);
         mSwitchNoWatermark = findViewById(R.id.switch_no_watermark);
         mSwitchBypassDownload = findViewById(R.id.switch_bypass_download);
+        mSwitchHDUpload = findViewById(R.id.switch_hd_upload);
+        mRowHDUpload = findViewById(R.id.row_hd_upload);
+        mDividerHDUpload = findViewById(R.id.divider_hd_upload);
         mSwitchSpoof = findViewById(R.id.switch_enable_spoof);
         mSwitchLocale = findViewById(R.id.switch_spoof_locale);
         mSwitchHideIcon = findViewById(R.id.switch_hide_icon);
@@ -230,6 +237,7 @@ public class MainActivity extends AppCompatActivity {
         boolean hideAds = mPrefs.getBoolean(KEY_HIDE_ADS, true);
         boolean noWatermark = mPrefs.getBoolean(KEY_NO_WATERMARK, true);
         boolean bypassDownload = mPrefs.getBoolean(KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
+        boolean hdUpload = mPrefs.getBoolean(KEY_HD_UPLOAD, true);
 
         mSwitchSpoof.setChecked(enabled);
         mSwitchLocale.setChecked(spoofLocale);
@@ -241,6 +249,7 @@ public class MainActivity extends AppCompatActivity {
         mSwitchHideAds.setChecked(hideAds);
         mSwitchNoWatermark.setChecked(noWatermark);
         mSwitchBypassDownload.setChecked(bypassDownload);
+        if (mSwitchHDUpload != null) mSwitchHDUpload.setChecked(hdUpload);
         mSwitchCustomOverride.setChecked(isCustom);
         mLayoutCustomInputs.setVisibility(isCustom ? View.VISIBLE : View.GONE);
 
@@ -341,6 +350,15 @@ public class MainActivity extends AppCompatActivity {
             makePrefsWorldReadable();
             Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
         });
+
+        if (mSwitchHDUpload != null) {
+            mSwitchHDUpload.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                mPrefs.edit().putBoolean(KEY_HD_UPLOAD, isChecked).apply();
+                saveToDeviceProtectedStorage(KEY_HD_UPLOAD, isChecked);
+                makePrefsWorldReadable();
+                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            });
+        }
 
         mSwitchSpoof.setOnCheckedChangeListener((buttonView, isChecked) -> {
             mPrefs.edit().putBoolean(KEY_ENABLED, isChecked).apply();
@@ -743,6 +761,9 @@ public class MainActivity extends AppCompatActivity {
             mRowSpoofLocale.setVisibility(View.GONE);
             mDividerSpoofLocale.setVisibility(View.GONE);
 
+            if (mRowHDUpload != null) mRowHDUpload.setVisibility(View.GONE);
+            if (mDividerHDUpload != null) mDividerHDUpload.setVisibility(View.GONE);
+
             mBtnForceStop.setText("Restart Douyin");
             mBtnLaunch.setText("Launch Douyin");
         } else {
@@ -765,6 +786,9 @@ public class MainActivity extends AppCompatActivity {
             mDividerEnableSpoof.setVisibility(View.VISIBLE);
             mRowSpoofLocale.setVisibility(View.VISIBLE);
             mDividerSpoofLocale.setVisibility(View.VISIBLE);
+
+            if (mRowHDUpload != null) mRowHDUpload.setVisibility(View.VISIBLE);
+            if (mDividerHDUpload != null) mDividerHDUpload.setVisibility(View.VISIBLE);
 
             if (isAsia) {
                 mBtnForceStop.setText("Restart TikTok Asia");

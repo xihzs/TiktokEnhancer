@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release tag 1.0.0'
+        description: 'Release tag 1.0.3'
         required: false
-        default: 'v1.0.0'
+        default: 'v1.0.3'
       release_name:
         description: 'Release name'
         required: false
-        default: 'Tiktok Enhancer v1.0.0'
+        default: 'Tiktok Enhancer v1.0.3'
       prerelease:
         description: 'Mark as pre-release'
         required: false
@@ -50,7 +50,7 @@ jobs:
           mkdir -p release_assets
           TAG="${{ github.event.inputs.tag_name }}"
           if [ -z "$TAG" ]; then
-            TAG="v1.0.0-$(date +'%Y%m%d%H%M%S')"
+            TAG="v1.0.3-$(date +'%Y%m%d%H%M%S')"
           fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 

@@ -18,6 +18,7 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -76,6 +77,7 @@ public class MainHook implements IXposedHookLoadPackage {
     private static volatile Locale sCachedSpoofedLocale = new Locale("en", "US");
     private static volatile boolean sNoWatermark = true;
     private static volatile boolean sBypassDownloadRestriction = true;
+    private static volatile boolean sHDUpload = true;
     private static volatile boolean sHideAds = true;
     private static volatile boolean sForceRegion = true;
     private static volatile boolean sStrictForceRegion = false;
@@ -93,6 +95,10 @@ public class MainHook implements IXposedHookLoadPackage {
 
     public static boolean isBypassDownloadRestrictionEnabled() {
         return sBypassDownloadRestriction;
+    }
+
+    public static boolean isHDUploadEnabled() {
+        return sHDUpload;
     }
 
     public static boolean isHideAdsEnabled() {
@@ -161,6 +167,9 @@ public class MainHook implements IXposedHookLoadPackage {
 
         WatermarkHook.hook(lpparam.classLoader);
         AdsHook.hook(lpparam.classLoader);
+        if (!isChina) {
+            HDUploadHook.hook(lpparam.classLoader);
+        }
 
         XposedBridge.log(TAG + ": All initial hooks dispatched for " + lpparam.packageName);
     }
@@ -184,6 +193,9 @@ public class MainHook implements IXposedHookLoadPackage {
         }
     }
 
+    private static final AtomicBoolean sLifecycleInitialized = new AtomicBoolean(false);
+    private static volatile boolean sDeferredHooksInstalled = false;
+
     private void hookApplicationLifecycle(ClassLoader classLoader) {
         XC_MethodHook appAttachHook = new XC_MethodHook() {
             @Override
@@ -196,7 +208,7 @@ public class MainHook implements IXposedHookLoadPackage {
                     sAppContext = (Application) param.thisObject;
                 }
                 final Context ctx = (context != null) ? context : sAppContext;
-                if (ctx != null) {
+                if (ctx != null && sLifecycleInitialized.compareAndSet(false, true)) {
                     installDeferredHooks(ctx.getClassLoader());
                     new Thread(() -> refreshConfig(ctx), "TikTokEnhancer-ConfigRefresh").start();
                 }
@@ -204,7 +216,7 @@ public class MainHook implements IXposedHookLoadPackage {
         };
 
         try {
-            XposedHelpers.findAndHookMethod(ContextWrapper.class, "attachBaseContext", Context.class, appAttachHook);
+            XposedHelpers.findAndHookMethod(Application.class, "attachBaseContext", Context.class, appAttachHook);
         } catch (Throwable ignored) {}
 
         try {
@@ -222,7 +234,7 @@ public class MainHook implements IXposedHookLoadPackage {
                                 sAppContext = (Application) param.thisObject;
                             }
                             final Context ctx = sAppContext;
-                            if (ctx != null) {
+                            if (ctx != null && sLifecycleInitialized.compareAndSet(false, true)) {
                                 installDeferredHooks(ctx.getClassLoader());
                                 new Thread(() -> refreshConfig(ctx), "TikTokEnhancer-ConfigRefresh").start();
                             }
@@ -252,6 +264,7 @@ public class MainHook implements IXposedHookLoadPackage {
     }
 
     private static volatile boolean sClassLoaderHooked = false;
+    private static final ThreadLocal<Boolean> sInLoadClass = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     private void hookClassLoader(ClassLoader classLoader) {
         if (sClassLoaderHooked) return;
@@ -260,9 +273,15 @@ public class MainHook implements IXposedHookLoadPackage {
         XC_MethodHook loadClassHook = new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) {
-                Object result = param.getResult();
-                if (result instanceof Class<?>) {
-                    onClassLoaded((Class<?>) result);
+                if (sInLoadClass.get()) return;
+                sInLoadClass.set(Boolean.TRUE);
+                try {
+                    Object result = param.getResult();
+                    if (result instanceof Class<?>) {
+                        onClassLoaded((Class<?>) result);
+                    }
+                } finally {
+                    sInLoadClass.set(Boolean.FALSE);
                 }
             }
         };
@@ -279,15 +298,25 @@ public class MainHook implements IXposedHookLoadPackage {
     public static void onClassLoaded(Class<?> clazz) {
         if (clazz == null) return;
         String name = clazz.getName();
+
+        if (name.startsWith("android.") || name.startsWith("java.") || name.startsWith("javax.")
+                || name.startsWith("kotlin.") || name.startsWith("androidx.") || name.startsWith("com.google.")) {
+            return;
+        }
+
         if ("com.bytedance.ttnet.TTNetInit".equals(name)) {
             hookTTNetInitClass(clazz);
         } else if ("com.ss.ugc.clientai.core.api.FeatureProducer".equals(name)) {
             hookFeatureProducerClass(clazz);
         } else if ("com.ss.android.ugc.aweme.setting.services.SettingServiceImpl".equals(name)) {
             hookSettingServiceImplClass(clazz);
-        } else if ("X.03IJ".equals(name) || "LX.03IJ".equals(name)) {
+        } else if ("X.03JI".equals(name) || "LX.03JI".equals(name)
+                || "X.03IJ".equals(name) || "LX.03IJ".equals(name)
+                || "X.04JI".equals(name) || "LX.04JI".equals(name)) {
             hookParamMapClass(clazz);
-        } else if ("X.03im".equals(name) || "LX.03im".equals(name)) {
+        } else if ("X.03jl".equals(name) || "LX.03jl".equals(name)
+                || "X.03im".equals(name) || "LX.03im".equals(name)
+                || "X.04jl".equals(name) || "LX.04jl".equals(name)) {
             hookNetworkCommonParamsClass(clazz);
         } else if ("com.ss.android.ugc.aweme.watermark.WaterMarkServiceImpl".equals(name)
                 || "com.ss.android.ugc.aweme.services.watermark.WaterMarkBuilder".equals(name)) {
@@ -310,17 +339,13 @@ public class MainHook implements IXposedHookLoadPackage {
         } else if ("com.ss.android.ugc.aweme.friendstab.api.FriendsFeedResponse".equals(name)) {
             AdsHook.hookFriendsFeedResponseClass(clazz);
         } else if (!isChinaPackage()) {
-            if (!sParamMapHooked) {
-                tryHookAsParamMapClass(clazz);
-            }
-            if (!sNetworkParamsHooked) {
-                tryHookAsNetworkParamsClass(clazz);
-            }
+            HDUploadHook.onClassLoaded(clazz);
         }
     }
 
     public static void installDeferredHooks(ClassLoader classLoader) {
-        if (classLoader == null) return;
+        if (classLoader == null || sDeferredHooksInstalled) return;
+        sDeferredHooksInstalled = true;
         boolean isChina = isChinaPackage();
         if (!isChina) {
             hookCronetNetworkStack(classLoader);
@@ -330,6 +355,9 @@ public class MainHook implements IXposedHookLoadPackage {
         }
         WatermarkHook.hook(classLoader);
         AdsHook.hook(classLoader);
+        if (!isChina) {
+            HDUploadHook.hook(classLoader);
+        }
     }
 
     public static void checkConfigRefreshAsync(Context context) {
@@ -370,6 +398,7 @@ public class MainHook implements IXposedHookLoadPackage {
                     sCachedSpoofedLocale = new Locale(sLocaleLang, sLocaleCountry);
                     sNoWatermark = bundle.getBoolean(ConfigProvider.KEY_NO_WATERMARK, true);
                     sBypassDownloadRestriction = bundle.getBoolean(ConfigProvider.KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
+                    sHDUpload = bundle.getBoolean(ConfigProvider.KEY_HD_UPLOAD, true);
                     sHideAds = bundle.getBoolean(ConfigProvider.KEY_HIDE_ADS, true);
                     sForceRegion = bundle.getBoolean(ConfigProvider.KEY_FORCE_REGION, true);
                     sStrictForceRegion = bundle.getBoolean(ConfigProvider.KEY_STRICT_FORCE_REGION, false);
@@ -420,6 +449,7 @@ public class MainHook implements IXposedHookLoadPackage {
             sSpoofLocale = prefs.getBoolean(MainActivity.KEY_SPOOF_LOCALE, false);
             sNoWatermark = prefs.getBoolean(MainActivity.KEY_NO_WATERMARK, true);
             sBypassDownloadRestriction = prefs.getBoolean(MainActivity.KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
+            sHDUpload = prefs.getBoolean(MainActivity.KEY_HD_UPLOAD, true);
             sHideAds = prefs.getBoolean(MainActivity.KEY_HIDE_ADS, true);
             sForceRegion = prefs.getBoolean(MainActivity.KEY_FORCE_REGION, true);
             sStrictForceRegion = prefs.getBoolean(MainActivity.KEY_STRICT_FORCE_REGION, false);
@@ -596,8 +626,9 @@ public class MainHook implements IXposedHookLoadPackage {
     private static volatile boolean sParamMapHooked = false;
     private static volatile boolean sNetworkParamsHooked = false;
 
-    // Known obfuscated class names for the param map across TikTok versions
     private static final String[] PARAM_MAP_CLASS_NAMES = {
+            "X.03JI", "LX.03JI",
+            "X.04JI", "LX.04JI",
             "X.03IJ", "LX.03IJ",
             "X.04IJ", "LX.04IJ",
             "X.03IK", "LX.03IK",
@@ -606,8 +637,9 @@ public class MainHook implements IXposedHookLoadPackage {
             "X.04IL", "LX.04IL",
     };
 
-    // Known obfuscated class names for TTNet network common parameter builders
     private static final String[] NETWORK_COMMON_PARAMS_CLASSES = {
+            "X.03jl", "LX.03jl",
+            "X.04jl", "LX.04jl",
             "X.03im", "LX.03im",
             "X.04im", "LX.04im",
             "X.03in", "LX.03in",
@@ -670,7 +702,7 @@ public class MainHook implements IXposedHookLoadPackage {
                     if (featureKey != null) {
                         String upper = sCountryIso.toUpperCase(Locale.ROOT);
                         switch (featureKey) {
-                            // Region keys — all return target country ISO
+
                             case "f_global_carrier_region":
                             case "f_global_carrier_region_v2":
                             case "f_global_sys_region":
@@ -682,15 +714,15 @@ public class MainHook implements IXposedHookLoadPackage {
                             case "f_global_store_region":
                                 param.setResult(upper);
                                 break;
-                            // MCC/MNC
+
                             case "f_global_mcc_mnc":
                                 param.setResult(sOperatorMccMnc);
                                 break;
-                            // Anti-spoof detection — return empty to suppress
+
                             case "f_global_fake_region":
                                 param.setResult("");
                                 break;
-                            // Timezone spoofing
+
                             case "f_global_timezone":
                             case "f_global_timezone_name":
                             case "f_global_timezone_display":
@@ -701,7 +733,7 @@ public class MainHook implements IXposedHookLoadPackage {
                                 String tzOff = getTimezoneOffsetForCountry(sCountryIso);
                                 if (tzOff != null) param.setResult(tzOff);
                                 break;
-                            // Language keys — spoof if locale spoofing enabled
+
                             case "f_global_language":
                             case "f_global_app_language":
                             case "f_global_content_language":
@@ -767,15 +799,14 @@ public class MainHook implements IXposedHookLoadPackage {
     private static void discoverParamMapFromSettingService(Object settingService) {
         if (settingService == null || sParamMapHooked) return;
         try {
-            // Scan all fields of the SettingServiceImpl for objects that contain
-            // a method with (String, String) params — this is the param map.
+
             Class<?> serviceClass = settingService.getClass();
             for (Field field : serviceClass.getDeclaredFields()) {
                 field.setAccessible(true);
                 Object fieldValue = field.get(settingService);
                 if (fieldValue == null) continue;
                 Class<?> fieldClass = fieldValue.getClass();
-                // Check ALL methods (static and instance) with (String, String) signature
+
                 for (Method m : fieldClass.getDeclaredMethods()) {
                     if (m.getParameterTypes().length == 2
                             && m.getParameterTypes()[0] == String.class
@@ -788,7 +819,7 @@ public class MainHook implements IXposedHookLoadPackage {
                     }
                 }
             }
-            // Also check static fields on the service class itself
+
             for (Field field : serviceClass.getDeclaredFields()) {
                 if (!java.lang.reflect.Modifier.isStatic(field.getModifiers())) continue;
                 field.setAccessible(true);
@@ -847,7 +878,7 @@ public class MainHook implements IXposedHookLoadPackage {
         try {
             for (Method m : clazz.getDeclaredMethods()) {
                 Class<?>[] pTypes = m.getParameterTypes();
-                // Match LIZIZ(Context, boolean, Map, ...) - TTNet common params population
+
                 if (pTypes.length >= 3
                         && Context.class.isAssignableFrom(pTypes[0])
                         && (pTypes[1] == boolean.class || pTypes[1] == Boolean.class)
@@ -869,7 +900,6 @@ public class MainHook implements IXposedHookLoadPackage {
                     log("Hooked TTNet common params: " + clazz.getName() + "." + m.getName() + "(Context, boolean, Map, ...)");
                 }
 
-                // Match LIZ(Context, StringBuilder, boolean, ...) - TTNet URL builder
                 if (pTypes.length >= 3
                         && Context.class.isAssignableFrom(pTypes[0])
                         && StringBuilder.class.isAssignableFrom(pTypes[1])
@@ -925,19 +955,13 @@ public class MainHook implements IXposedHookLoadPackage {
         } catch (Throwable ignored) {}
     }
 
-    /**
-     * Try to detect if a class loaded via the classloader hook is the obfuscated param map class.
-     * Called from onClassLoaded for unrecognized classes when the param map is not yet hooked.
-     * Checks for ANY method with (String, String) params — the method name is obfuscated
-     * and changes between TikTok versions.
-     */
     private static void tryHookAsParamMapClass(Class<?> clazz) {
         if (clazz == null || sParamMapHooked) return;
         String name = clazz.getName();
-        // Only check short obfuscated names — X.xxxx, LX.xxxx, or single-segment short names
+
         if (name.length() > 12) return;
         if (!name.startsWith("X.") && !name.startsWith("LX.")) {
-            // Also allow other short obfuscated patterns like A0.xxxx
+
             if (name.contains(".") && name.indexOf('.') > 3) return;
             if (!name.contains(".")) return;
         }
@@ -946,11 +970,9 @@ public class MainHook implements IXposedHookLoadPackage {
                 if (m.getParameterTypes().length == 2
                         && m.getParameterTypes()[0] == String.class
                         && m.getParameterTypes()[1] == String.class) {
-                    // Verify this is likely the param map by checking the method count
-                    // and class characteristics — param map classes are typically small
-                    // with only a few methods
+
                     Method[] allMethods = clazz.getDeclaredMethods();
-                    if (allMethods.length > 20) continue; // Too many methods, not the param map
+                    if (allMethods.length > 20) continue;
                     hookParamMapMethod(clazz, m.getName());
                     if (sParamMapHooked) {
                         log("Auto-detected param map class via classloader: " + name + "." + m.getName());
@@ -968,7 +990,7 @@ public class MainHook implements IXposedHookLoadPackage {
             String key = (String) param.args[0];
             if (key == null) return;
             switch (key) {
-                // Region keys — spoof to target country
+
                 case "carrier_region":
                 case "carrier_region1":
                 case "carrier_region_v2":
@@ -984,11 +1006,11 @@ public class MainHook implements IXposedHookLoadPackage {
                 case "store_region":
                     param.args[1] = sCountryIso.toUpperCase(Locale.ROOT);
                     break;
-                // MCC/MNC
+
                 case "mcc_mnc":
                     param.args[1] = sOperatorMccMnc;
                     break;
-                // Timezone
+
                 case "timezone_name": {
                     String tz = getTimezoneForCountry(sCountryIso);
                     if (tz != null) param.args[1] = tz;
@@ -999,7 +1021,7 @@ public class MainHook implements IXposedHookLoadPackage {
                     if (tzOff != null) param.args[1] = tzOff;
                     break;
                 }
-                // Language (only if locale spoofing enabled)
+
                 case "language":
                 case "content_language":
                     if (sSpoofLocale) {
@@ -1014,7 +1036,6 @@ public class MainHook implements IXposedHookLoadPackage {
         if (paramMapClass == null || sParamMapHooked) return;
         hookParamMapMethod(paramMapClass, "LIZ");
 
-        // Also hook Map/StringBuilder bulk methods on paramMapClass (like C03IJ.LIZLLL / LIZIZ)
         try {
             for (Method m : paramMapClass.getDeclaredMethods()) {
                 Class<?>[] pTypes = m.getParameterTypes();
@@ -1076,9 +1097,6 @@ public class MainHook implements IXposedHookLoadPackage {
         }
     }
 
-    /**
-     * Returns a timezone ID appropriate for the given country ISO code.
-     */
     static String getTimezoneForCountry(String countryIso) {
         if (countryIso == null) return null;
         switch (countryIso.toLowerCase(Locale.ROOT)) {
@@ -1133,9 +1151,6 @@ public class MainHook implements IXposedHookLoadPackage {
         }
     }
 
-    /**
-     * Returns a timezone offset string (seconds) for the given country.
-     */
     static String getTimezoneOffsetForCountry(String countryIso) {
         String tzId = getTimezoneForCountry(countryIso);
         if (tzId == null) return null;
@@ -1148,9 +1163,6 @@ public class MainHook implements IXposedHookLoadPackage {
         }
     }
 
-    // --- URL-level region param interception ---
-    // This is the most reliable approach: intercepts ALL region-related query parameters
-    // at the Uri.Builder level, regardless of which class/method set them.
     private static volatile boolean sUrlQueryParamsHooked = false;
 
     private static final Set<String> URL_REGION_PARAMS = new HashSet<>(Arrays.asList(
@@ -1164,7 +1176,6 @@ public class MainHook implements IXposedHookLoadPackage {
         if (sUrlQueryParamsHooked) return;
         sUrlQueryParamsHooked = true;
 
-        // Hook android.net.Uri.Builder.appendQueryParameter(String key, String value)
         try {
             XposedHelpers.findAndHookMethod(
                     Uri.Builder.class,
@@ -1198,7 +1209,6 @@ public class MainHook implements IXposedHookLoadPackage {
             logD("Uri.Builder.appendQueryParameter hook failed: " + t.getMessage());
         }
 
-        // Also hook the encoded variant
         try {
             XposedHelpers.findAndHookMethod(
                     "android.net.Uri$Builder", classLoader,
@@ -1215,7 +1225,6 @@ public class MainHook implements IXposedHookLoadPackage {
             );
         } catch (Throwable ignored) {}
 
-        // Hook okhttp3.HttpUrl.Builder if available (some TikTok versions use OkHttp)
         try {
             Class<?> httpUrlBuilder = XposedHelpers.findClassIfExists("okhttp3.HttpUrl$Builder", classLoader);
             if (httpUrlBuilder != null) {
@@ -1241,14 +1250,11 @@ public class MainHook implements IXposedHookLoadPackage {
         } catch (Throwable ignored) {}
     }
 
-    /**
-     * Rewrites region-related query params in an already-encoded query string.
-     */
     public static String rewriteQueryString(String query) {
         if (query == null || query.isEmpty()) return query;
         String upper = sCountryIso.toUpperCase(Locale.ROOT);
         for (String param : URL_REGION_PARAMS) {
-            // Match param=VALUE& or param=VALUE$ (end of string)
+
             query = query.replaceAll("(?<=[?&]|^)" + param + "=[^&]*", param + "=" + upper);
         }
         query = query.replaceAll("(?<=[?&]|^)mcc_mnc=[^&]*", "mcc_mnc=" + sOperatorMccMnc);

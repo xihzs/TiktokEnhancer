@@ -12,11 +12,15 @@ This module requires **[Vector](https://github.com/JingMatrix/Vector)** (the mod
 
 ---
 
-## Supported Applications
+## Supported Applications & Versions
 
-- **TikTok Global** (`com.zhiliaoapp.musically`)
-- **TikTok Asia** (`com.ss.android.ugc.trill`)
-- **Douyin / TikTok China** (`com.ss.android.ugc.aweme`)
+> **Note**: Tiktok Enhancer v1.0.3 only supports **46.9.3**.
+
+| Application | Package Name | Supported Version |
+| :--- | :--- | :--- |
+| **TikTok Global** | `com.zhiliaoapp.musically` | **46.9.3** |
+| **TikTok Asia** | `com.ss.android.ugc.trill` | **46.9.3** |
+| **Douyin / TikTok China** | `com.ss.android.ugc.aweme` | Modern versions |
 
 The in-app profile menu automatically detects installed packages and only displays apps present on your device.
 

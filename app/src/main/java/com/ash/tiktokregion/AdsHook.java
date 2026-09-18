@@ -138,7 +138,6 @@ public class AdsHook {
         } catch (Throwable ignored) {}
     }
 
-    // Hook setAwemeList if present in FeedItemList
     private static void hookSetAwemeList(Class<?> feedItemListClass) {
         try {
             XposedHelpers.findAndHookMethod(feedItemListClass, "setAwemeList", List.class, new XC_MethodHook() {
@@ -159,7 +158,6 @@ public class AdsHook {
             log("Hooked FeedItemList.setAwemeList(List)");
         } catch (Throwable ignored) {}
 
-        // Also try appendItems if it exists
         try {
             XposedHelpers.findAndHookMethod(feedItemListClass, "appendItems", List.class, new XC_MethodHook() {
                 @Override
@@ -189,7 +187,6 @@ public class AdsHook {
         }
     }
 
-    // Track which panel classes we've already hooked to avoid duplicates
     private static final Set<String> sHookedPanelClasses = new HashSet<>();
 
     public static void hookFeedPanel(ClassLoader classLoader) {
@@ -245,7 +242,6 @@ public class AdsHook {
         }
     }
 
-    // --- FollowFeedList hook ---
     private static volatile boolean sFollowFeedListHooked = false;
 
     public static synchronized void hookFollowFeedListClass(Class<?> followFeedListClass) {
@@ -278,14 +274,12 @@ public class AdsHook {
         }
     }
 
-    // --- FriendsFeedResponse hook ---
     private static volatile boolean sFriendsFeedResponseHooked = false;
 
     public static synchronized void hookFriendsFeedResponseClass(Class<?> friendsFeedResponseClass) {
         if (friendsFeedResponseClass == null || sFriendsFeedResponseHooked) return;
         sFriendsFeedResponseHooked = true;
 
-        // FriendsFeedResponse typically has getItems() or getAwemeList() returning content
         String[] listMethods = {"getAwemeList", "getItems", "getFriendsFeedList"};
         for (String methodName : listMethods) {
             try {
@@ -444,7 +438,7 @@ public class AdsHook {
                     kept.add(item);
                 }
             }
-            // CRITICAL: NEVER kept.addAll(sourceList) if blocked countries or ads exist!
+
         }
 
         XposedHelpers.setAdditionalInstanceField(kept, "tiktok_enhancer_clean", Boolean.TRUE);
@@ -702,18 +696,14 @@ public class AdsHook {
             String clean = langCode.trim().toLowerCase(Locale.ROOT);
             if (clean.isEmpty()) return false;
 
-            // Direct check against ISO codes (e.g. "id", "ru", "uk", "uz")
             if (mIsoCodes.contains(clean)) return true;
 
-            // Special ISO 639-1 mappings:
-            // "in" is the legacy ISO 639-1 code for Indonesian ("id") used by Java/Android
             if ("in".equals(clean) && (mIsoCodes.contains("id") || mIsoCodes.contains("idn"))) return true;
-            // "iw" is legacy Hebrew ("he") -> IL
+
             if ("iw".equals(clean) && (mIsoCodes.contains("il") || mIsoCodes.contains("isr"))) return true;
-            // "uk" is Ukrainian -> UA
+
             if ("uk".equals(clean) && (mIsoCodes.contains("ua") || mIsoCodes.contains("ukr"))) return true;
 
-            // Handle composite locale strings like "id-ID", "in-ID", "id_ID", "ru-RU", etc.
             if (clean.contains("-") || clean.contains("_")) {
                 String[] parts = clean.split("[-_]");
                 for (String part : parts) {
@@ -743,14 +733,12 @@ public class AdsHook {
                 }
             }
 
-            // Check hashtags like #id, #indonesia, #indo, #fypindonesia
             for (String iso : mIsoCodes) {
                 if (iso.length() == 2 && containsHashtag(clean, iso)) {
                     return true;
                 }
             }
 
-            // Check calling code and currency if Indonesia is blocked
             if (mIsoCodes.contains("id") || mIsoCodes.contains("idn")) {
                 if (clean.contains("+62") || containsWord(clean, "idr") || containsWord(clean, "rupiah")) {
                     return true;
@@ -817,14 +805,12 @@ public class AdsHook {
 
             String aid = getSafeString(aweme, "getAid", "aid");
 
-            // 1. Direct Aweme region
             String region = getSafeString(aweme, "getRegion", "region");
             if (matchesCode(region)) {
                 AdsHook.log("Blocked Aweme [" + aid + "] by region: " + region);
                 return true;
             }
 
-            // 2. Aweme geofencing regions (List<String>)
             Object geoObj = getSafeObject(aweme, "getGeofencingRegions", "geofencingRegions");
             if (geoObj instanceof List) {
                 for (Object g : (List<?>) geoObj) {
@@ -835,7 +821,6 @@ public class AdsHook {
                 }
             }
 
-            // 3. Post / caption language (CRITICAL in TikTok 46.x: desc_language & title_language)
             String descLang = getSafeString(aweme, "getDescLanguage", "descLanguage");
             if (matchesLanguageCode(descLang)) {
                 AdsHook.log("Blocked Aweme [" + aid + "] by descLanguage: " + descLang);
@@ -854,7 +839,6 @@ public class AdsHook {
                 return true;
             }
 
-            // 4. Caption / Description text matching (cities, keywords, hashtags)
             String desc = getSafeString(aweme, "getDesc", "desc");
             if (matchesText(desc)) {
                 String preview = desc != null && desc.length() > 60 ? desc.substring(0, 60) + "..." : desc;
@@ -862,15 +846,12 @@ public class AdsHook {
                 return true;
             }
 
-            // 5. Author profile
             Object author = getSafeObject(aweme, "getAuthor", "author");
             if (checkUser(author, aid, "author")) return true;
 
-            // 6. Origin author profile (duet / stitch / repost)
             Object originAuthor = getSafeObject(aweme, "getOriginAuthor", "originAuthor");
             if (checkUser(originAuthor, aid, "originAuthor")) return true;
 
-            // 7. Nearby info
             Object nearby = getSafeObject(aweme, "getNearbyInfo", "nearbyInfo");
             if (nearby != null) {
                 String nearbyRegion = getSafeString(nearby, "getNearbyRegion", "nearbyRegion");
@@ -885,7 +866,6 @@ public class AdsHook {
                 }
             }
 
-            // 8. POI data struct
             Object poi = getSafeObject(aweme, "getPoiDataStruct", "poiDataStruct");
             if (poi != null) {
                 String locDesc = getSafeString(poi, "getLocationDesc", "locationDesc");
@@ -930,21 +910,18 @@ public class AdsHook {
                 }
             }
 
-            // 9. Region of residence
             String regionOfResidence = getSafeString(aweme, "getRegionOfResidence", "regionOfResidence");
             if (matchesCode(regionOfResidence)) {
                 AdsHook.log("Blocked Aweme [" + aid + "] by regionOfResidence: " + regionOfResidence);
                 return true;
             }
 
-            // 10. Region block info
             String regionBlock = getSafeString(aweme, "getRegionBlock", "regionBlock");
             if (matchesCode(regionBlock)) {
                 AdsHook.log("Blocked Aweme [" + aid + "] by regionBlock: " + regionBlock);
                 return true;
             }
 
-            // 11. Anchors / Commerce / Shop data
             String anchorsExtras = getSafeString(aweme, "getAnchorsExtras", "anchorsExtras");
             if (anchorsExtras != null && matchesCommerce(anchorsExtras)) {
                 AdsHook.log("Blocked Aweme [" + aid + "] by commerce anchorsExtras");
@@ -957,7 +934,6 @@ public class AdsHook {
                 return true;
             }
 
-            // 12. Music details
             Object music = getSafeObject(aweme, "getMusic", "music");
             if (music != null) {
                 String musicAuthor = getSafeString(music, "getAuthorName", "authorName");
@@ -1038,14 +1014,12 @@ public class AdsHook {
                 return true;
             }
 
-            // User bio language (e.g. "id")
             String sigLang = getSafeString(user, "getSignatureLanguage", "signatureLanguage");
             if (matchesLanguageCode(sigLang)) {
                 AdsHook.log("Blocked Aweme [" + aid + "] by " + source + ".signatureLanguage: " + sigLang);
                 return true;
             }
 
-            // User bio text
             String signature = getSafeString(user, "getSignature", "signature");
             if (matchesText(signature)) {
                 AdsHook.log("Blocked Aweme [" + aid + "] by " + source + ".signature text");
@@ -1127,3 +1101,4 @@ public class AdsHook {
         } catch (Throwable ignored) {}
     }
 }
+

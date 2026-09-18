@@ -25,6 +25,7 @@ public class ConfigProvider extends ContentProvider {
     public static final String KEY_LOCALE_COUNTRY = "locale_country";
     public static final String KEY_NO_WATERMARK = "no_watermark";
     public static final String KEY_BYPASS_DOWNLOAD_RESTRICTION = "bypass_download_restriction";
+    public static final String KEY_HD_UPLOAD = "hd_upload";
     public static final String KEY_HIDE_ADS = "hide_ads";
     public static final String KEY_FORCE_REGION = "force_region";
     public static final String KEY_STRICT_FORCE_REGION = "strict_force_region";
@@ -57,6 +58,7 @@ public class ConfigProvider extends ContentProvider {
                 boolean spoofLocale = sp.getBoolean(MainActivity.KEY_SPOOF_LOCALE, false);
                 boolean noWatermark = sp.getBoolean(MainActivity.KEY_NO_WATERMARK, true);
                 boolean bypassDownload = sp.getBoolean(MainActivity.KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
+                boolean hdUpload = sp.getBoolean(MainActivity.KEY_HD_UPLOAD, true);
                 boolean hideAds = sp.getBoolean(MainActivity.KEY_HIDE_ADS, true);
                 boolean forceRegion = sp.getBoolean(MainActivity.KEY_FORCE_REGION, true);
                 boolean strictForceRegion = sp.getBoolean(MainActivity.KEY_STRICT_FORCE_REGION, false);
@@ -95,6 +97,7 @@ public class ConfigProvider extends ContentProvider {
                 bundle.putString(KEY_LOCALE_COUNTRY, preset.getLocaleCountry());
                 bundle.putBoolean(KEY_NO_WATERMARK, noWatermark);
                 bundle.putBoolean(KEY_BYPASS_DOWNLOAD_RESTRICTION, bypassDownload);
+                bundle.putBoolean(KEY_HD_UPLOAD, hdUpload);
                 bundle.putBoolean(KEY_HIDE_ADS, hideAds);
                 bundle.putBoolean(KEY_FORCE_REGION, forceRegion);
                 bundle.putBoolean(KEY_STRICT_FORCE_REGION, strictForceRegion);

@@ -43,6 +43,8 @@
     <string name="feature_hide_ads_desc">Filters commercial cards and promotional posts</string>
     <string name="feature_bypass_download">Unlock Downloads</string>
     <string name="feature_bypass_download_desc">Allows saving videos even if disabled by author</string>
+    <string name="feature_hd_upload">Ultra HD Upload (Douyin Quality)</string>
+    <string name="feature_hd_upload_desc">Forces 1080p 60fps synthesis, 18–25 Mbps bitrate, and direct HD upload without compression loss</string>
     <string name="feature_block_countries">Block Selected Countries</string>
     <string name="feature_block_countries_desc">Filters out videos and creators from blocked countries</string>
     <string name="btn_manage_blocked_countries">Manage Blocked Countries</string>
