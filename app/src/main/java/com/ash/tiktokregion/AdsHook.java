@@ -192,7 +192,6 @@ public class AdsHook {
         if (classLoader == null) return;
 
         String[] panelClasses = {
-                "com.ss.android.ugc.aweme.feed.panel.BaseListFragmentPanel",
                 "com.ss.android.ugc.aweme.feed.panel.FullFeedFragmentPanel",
                 "com.ss.android.ugc.aweme.feed.panel.RecommendFeedFragmentPanel",
                 "com.ss.android.ugc.aweme.feed.panel.FollowFeedFragmentPanelMT",
@@ -217,6 +216,9 @@ public class AdsHook {
             XposedHelpers.findAndHookMethod(clazz, "getAwemeList", new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    if (param.thisObject != null && isProfileOrDetailContext(param.thisObject)) {
+                        return;
+                    }
                     Object result = param.getResult();
                     if (result instanceof List) {
                         List<?> list = (List<?>) result;
@@ -357,8 +359,56 @@ public class AdsHook {
         }
     }
 
+    public static boolean isProfileOrDetailContext(Object contextObj) {
+        if (contextObj == null) return false;
+        String className = contextObj.getClass().getName();
+        if (className.contains("Profile")
+                || className.contains("User")
+                || className.contains("Detail")
+                || className.contains("AwemeList")
+                || className.contains("Favorite")
+                || className.contains("Music")
+                || className.contains("Challenge")
+                || className.contains("Search")) {
+            return true;
+        }
+        try {
+            String dataUserId = getSafeString(contextObj, "getDataUserId", "dataUserId");
+            if (dataUserId != null && !dataUserId.trim().isEmpty()) {
+                return true;
+            }
+        } catch (Throwable ignored) {}
+        return false;
+    }
+
+    public static boolean isSingleAuthorProfileFeed(List<?> items) {
+        if (items == null || items.size() < 2) return false;
+        String firstUid = null;
+        int checked = 0;
+        for (Object aweme : items) {
+            if (aweme == null) continue;
+            Object author = getSafeObject(aweme, "getAuthor", "author");
+            if (author == null) continue;
+            String uid = getSafeString(author, "getUid", "uid");
+            if (uid == null || uid.isEmpty()) continue;
+            if (firstUid == null) {
+                firstUid = uid;
+            } else if (!firstUid.equals(uid)) {
+                return false;
+            }
+            checked++;
+            if (checked >= 3) break;
+        }
+        return checked >= 2;
+    }
+
     private static boolean isRecommendFeed(Object feedItemList) {
-        if (feedItemList == null) return true;
+        if (feedItemList == null) return false;
+        if (isProfileOrDetailContext(feedItemList)) return false;
+        String className = feedItemList.getClass().getName();
+        if (className.contains("RecommendFeedFragmentPanel") || className.contains("FullFeedFragmentPanel")) {
+            return true;
+        }
         try {
             Object ft = XposedHelpers.callMethod(feedItemList, "getFeedType");
             if (ft instanceof Number) {
@@ -371,7 +421,7 @@ public class AdsHook {
                 return ((Number) ft).intValue() == 0;
             }
         } catch (Throwable ignored) {}
-        return true;
+        return false;
     }
 
     public static List<Object> filterAwemeList(List<?> sourceList, Object feedItemList) {
@@ -395,19 +445,24 @@ public class AdsHook {
 
         List<Object> kept = new ArrayList<>(sourceList.size());
         boolean isChina = MainHook.isChinaPackage();
+        boolean isProfile = isProfileOrDetailContext(feedItemList) || isSingleAuthorProfileFeed(sourceList);
+        if (isProfile) {
+            log("Detected profile/creator feed (" + sourceList.size() + " items) - bypassing recommendation and country/language filters");
+        }
+
         boolean hideAds = MainHook.isHideAdsEnabled();
-        boolean hidePymk = !isChina && MainHook.isHidePymkEnabled();
-        boolean strictRegion = !isChina && MainHook.isStrictForceRegionEnabled();
-        boolean smartRegion = !isChina && !strictRegion && MainHook.isForceRegionEnabled() && isRecommendFeed(feedItemList);
+        boolean hidePymk = !isProfile && !isChina && MainHook.isHidePymkEnabled();
+        boolean strictRegion = !isProfile && !isChina && MainHook.isStrictForceRegionEnabled();
+        boolean smartRegion = !isProfile && !isChina && !strictRegion && MainHook.isForceRegionEnabled() && isRecommendFeed(feedItemList);
         boolean anyRegionFilter = strictRegion || smartRegion;
         String targetRegion = MainHook.getTargetCountryIso();
-        boolean blockCountries = !isChina && MainHook.isBlockCountriesEnabled();
+        boolean blockCountries = !isProfile && !isChina && MainHook.isBlockCountriesEnabled();
         Set<String> blockedCountries = blockCountries ? MainHook.getBlockedCountries() : Collections.emptySet();
         boolean hasBlockedCountries = blockCountries && blockedCountries != null && !blockedCountries.isEmpty();
         BlockedCountryMatcher matcher = hasBlockedCountries ? getMatcher(blockedCountries) : null;
 
-        boolean lockedRegionFilter = !isChina && MainHook.isLockedRegionFilterEnabled();
-        boolean languageFilter = !isChina && MainHook.isLanguageFilterEnabled();
+        boolean lockedRegionFilter = !isProfile && !isChina && MainHook.isLockedRegionFilterEnabled();
+        boolean languageFilter = !isProfile && !isChina && MainHook.isLanguageFilterEnabled();
         Set<String> allowedLanguages = languageFilter ? MainHook.getAllowedLanguages() : Collections.emptySet();
         boolean hasAllowedLanguages = languageFilter && allowedLanguages != null && !allowedLanguages.isEmpty();
 
