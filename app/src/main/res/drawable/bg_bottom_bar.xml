@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Top specular hairline border -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/divider_glass" />
+        </shape>
+    </item>
+    <!-- Background surface inset by 1dp from top -->
+    <item android:top="1dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#000000" />
+        </shape>
+    </item>
+</layer-list>

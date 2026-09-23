@@ -7,13 +7,11 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 
-import android.content.ContextWrapper;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
@@ -165,10 +163,32 @@ public class MainHook implements IXposedHookLoadPackage {
             XposedBridge.log(TAG + ": TikTok China (Douyin) detected - skipping telephony, locale, and network region spoofing");
         }
 
-        WatermarkHook.hook(lpparam.classLoader);
-        AdsHook.hook(lpparam.classLoader);
+        if (isChina) {
+            XposedBridge.log(TAG + ": TikTok China (Douyin) detected - hooks will be initialized deferred after SafeMode loader");
+        } else {
+            try {
+                XposedBridge.log(TAG + ": STEP 1: Calling WatermarkHook.hook");
+                WatermarkHook.hook(lpparam.classLoader);
+                XposedBridge.log(TAG + ": STEP 1: WatermarkHook.hook finished");
+            } catch (Throwable t) {
+                XposedBridge.log(TAG + ": WatermarkHook.hook error: " + t.getMessage());
+            }
+        }
+
+        try {
+            XposedBridge.log(TAG + ": STEP 3: Calling AdsHook.hook");
+            AdsHook.hook(lpparam.classLoader);
+            XposedBridge.log(TAG + ": STEP 3: AdsHook.hook finished");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": AdsHook.hook error: " + t.getMessage());
+        }
+
         if (!isChina) {
-            HDUploadHook.hook(lpparam.classLoader);
+            try {
+                HDUploadHook.hook(lpparam.classLoader);
+            } catch (Throwable t) {
+                XposedBridge.log(TAG + ": HDUploadHook.hook error: " + t.getMessage());
+            }
         }
 
         XposedBridge.log(TAG + ": All initial hooks dispatched for " + lpparam.packageName);
@@ -300,7 +320,8 @@ public class MainHook implements IXposedHookLoadPackage {
         String name = clazz.getName();
 
         if (name.startsWith("android.") || name.startsWith("java.") || name.startsWith("javax.")
-                || name.startsWith("kotlin.") || name.startsWith("androidx.") || name.startsWith("com.google.")) {
+                || name.startsWith("kotlin.") || name.startsWith("androidx.") || name.startsWith("com.google.")
+                || name.startsWith("com.ash.tiktokregion.")) {
             return;
         }
 
@@ -320,7 +341,11 @@ public class MainHook implements IXposedHookLoadPackage {
             hookNetworkCommonParamsClass(clazz);
         } else if ("com.ss.android.ugc.aweme.watermark.WaterMarkServiceImpl".equals(name)
                 || "com.ss.android.ugc.aweme.services.watermark.WaterMarkBuilder".equals(name)) {
-            WatermarkHook.hookWatermarkServiceClass(clazz);
+            if (isChinaPackage()) {
+                DouyinWatermarkHook.hookWatermarkServiceClass(clazz);
+            } else {
+                WatermarkHook.hookWatermarkServiceClass(clazz);
+            }
         } else if ("com.ss.android.ugc.aweme.base.model.UrlModel".equals(name)) {
             WatermarkHook.hookUrlModelClass(clazz);
         } else if ("com.ss.android.ugc.aweme.feed.model.FeedItemList".equals(name)) {
@@ -333,12 +358,22 @@ public class MainHook implements IXposedHookLoadPackage {
                 || "com.ss.android.ugc.aweme.repostfeed.feed.RepostFeedPanel".equals(name)) {
             AdsHook.hookFeedPanel(clazz.getClassLoader());
         } else if ("com.ss.android.ugc.aweme.feed.model.Aweme".equals(name)) {
-            WatermarkHook.hookAwemeClass(clazz);
+            if (isChinaPackage()) {
+                DouyinWatermarkHook.hookAwemeClass(clazz);
+            } else {
+                WatermarkHook.hookAwemeClass(clazz);
+            }
+        } else if ("com.ss.android.ugc.aweme.feed.model.Video".equals(name)) {
+            if (isChinaPackage()) {
+                DouyinWatermarkHook.hookVideoClass(clazz);
+            }
         } else if ("com.ss.android.ugc.aweme.follow.presenter.FollowFeedList".equals(name)) {
             AdsHook.hookFollowFeedListClass(clazz);
         } else if ("com.ss.android.ugc.aweme.friendstab.api.FriendsFeedResponse".equals(name)) {
             AdsHook.hookFriendsFeedResponseClass(clazz);
-        } else if (!isChinaPackage()) {
+        } else if (isChinaPackage()) {
+            DouyinWatermarkHook.onClassLoaded(clazz);
+        } else {
             HDUploadHook.onClassLoaded(clazz);
         }
     }
@@ -353,7 +388,11 @@ public class MainHook implements IXposedHookLoadPackage {
             hookNetworkCommonParams(classLoader);
             hookUrlQueryParams(classLoader);
         }
-        WatermarkHook.hook(classLoader);
+        if (isChina) {
+            DouyinWatermarkHook.hook(classLoader);
+        } else {
+            WatermarkHook.hook(classLoader);
+        }
         AdsHook.hook(classLoader);
         if (!isChina) {
             HDUploadHook.hook(classLoader);
@@ -627,6 +666,8 @@ public class MainHook implements IXposedHookLoadPackage {
     private static volatile boolean sNetworkParamsHooked = false;
 
     private static final String[] PARAM_MAP_CLASS_NAMES = {
+            "X.03II", "LX.03II",
+            "X.04II", "LX.04II",
             "X.03JI", "LX.03JI",
             "X.04JI", "LX.04JI",
             "X.03IJ", "LX.03IJ",
@@ -638,6 +679,8 @@ public class MainHook implements IXposedHookLoadPackage {
     };
 
     private static final String[] NETWORK_COMMON_PARAMS_CLASSES = {
+            "X.03iB", "LX.03iB",
+            "X.04iB", "LX.04iB",
             "X.03jl", "LX.03jl",
             "X.04jl", "LX.04jl",
             "X.03im", "LX.03im",
@@ -859,12 +902,22 @@ public class MainHook implements IXposedHookLoadPackage {
         map.put("current_region", upper);
         map.put("op_region", upper);
         map.put("store_region", upper);
+        map.put("sim_region", upper);
+        map.put("priority_region", upper);
+        map.put("reg_store_region", upper);
+        map.put("user_selected_region", upper);
         map.put("mcc_mnc", sOperatorMccMnc);
 
         String tz = getTimezoneForCountry(sCountryIso);
-        if (tz != null) map.put("timezone_name", tz);
+        if (tz != null) {
+            map.put("timezone_name", tz);
+            map.put("tz_name", tz);
+        }
         String tzOff = getTimezoneOffsetForCountry(sCountryIso);
-        if (tzOff != null) map.put("timezone_offset", tzOff);
+        if (tzOff != null) {
+            map.put("timezone_offset", tzOff);
+            map.put("tz_offset", tzOff);
+        }
 
         if (sSpoofLocale) {
             map.put("language", sLocaleLang);
@@ -933,55 +986,6 @@ public class MainHook implements IXposedHookLoadPackage {
         }
     }
 
-    private static void tryHookAsNetworkParamsClass(Class<?> clazz) {
-        if (clazz == null || sNetworkParamsHooked) return;
-        String name = clazz.getName();
-        if (name.length() > 12) return;
-        if (!name.startsWith("X.") && !name.startsWith("LX.")) {
-            if (name.contains(".") && name.indexOf('.') > 3) return;
-            if (!name.contains(".")) return;
-        }
-        try {
-            for (Method m : clazz.getDeclaredMethods()) {
-                Class<?>[] pTypes = m.getParameterTypes();
-                if (pTypes.length >= 3
-                        && Context.class.isAssignableFrom(pTypes[0])
-                        && (pTypes[1] == boolean.class || pTypes[1] == Boolean.class)
-                        && Map.class.isAssignableFrom(pTypes[2])) {
-                    hookNetworkCommonParamsClass(clazz);
-                    return;
-                }
-            }
-        } catch (Throwable ignored) {}
-    }
-
-    private static void tryHookAsParamMapClass(Class<?> clazz) {
-        if (clazz == null || sParamMapHooked) return;
-        String name = clazz.getName();
-
-        if (name.length() > 12) return;
-        if (!name.startsWith("X.") && !name.startsWith("LX.")) {
-
-            if (name.contains(".") && name.indexOf('.') > 3) return;
-            if (!name.contains(".")) return;
-        }
-        try {
-            for (Method m : clazz.getDeclaredMethods()) {
-                if (m.getParameterTypes().length == 2
-                        && m.getParameterTypes()[0] == String.class
-                        && m.getParameterTypes()[1] == String.class) {
-
-                    Method[] allMethods = clazz.getDeclaredMethods();
-                    if (allMethods.length > 20) continue;
-                    hookParamMapMethod(clazz, m.getName());
-                    if (sParamMapHooked) {
-                        log("Auto-detected param map class via classloader: " + name + "." + m.getName());
-                    }
-                    return;
-                }
-            }
-        } catch (Throwable ignored) {}
-    }
 
     private static final XC_MethodHook PARAM_MAP_HOOK = new XC_MethodHook() {
         @Override
@@ -1004,6 +1008,10 @@ public class MainHook implements IXposedHookLoadPackage {
                 case "current_region":
                 case "op_region":
                 case "store_region":
+                case "sim_region":
+                case "priority_region":
+                case "reg_store_region":
+                case "user_selected_region":
                     param.args[1] = sCountryIso.toUpperCase(Locale.ROOT);
                     break;
 
@@ -1011,12 +1019,14 @@ public class MainHook implements IXposedHookLoadPackage {
                     param.args[1] = sOperatorMccMnc;
                     break;
 
-                case "timezone_name": {
+                case "timezone_name":
+                case "tz_name": {
                     String tz = getTimezoneForCountry(sCountryIso);
                     if (tz != null) param.args[1] = tz;
                     break;
                 }
-                case "timezone_offset": {
+                case "timezone_offset":
+                case "tz_offset": {
                     String tzOff = getTimezoneOffsetForCountry(sCountryIso);
                     if (tzOff != null) param.args[1] = tzOff;
                     break;
@@ -1169,7 +1179,9 @@ public class MainHook implements IXposedHookLoadPackage {
             "carrier_region", "carrier_region1", "carrier_region_v2",
             "sys_region", "account_region", "residence", "region",
             "app_region", "device_region", "user_region", "current_region",
-            "op_region", "store_region"
+            "op_region", "store_region", "sim_region", "priority_region",
+            "reg_store_region", "user_selected_region", "store_country",
+            "country_code", "country"
     ));
 
     private static void hookUrlQueryParams(ClassLoader classLoader) {
@@ -1192,10 +1204,10 @@ public class MainHook implements IXposedHookLoadPackage {
                                 param.args[1] = sCountryIso.toUpperCase(Locale.ROOT);
                             } else if ("mcc_mnc".equals(key)) {
                                 param.args[1] = sOperatorMccMnc;
-                            } else if ("timezone_name".equals(key)) {
+                            } else if ("timezone_name".equals(key) || "tz_name".equals(key)) {
                                 String tz = getTimezoneForCountry(sCountryIso);
                                 if (tz != null) param.args[1] = tz;
-                            } else if ("timezone_offset".equals(key)) {
+                            } else if ("timezone_offset".equals(key) || "tz_offset".equals(key)) {
                                 String tzOff = getTimezoneOffsetForCountry(sCountryIso);
                                 if (tzOff != null) param.args[1] = tzOff;
                             } else if (sSpoofLocale && ("language".equals(key) || "content_language".equals(key))) {
@@ -1261,10 +1273,12 @@ public class MainHook implements IXposedHookLoadPackage {
         String tz = getTimezoneForCountry(sCountryIso);
         if (tz != null) {
             query = query.replaceAll("(?<=[?&]|^)timezone_name=[^&]*", "timezone_name=" + tz);
+            query = query.replaceAll("(?<=[?&]|^)tz_name=[^&]*", "tz_name=" + tz);
         }
         String tzOff = getTimezoneOffsetForCountry(sCountryIso);
         if (tzOff != null) {
             query = query.replaceAll("(?<=[?&]|^)timezone_offset=[^&]*", "timezone_offset=" + tzOff);
+            query = query.replaceAll("(?<=[?&]|^)tz_offset=[^&]*", "tz_offset=" + tzOff);
         }
         if (sSpoofLocale) {
             query = query.replaceAll("(?<=[?&]|^)language=[^&]*", "language=" + sLocaleLang);

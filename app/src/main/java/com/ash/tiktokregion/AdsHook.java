@@ -29,7 +29,6 @@ public class AdsHook {
 
     private static volatile boolean sFeedItemListHooked = false;
     private static volatile boolean sFeedApisHooked = false;
-    private static volatile boolean sFeedPanelHooked = false;
     private static volatile boolean sAwemeModelHooked = false;
 
     private static volatile BlockedCountryMatcher sCachedMatcher = null;

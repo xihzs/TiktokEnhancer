@@ -18,30 +18,24 @@ import android.util.DisplayMetrics;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.bottomsheet.BottomSheetDialog;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.textfield.TextInputEditText;
 
 import java.io.DataOutputStream;
 import java.io.File;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -79,6 +73,12 @@ public class MainActivity extends AppCompatActivity {
 
     private SharedPreferences mPrefs;
     private String mCurrentProfile = PROFILE_GLOBAL;
+    private View mTabGlobal;
+    private View mTabAsia;
+    private View mTabChina;
+    private TextView mTvTabGlobal;
+    private TextView mTvTabAsia;
+    private TextView mTvTabChina;
     private View mBtnHamburger;
     private View mLayoutHeaderProfile;
     private TextView mTvActiveProfileTitle;
@@ -98,7 +98,6 @@ public class MainActivity extends AppCompatActivity {
     private View mRowEnableSpoof;
     private View mDividerEnableSpoof;
     private View mRowSpoofLocale;
-    private View mDividerSpoofLocale;
 
     private MaterialSwitch mSwitchSpoof;
     private MaterialSwitch mSwitchLocale;
@@ -109,12 +108,12 @@ public class MainActivity extends AppCompatActivity {
     private View mBtnManageBlockedCountries;
     private TextView mTvBlockedCountriesSummary;
     private MaterialSwitch mSwitchDownloadStory;
+    private View mDividerDownloadStory;
     private MaterialSwitch mSwitchHideAds;
     private MaterialSwitch mSwitchNoWatermark;
     private MaterialSwitch mSwitchBypassDownload;
     private MaterialSwitch mSwitchHDUpload;
     private View mRowHDUpload;
-    private View mDividerHDUpload;
     private MaterialSwitch mSwitchCustomOverride;
     private LinearLayout mLayoutCustomInputs;
     private TextInputEditText mEtCustomIso;
@@ -164,7 +163,6 @@ public class MainActivity extends AppCompatActivity {
         mRowEnableSpoof = findViewById(R.id.row_enable_spoof);
         mDividerEnableSpoof = findViewById(R.id.divider_enable_spoof);
         mRowSpoofLocale = findViewById(R.id.row_spoof_locale);
-        mDividerSpoofLocale = findViewById(R.id.divider_spoof_locale);
 
         mTvCurrentCountry = findViewById(R.id.tv_current_country);
         mTvCurrentCarrierInfo = findViewById(R.id.tv_current_carrier_info);
@@ -183,18 +181,53 @@ public class MainActivity extends AppCompatActivity {
         mBtnManageBlockedCountries = findViewById(R.id.btn_manage_blocked_countries);
         mTvBlockedCountriesSummary = findViewById(R.id.tv_blocked_countries_summary);
         mSwitchDownloadStory = findViewById(R.id.switch_download_story);
+        mDividerDownloadStory = findViewById(R.id.divider_download_story);
         mSwitchHideAds = findViewById(R.id.switch_hide_ads);
         mSwitchNoWatermark = findViewById(R.id.switch_no_watermark);
         mSwitchBypassDownload = findViewById(R.id.switch_bypass_download);
         mSwitchHDUpload = findViewById(R.id.switch_hd_upload);
         mRowHDUpload = findViewById(R.id.row_hd_upload);
-        mDividerHDUpload = findViewById(R.id.divider_hd_upload);
         mSwitchSpoof = findViewById(R.id.switch_enable_spoof);
         mSwitchLocale = findViewById(R.id.switch_spoof_locale);
         mSwitchHideIcon = findViewById(R.id.switch_hide_icon);
 
         mBtnForceStop = findViewById(R.id.btn_force_stop_tiktok);
         mBtnLaunch = findViewById(R.id.btn_launch_tiktok);
+
+        mTabGlobal = findViewById(R.id.tab_profile_global);
+        mTabAsia = findViewById(R.id.tab_profile_asia);
+        mTabChina = findViewById(R.id.tab_profile_china);
+        mTvTabGlobal = findViewById(R.id.tv_tab_global);
+        mTvTabAsia = findViewById(R.id.tv_tab_asia);
+        mTvTabChina = findViewById(R.id.tv_tab_china);
+
+        if (mTabGlobal != null) {
+            mTabGlobal.setOnClickListener(v -> setProfile(PROFILE_GLOBAL));
+        }
+        if (mTabAsia != null) {
+            mTabAsia.setOnClickListener(v -> setProfile(PROFILE_ASIA));
+        }
+        if (mTabChina != null) {
+            mTabChina.setOnClickListener(v -> setProfile(PROFILE_CHINA));
+        }
+
+        View layoutSegmentProfiles = findViewById(R.id.layout_segment_profiles);
+        boolean globalInstalled = isAppInstalled(PACKAGE_GLOBAL);
+        boolean asiaInstalled = isAppInstalled(PACKAGE_ASIA);
+        boolean chinaInstalled = isAppInstalled(PACKAGE_CHINA);
+        int installedCount = (globalInstalled ? 1 : 0) + (asiaInstalled ? 1 : 0) + (chinaInstalled ? 1 : 0);
+
+        if (layoutSegmentProfiles != null) {
+            if (installedCount > 1) {
+                layoutSegmentProfiles.setVisibility(View.VISIBLE);
+                if (mTabGlobal != null) mTabGlobal.setVisibility(globalInstalled ? View.VISIBLE : View.GONE);
+                if (mTabAsia != null) mTabAsia.setVisibility(asiaInstalled ? View.VISIBLE : View.GONE);
+                if (mTabChina != null) mTabChina.setVisibility(chinaInstalled ? View.VISIBLE : View.GONE);
+            } else {
+                // When 1 or fewer apps are installed, do not show the profile switcher menu
+                layoutSegmentProfiles.setVisibility(View.GONE);
+            }
+        }
 
         if (mBtnHamburger != null) {
             mBtnHamburger.setOnClickListener(v -> showProfilePickerBottomSheet());
@@ -398,7 +431,7 @@ public class MainActivity extends AppCompatActivity {
             String name = mPrefs.getString(KEY_CUSTOM_NAME, "Custom Carrier");
 
             mTvCurrentCountry.setText("🌐  Custom (" + iso + ")");
-            mTvCurrentCarrierInfo.setText(name + " · MCC+MNC " + op + " · ISO " + iso);
+            mTvCurrentCarrierInfo.setText(name + " · MCC+MNC " + op + " · " + iso);
 
             mEtCustomIso.setText(iso.toLowerCase());
             mEtCustomOperator.setText(op);
@@ -408,7 +441,7 @@ public class MainActivity extends AppCompatActivity {
             CountryPreset preset = CountryPreset.getById(presetId);
 
             mTvCurrentCountry.setText(preset.getFlag() + "  " + preset.getCountryName());
-            mTvCurrentCarrierInfo.setText(preset.getOperatorName() + " · MCC+MNC " + preset.getOperatorMccMnc() + " · ISO " + preset.getCountryIso().toUpperCase());
+            mTvCurrentCarrierInfo.setText(preset.getOperatorName() + " · MCC+MNC " + preset.getOperatorMccMnc() + " · " + preset.getCountryIso().toUpperCase());
         }
     }
 
@@ -579,7 +612,7 @@ public class MainActivity extends AppCompatActivity {
         btnAddCustomIso.setOnClickListener(v -> {
             String iso = etCustomIso.getText() != null ? etCustomIso.getText().toString().trim().toLowerCase(Locale.ROOT) : "";
             if (iso.length() != 2) {
-                Toast.makeText(this, "Enter a 2-letter ISO code", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Enter a 2-letter country code", Toast.LENGTH_SHORT).show();
                 return;
             }
             CountryPreset.CountryItem customItem = CountryPreset.createCountryItem(iso);
@@ -721,6 +754,24 @@ public class MainActivity extends AppCompatActivity {
         boolean isAsia = PROFILE_ASIA.equals(profile);
         boolean isChina = PROFILE_CHINA.equals(profile);
 
+        // Sync Cupertino segmented control UI
+        if (mTabGlobal != null && mTabAsia != null && mTabChina != null) {
+            mTabGlobal.setBackgroundResource(isGlobal ? R.drawable.bg_profile_tab_selected : R.drawable.bg_profile_tab_unselected);
+            if (mTvTabGlobal != null) {
+                mTvTabGlobal.setTextColor(ContextCompat.getColor(this, isGlobal ? R.color.profile_tab_text_active : R.color.profile_tab_text_inactive));
+            }
+
+            mTabAsia.setBackgroundResource(isAsia ? R.drawable.bg_profile_tab_selected : R.drawable.bg_profile_tab_unselected);
+            if (mTvTabAsia != null) {
+                mTvTabAsia.setTextColor(ContextCompat.getColor(this, isAsia ? R.color.profile_tab_text_active : R.color.profile_tab_text_inactive));
+            }
+
+            mTabChina.setBackgroundResource(isChina ? R.drawable.bg_profile_tab_selected : R.drawable.bg_profile_tab_unselected);
+            if (mTvTabChina != null) {
+                mTvTabChina.setTextColor(ContextCompat.getColor(this, isChina ? R.color.china_amber : R.color.profile_tab_text_inactive));
+            }
+        }
+
         if (mTvActiveProfileTitle != null && mTvActiveProfileBadge != null && mTvActiveProfilePackage != null) {
             if (isChina) {
                 mTvActiveProfileTitle.setText("Douyin");
@@ -759,13 +810,12 @@ public class MainActivity extends AppCompatActivity {
             mRowEnableSpoof.setVisibility(View.GONE);
             mDividerEnableSpoof.setVisibility(View.GONE);
             mRowSpoofLocale.setVisibility(View.GONE);
-            mDividerSpoofLocale.setVisibility(View.GONE);
 
             if (mRowHDUpload != null) mRowHDUpload.setVisibility(View.GONE);
-            if (mDividerHDUpload != null) mDividerHDUpload.setVisibility(View.GONE);
+            if (mDividerDownloadStory != null) mDividerDownloadStory.setVisibility(View.GONE);
 
-            mBtnForceStop.setText("Restart Douyin");
-            mBtnLaunch.setText("Launch Douyin");
+            mBtnForceStop.setText(R.string.btn_force_stop_tiktok);
+            mBtnLaunch.setText(R.string.btn_open_tiktok);
         } else {
 
             if (mTvNoWatermarkTitle != null) mTvNoWatermarkTitle.setText(R.string.feature_no_watermark);
@@ -785,18 +835,12 @@ public class MainActivity extends AppCompatActivity {
             mRowEnableSpoof.setVisibility(View.VISIBLE);
             mDividerEnableSpoof.setVisibility(View.VISIBLE);
             mRowSpoofLocale.setVisibility(View.VISIBLE);
-            mDividerSpoofLocale.setVisibility(View.VISIBLE);
 
             if (mRowHDUpload != null) mRowHDUpload.setVisibility(View.VISIBLE);
-            if (mDividerHDUpload != null) mDividerHDUpload.setVisibility(View.VISIBLE);
+            if (mDividerDownloadStory != null) mDividerDownloadStory.setVisibility(View.VISIBLE);
 
-            if (isAsia) {
-                mBtnForceStop.setText("Restart TikTok Asia");
-                mBtnLaunch.setText("Launch");
-            } else {
-                mBtnForceStop.setText(R.string.btn_force_stop_tiktok);
-                mBtnLaunch.setText(R.string.btn_open_tiktok);
-            }
+            mBtnForceStop.setText(R.string.btn_force_stop_tiktok);
+            mBtnLaunch.setText(R.string.btn_open_tiktok);
         }
     }
 

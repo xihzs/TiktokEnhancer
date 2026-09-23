@@ -1,11 +1,10 @@
 <resources>
     <style name="Theme.TikTokRegion" parent="Theme.Material3.Dark.NoActionBar">
-
         <item name="android:colorBackground">@color/bg_dark</item>
         <item name="colorSurface">@color/surface_card</item>
         <item name="colorSurfaceVariant">@color/surface_card_secondary</item>
-        <item name="colorPrimary">@color/accent_silver</item>
-        <item name="colorOnPrimary">#0D0E11</item>
+        <item name="colorPrimary">@color/ios_blue</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
         <item name="colorSecondary">@color/text_secondary</item>
 
         <item name="android:statusBarColor">@color/bg_dark</item>
@@ -15,13 +14,23 @@
 
         <item name="android:textColorPrimary">@color/text_primary</item>
         <item name="android:textColorSecondary">@color/text_secondary</item>
+
+        <!-- iOS Switch Theme Defaults -->
+        <item name="materialSwitchStyle">@style/Widget.IOS.Switch</item>
+    </style>
+
+    <style name="Widget.IOS.Switch" parent="Widget.Material3.CompoundButton.MaterialSwitch">
+        <item name="thumbTint">@color/switch_thumb_selector</item>
+        <item name="trackTint">@color/switch_track_selector</item>
+        <item name="trackDecorationTint">@android:color/transparent</item>
+        <item name="android:scaleX">0.92</item>
+        <item name="android:scaleY">0.92</item>
     </style>
 
     <style name="DialogDarkTheme" parent="Theme.Material3.Dark.Dialog.Alert">
         <item name="android:colorBackground">@color/surface_card</item>
         <item name="colorSurface">@color/surface_card</item>
-        <item name="colorPrimary">@color/accent_silver</item>
+        <item name="colorPrimary">@color/ios_blue</item>
         <item name="shapeAppearance">@style/ShapeAppearance.Material3.Corner.Medium</item>
     </style>
 </resources>
-

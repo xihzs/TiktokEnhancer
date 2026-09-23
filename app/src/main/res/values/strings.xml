@@ -21,15 +21,15 @@
     <string name="btn_change_region">Select Target Region</string>
     <string name="custom_override">Manual Carrier Override</string>
 
-    <string name="label_sim_country">Country ISO (e.g. us, my)</string>
+    <string name="label_sim_country">Country Code (e.g. us, my)</string>
     <string name="label_sim_operator">MCC + MNC (e.g. 310260, 50212)</string>
     <string name="label_carrier_name">Carrier Name (e.g. T-Mobile, Maxis)</string>
     <string name="btn_save_custom">Apply Custom Carrier</string>
 
     <string name="section_enhancements">ENHANCEMENTS</string>
-    <string name="feature_force_region">Smart Force Region (New)</string>
+    <string name="feature_force_region">Smart Force Region</string>
     <string name="feature_force_region_desc">Filters feed videos by region with network error protection</string>
-    <string name="feature_strict_force_region">Strict Force Region (Previous)</string>
+    <string name="feature_strict_force_region">Strict Region Filter</string>
     <string name="feature_strict_force_region_desc">Strictly discards all non-region videos without fallback</string>
     <string name="feature_download_story">Download Stories</string>
     <string name="feature_download_story_desc">Save videos and photos from 24-hour stories</string>
@@ -43,7 +43,7 @@
     <string name="feature_hide_ads_desc">Filters commercial cards and promotional posts</string>
     <string name="feature_bypass_download">Unlock Downloads</string>
     <string name="feature_bypass_download_desc">Allows saving videos even if disabled by author</string>
-    <string name="feature_hd_upload">Ultra HD Upload (Douyin Quality)</string>
+    <string name="feature_hd_upload">Ultra HD Upload</string>
     <string name="feature_hd_upload_desc">Forces 1080p 60fps synthesis, 18–25 Mbps bitrate, and direct HD upload without compression loss</string>
     <string name="feature_block_countries">Block Selected Countries</string>
     <string name="feature_block_countries_desc">Filters out videos and creators from blocked countries</string>
@@ -54,7 +54,7 @@
     <string name="btn_clear_all">Clear All</string>
     <string name="btn_done">Done</string>
     <string name="btn_add_custom_iso">Add</string>
-    <string name="hint_custom_iso">Add 2-letter ISO (e.g. cn)</string>
+    <string name="hint_custom_iso">Add 2-letter code (e.g. cn)</string>
     <string name="no_countries_blocked">No countries blocked (tap to manage)</string>
     <string name="blocked_count_format">%d countries blocked</string>
 
@@ -67,7 +67,7 @@
     <string name="pref_hide_icon_desc">Access module from Vector Manager</string>
 
     <string name="section_actions">QUICK ACTIONS</string>
-    <string name="btn_force_stop_tiktok">Restart TikTok</string>
+    <string name="btn_force_stop_tiktok">Restart</string>
     <string name="btn_open_tiktok">Launch</string>
 
     <string name="pref_saved_notice">Settings updated</string>

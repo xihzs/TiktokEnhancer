@@ -1,9 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <corners android:radius="8dp" />
-    <solid android:color="@color/china_banner_bg" />
-    <stroke
-        android:width="1dp"
-        android:color="@color/china_banner_border" />
-</shape>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="12dp" />
+            <solid android:color="@color/china_banner_bg" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/china_banner_border" />
+        </shape>
+    </item>
+    <item
+        android:left="1dp"
+        android:right="1dp"
+        android:top="1dp"
+        android:bottom="0dp">
+        <shape android:shape="rectangle">
+            <corners
+                android:topLeftRadius="11dp"
+                android:topRightRadius="11dp"
+                android:bottomLeftRadius="0dp"
+                android:bottomRightRadius="0dp" />
+            <stroke
+                android:width="1dp"
+                android:color="#24FF9F0A" />
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+</layer-list>
