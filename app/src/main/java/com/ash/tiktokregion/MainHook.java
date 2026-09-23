@@ -11,8 +11,10 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -77,8 +79,13 @@ public class MainHook implements IXposedHookLoadPackage {
     private static volatile boolean sBypassDownloadRestriction = true;
     private static volatile boolean sHDUpload = true;
     private static volatile boolean sHideAds = true;
+    private static volatile boolean sHidePymk = false;
     private static volatile boolean sForceRegion = true;
     private static volatile boolean sStrictForceRegion = false;
+    private static volatile boolean sLockedRegionFilter = false;
+    private static volatile boolean sLanguageFilter = false;
+    private static volatile Set<String> sAllowedLanguages = java.util.Collections.emptySet();
+    private static volatile String sAllowedLanguagesRaw = "";
     private static volatile boolean sDownloadStory = true;
     private static volatile boolean sBlockCountries = false;
     private static volatile Set<String> sBlockedCountries = java.util.Collections.emptySet();
@@ -86,6 +93,10 @@ public class MainHook implements IXposedHookLoadPackage {
     private static volatile Context sAppContext = null;
     private static volatile long sLastConfigFetchTime = 0;
     private static final long CONFIG_CACHE_MS = 5000;
+
+    public static boolean isEnabled() {
+        return sEnabled;
+    }
 
     public static boolean isNoWatermarkEnabled() {
         return sNoWatermark;
@@ -103,12 +114,32 @@ public class MainHook implements IXposedHookLoadPackage {
         return sHideAds;
     }
 
+    public static boolean isHidePymkEnabled() {
+        return sHidePymk;
+    }
+
     public static boolean isForceRegionEnabled() {
         return sForceRegion;
     }
 
     public static boolean isStrictForceRegionEnabled() {
         return sStrictForceRegion;
+    }
+
+    public static boolean isLockedRegionFilterEnabled() {
+        return sLockedRegionFilter;
+    }
+
+    public static boolean isLanguageFilterEnabled() {
+        return sLanguageFilter;
+    }
+
+    public static Set<String> getAllowedLanguages() {
+        return sAllowedLanguages;
+    }
+
+    public static String getAllowedLanguagesRaw() {
+        return sAllowedLanguagesRaw;
     }
 
     public static boolean isDownloadStoryEnabled() {
@@ -189,6 +220,9 @@ public class MainHook implements IXposedHookLoadPackage {
             } catch (Throwable t) {
                 XposedBridge.log(TAG + ": HDUploadHook.hook error: " + t.getMessage());
             }
+            try {
+                hookContentLanguageService(lpparam.classLoader);
+            } catch (Throwable ignored) {}
         }
 
         XposedBridge.log(TAG + ": All initial hooks dispatched for " + lpparam.packageName);
@@ -439,8 +473,13 @@ public class MainHook implements IXposedHookLoadPackage {
                     sBypassDownloadRestriction = bundle.getBoolean(ConfigProvider.KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
                     sHDUpload = bundle.getBoolean(ConfigProvider.KEY_HD_UPLOAD, true);
                     sHideAds = bundle.getBoolean(ConfigProvider.KEY_HIDE_ADS, true);
+                    sHidePymk = bundle.getBoolean(ConfigProvider.KEY_HIDE_PYMK, false);
                     sForceRegion = bundle.getBoolean(ConfigProvider.KEY_FORCE_REGION, true);
                     sStrictForceRegion = bundle.getBoolean(ConfigProvider.KEY_STRICT_FORCE_REGION, false);
+                    sLockedRegionFilter = bundle.getBoolean(ConfigProvider.KEY_LOCKED_REGION_FILTER, false);
+                    sLanguageFilter = bundle.getBoolean(ConfigProvider.KEY_LANGUAGE_FILTER, false);
+                    sAllowedLanguagesRaw = bundle.getString(ConfigProvider.KEY_ALLOWED_LANGUAGES, "");
+                    sAllowedLanguages = parseIsoSet(sAllowedLanguagesRaw);
                     sDownloadStory = bundle.getBoolean(ConfigProvider.KEY_DOWNLOAD_STORY, true);
                     sBlockCountries = bundle.getBoolean(ConfigProvider.KEY_BLOCK_COUNTRIES, false);
                     sBlockedCountries = parseIsoSet(bundle.getString(ConfigProvider.KEY_BLOCKED_COUNTRY_LIST, ""));
@@ -448,8 +487,9 @@ public class MainHook implements IXposedHookLoadPackage {
                     log("Config loaded via ContentProvider IPC: enabled=" + sEnabled
                             + ", country=" + sCountryIso + ", op=" + sOperatorName + " (" + sOperatorMccMnc + ")"
                             + ", forceRegion=" + sForceRegion + ", strictForceRegion=" + sStrictForceRegion
+                            + ", lockedRegionFilter=" + sLockedRegionFilter + ", languageFilter=" + sLanguageFilter + " (" + sAllowedLanguages.size() + ")"
                             + ", blockCountries=" + sBlockCountries + " (" + sBlockedCountries.size() + ")"
-                            + ", hideAds=" + sHideAds + ", downloadStory=" + sDownloadStory);
+                            + ", hideAds=" + sHideAds + ", hidePymk=" + sHidePymk + ", downloadStory=" + sDownloadStory);
                     return;
                 }
             } catch (Throwable t) {
@@ -490,8 +530,13 @@ public class MainHook implements IXposedHookLoadPackage {
             sBypassDownloadRestriction = prefs.getBoolean(MainActivity.KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
             sHDUpload = prefs.getBoolean(MainActivity.KEY_HD_UPLOAD, true);
             sHideAds = prefs.getBoolean(MainActivity.KEY_HIDE_ADS, true);
+            sHidePymk = prefs.getBoolean(MainActivity.KEY_HIDE_PYMK, false);
             sForceRegion = prefs.getBoolean(MainActivity.KEY_FORCE_REGION, true);
             sStrictForceRegion = prefs.getBoolean(MainActivity.KEY_STRICT_FORCE_REGION, false);
+            sLockedRegionFilter = prefs.getBoolean(MainActivity.KEY_LOCKED_REGION_FILTER, false);
+            sLanguageFilter = prefs.getBoolean(MainActivity.KEY_LANGUAGE_FILTER, false);
+            sAllowedLanguagesRaw = prefs.getString(MainActivity.KEY_ALLOWED_LANGUAGES, "");
+            sAllowedLanguages = parseIsoSet(sAllowedLanguagesRaw);
             sDownloadStory = prefs.getBoolean(MainActivity.KEY_DOWNLOAD_STORY, true);
             sBlockCountries = prefs.getBoolean(MainActivity.KEY_BLOCK_COUNTRIES, false);
             sBlockedCountries = parseIsoSet(prefs.getString(MainActivity.KEY_BLOCKED_COUNTRY_LIST, ""));
@@ -779,9 +824,15 @@ public class MainHook implements IXposedHookLoadPackage {
 
                             case "f_global_language":
                             case "f_global_app_language":
-                            case "f_global_content_language":
                             case "f_global_keyboard_language":
                                 if (sSpoofLocale) {
+                                    param.setResult(sLocaleLang);
+                                }
+                                break;
+                            case "f_global_content_language":
+                                if (sLanguageFilter && !sAllowedLanguages.isEmpty()) {
+                                    param.setResult(String.join(",", sAllowedLanguages));
+                                } else if (sSpoofLocale) {
                                     param.setResult(sLocaleLang);
                                 }
                                 break;
@@ -1210,7 +1261,13 @@ public class MainHook implements IXposedHookLoadPackage {
                             } else if ("timezone_offset".equals(key) || "tz_offset".equals(key)) {
                                 String tzOff = getTimezoneOffsetForCountry(sCountryIso);
                                 if (tzOff != null) param.args[1] = tzOff;
-                            } else if (sSpoofLocale && ("language".equals(key) || "content_language".equals(key))) {
+                            } else if ("content_language".equals(key)) {
+                                if (sLanguageFilter && !sAllowedLanguages.isEmpty()) {
+                                    param.args[1] = String.join(",", sAllowedLanguages);
+                                } else if (sSpoofLocale) {
+                                    param.args[1] = sLocaleLang;
+                                }
+                            } else if (sSpoofLocale && "language".equals(key)) {
                                 param.args[1] = sLocaleLang;
                             }
                         }
@@ -1280,12 +1337,34 @@ public class MainHook implements IXposedHookLoadPackage {
             query = query.replaceAll("(?<=[?&]|^)timezone_offset=[^&]*", "timezone_offset=" + tzOff);
             query = query.replaceAll("(?<=[?&]|^)tz_offset=[^&]*", "tz_offset=" + tzOff);
         }
+        if (sLanguageFilter && !sAllowedLanguages.isEmpty()) {
+            query = query.replaceAll("(?<=[?&]|^)content_language=[^&]*", "content_language=" + String.join(",", sAllowedLanguages));
+        } else if (sSpoofLocale) {
+            query = query.replaceAll("(?<=[?&]|^)content_language=[^&]*", "content_language=" + sLocaleLang);
+        }
         if (sSpoofLocale) {
             query = query.replaceAll("(?<=[?&]|^)language=[^&]*", "language=" + sLocaleLang);
-            query = query.replaceAll("(?<=[?&]|^)content_language=[^&]*", "content_language=" + sLocaleLang);
             query = query.replaceAll("(?<=[?&]|^)app_language=[^&]*", "app_language=" + sLocaleLang);
         }
         return query;
+    }
+
+    private static void hookContentLanguageService(ClassLoader classLoader) {
+        if (classLoader == null) return;
+        try {
+            Class<?> cls = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.contentlanguage.ContentLanguageServiceImpl", classLoader);
+            if (cls != null) {
+                XposedHelpers.findAndHookMethod(cls, "getLanguage", new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (sLanguageFilter && !sAllowedLanguages.isEmpty()) {
+                            param.setResult(new ArrayList<>(sAllowedLanguages));
+                        }
+                    }
+                });
+                log("Hooked ContentLanguageServiceImpl.getLanguage()");
+            }
+        } catch (Throwable ignored) {}
     }
 
     private void hookTelephonyManager(ClassLoader classLoader) {

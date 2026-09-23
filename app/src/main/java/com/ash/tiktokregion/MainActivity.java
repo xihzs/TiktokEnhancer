@@ -36,6 +36,8 @@ import com.google.android.material.textfield.TextInputEditText;
 
 import java.io.DataOutputStream;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -56,10 +58,14 @@ public class MainActivity extends AppCompatActivity {
     public static final String KEY_BYPASS_DOWNLOAD_RESTRICTION = "bypass_download_restriction";
     public static final String KEY_HD_UPLOAD = "hd_upload";
     public static final String KEY_HIDE_ADS = "hide_ads";
+    public static final String KEY_HIDE_PYMK = "hide_pymk";
     public static final String KEY_FORCE_REGION = "force_region";
     public static final String KEY_STRICT_FORCE_REGION = "strict_force_region";
+    public static final String KEY_LOCKED_REGION_FILTER = "locked_region_filter";
     public static final String KEY_BLOCK_COUNTRIES = "block_countries";
     public static final String KEY_BLOCKED_COUNTRY_LIST = "blocked_country_list";
+    public static final String KEY_LANGUAGE_FILTER = "language_filter";
+    public static final String KEY_ALLOWED_LANGUAGES = "allowed_languages";
     public static final String KEY_DOWNLOAD_STORY = "download_story";
 
     public static final String KEY_ACTIVE_PROFILE = "active_profile";
@@ -93,8 +99,12 @@ public class MainActivity extends AppCompatActivity {
     private View mDividerForceRegion;
     private View mRowStrictForceRegion;
     private View mDividerStrictForceRegion;
+    private View mRowLockedRegion;
+    private View mDividerLockedRegion;
     private View mRowBlockCountries;
     private View mDividerBlockCountries;
+    private View mRowLanguageFilter;
+    private View mDividerLanguageFilter;
     private View mRowEnableSpoof;
     private View mDividerEnableSpoof;
     private View mRowSpoofLocale;
@@ -104,12 +114,19 @@ public class MainActivity extends AppCompatActivity {
     private MaterialSwitch mSwitchHideIcon;
     private MaterialSwitch mSwitchForceRegion;
     private MaterialSwitch mSwitchStrictForceRegion;
+    private MaterialSwitch mSwitchLockedRegion;
     private MaterialSwitch mSwitchBlockCountries;
     private View mBtnManageBlockedCountries;
     private TextView mTvBlockedCountriesSummary;
+    private MaterialSwitch mSwitchLanguageFilter;
+    private View mBtnManageLanguages;
+    private TextView mTvLanguagesSummary;
     private MaterialSwitch mSwitchDownloadStory;
     private View mDividerDownloadStory;
     private MaterialSwitch mSwitchHideAds;
+    private View mRowHidePymk;
+    private View mDividerHidePymk;
+    private MaterialSwitch mSwitchHidePymk;
     private MaterialSwitch mSwitchNoWatermark;
     private MaterialSwitch mSwitchBypassDownload;
     private MaterialSwitch mSwitchHDUpload;
@@ -158,8 +175,12 @@ public class MainActivity extends AppCompatActivity {
         mDividerForceRegion = findViewById(R.id.divider_force_region);
         mRowStrictForceRegion = findViewById(R.id.row_strict_force_region);
         mDividerStrictForceRegion = findViewById(R.id.divider_strict_force_region);
+        mRowLockedRegion = findViewById(R.id.row_locked_region);
+        mDividerLockedRegion = findViewById(R.id.divider_locked_region);
         mRowBlockCountries = findViewById(R.id.row_block_countries);
         mDividerBlockCountries = findViewById(R.id.divider_block_countries);
+        mRowLanguageFilter = findViewById(R.id.row_language_filter);
+        mDividerLanguageFilter = findViewById(R.id.divider_language_filter);
         mRowEnableSpoof = findViewById(R.id.row_enable_spoof);
         mDividerEnableSpoof = findViewById(R.id.divider_enable_spoof);
         mRowSpoofLocale = findViewById(R.id.row_spoof_locale);
@@ -177,12 +198,19 @@ public class MainActivity extends AppCompatActivity {
 
         mSwitchForceRegion = findViewById(R.id.switch_force_region);
         mSwitchStrictForceRegion = findViewById(R.id.switch_strict_force_region);
+        mSwitchLockedRegion = findViewById(R.id.switch_locked_region);
         mSwitchBlockCountries = findViewById(R.id.switch_block_countries);
         mBtnManageBlockedCountries = findViewById(R.id.btn_manage_blocked_countries);
         mTvBlockedCountriesSummary = findViewById(R.id.tv_blocked_countries_summary);
+        mSwitchLanguageFilter = findViewById(R.id.switch_language_filter);
+        mBtnManageLanguages = findViewById(R.id.btn_manage_languages);
+        mTvLanguagesSummary = findViewById(R.id.tv_languages_summary);
         mSwitchDownloadStory = findViewById(R.id.switch_download_story);
         mDividerDownloadStory = findViewById(R.id.divider_download_story);
         mSwitchHideAds = findViewById(R.id.switch_hide_ads);
+        mRowHidePymk = findViewById(R.id.row_hide_pymk);
+        mDividerHidePymk = findViewById(R.id.divider_hide_pymk);
+        mSwitchHidePymk = findViewById(R.id.switch_hide_pymk);
         mSwitchNoWatermark = findViewById(R.id.switch_no_watermark);
         mSwitchBypassDownload = findViewById(R.id.switch_bypass_download);
         mSwitchHDUpload = findViewById(R.id.switch_hd_upload);
@@ -265,9 +293,12 @@ public class MainActivity extends AppCompatActivity {
         boolean isIconHidden = isLauncherIconHidden();
         boolean forceRegion = mPrefs.getBoolean(KEY_FORCE_REGION, true);
         boolean strictForceRegion = mPrefs.getBoolean(KEY_STRICT_FORCE_REGION, false);
+        boolean lockedRegionFilter = mPrefs.getBoolean(KEY_LOCKED_REGION_FILTER, false);
         boolean blockCountries = mPrefs.getBoolean(KEY_BLOCK_COUNTRIES, false);
+        boolean languageFilter = mPrefs.getBoolean(KEY_LANGUAGE_FILTER, false);
         boolean downloadStory = mPrefs.getBoolean(KEY_DOWNLOAD_STORY, true);
         boolean hideAds = mPrefs.getBoolean(KEY_HIDE_ADS, true);
+        boolean hidePymk = mPrefs.getBoolean(KEY_HIDE_PYMK, false);
         boolean noWatermark = mPrefs.getBoolean(KEY_NO_WATERMARK, true);
         boolean bypassDownload = mPrefs.getBoolean(KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
         boolean hdUpload = mPrefs.getBoolean(KEY_HD_UPLOAD, true);
@@ -277,9 +308,12 @@ public class MainActivity extends AppCompatActivity {
         mSwitchHideIcon.setChecked(isIconHidden);
         mSwitchForceRegion.setChecked(forceRegion);
         mSwitchStrictForceRegion.setChecked(strictForceRegion);
+        if (mSwitchLockedRegion != null) mSwitchLockedRegion.setChecked(lockedRegionFilter);
         mSwitchBlockCountries.setChecked(blockCountries);
+        if (mSwitchLanguageFilter != null) mSwitchLanguageFilter.setChecked(languageFilter);
         mSwitchDownloadStory.setChecked(downloadStory);
         mSwitchHideAds.setChecked(hideAds);
+        if (mSwitchHidePymk != null) mSwitchHidePymk.setChecked(hidePymk);
         mSwitchNoWatermark.setChecked(noWatermark);
         mSwitchBypassDownload.setChecked(bypassDownload);
         if (mSwitchHDUpload != null) mSwitchHDUpload.setChecked(hdUpload);
@@ -288,6 +322,7 @@ public class MainActivity extends AppCompatActivity {
 
         updateRegionDisplay();
         updateBlockedCountriesSummary();
+        updateLanguagesSummary();
 
         btnSelectPreset.setOnClickListener(v -> showSearchablePresetDialog());
 
@@ -345,6 +380,15 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
         });
 
+        if (mSwitchLockedRegion != null) {
+            mSwitchLockedRegion.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                mPrefs.edit().putBoolean(KEY_LOCKED_REGION_FILTER, isChecked).apply();
+                saveToDeviceProtectedStorage(KEY_LOCKED_REGION_FILTER, isChecked);
+                makePrefsWorldReadable();
+                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            });
+        }
+
         mSwitchBlockCountries.setOnCheckedChangeListener((buttonView, isChecked) -> {
             mPrefs.edit().putBoolean(KEY_BLOCK_COUNTRIES, isChecked).apply();
             saveToDeviceProtectedStorage(KEY_BLOCK_COUNTRIES, isChecked);
@@ -354,6 +398,19 @@ public class MainActivity extends AppCompatActivity {
 
         if (mBtnManageBlockedCountries != null) {
             mBtnManageBlockedCountries.setOnClickListener(v -> showBlockedCountriesDialog());
+        }
+
+        if (mSwitchLanguageFilter != null) {
+            mSwitchLanguageFilter.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                mPrefs.edit().putBoolean(KEY_LANGUAGE_FILTER, isChecked).apply();
+                saveToDeviceProtectedStorage(KEY_LANGUAGE_FILTER, isChecked);
+                makePrefsWorldReadable();
+                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        if (mBtnManageLanguages != null) {
+            mBtnManageLanguages.setOnClickListener(v -> showLanguageSelectionDialog());
         }
 
         mSwitchDownloadStory.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -369,6 +426,15 @@ public class MainActivity extends AppCompatActivity {
             makePrefsWorldReadable();
             Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
         });
+
+        if (mSwitchHidePymk != null) {
+            mSwitchHidePymk.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                mPrefs.edit().putBoolean(KEY_HIDE_PYMK, isChecked).apply();
+                saveToDeviceProtectedStorage(KEY_HIDE_PYMK, isChecked);
+                makePrefsWorldReadable();
+                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            });
+        }
 
         mSwitchNoWatermark.setOnCheckedChangeListener((buttonView, isChecked) -> {
             mPrefs.edit().putBoolean(KEY_NO_WATERMARK, isChecked).apply();
@@ -680,6 +746,310 @@ public class MainActivity extends AppCompatActivity {
         dialog.show();
     }
 
+    private void updateLanguagesSummary() {
+        if (mTvLanguagesSummary == null) return;
+        String list = mPrefs.getString(KEY_ALLOWED_LANGUAGES, "");
+        int count = 0;
+        if (list != null && !list.trim().isEmpty()) {
+            String[] parts = list.split(",");
+            for (String p : parts) {
+                if (!p.trim().isEmpty()) {
+                    count++;
+                }
+            }
+        }
+        if (count == 0) {
+            mTvLanguagesSummary.setText(R.string.no_languages_selected);
+        } else {
+            mTvLanguagesSummary.setText(getString(R.string.language_filter_count_format, count));
+        }
+    }
+
+    private String getCurrentRegionIso() {
+        if (mPrefs.getBoolean(KEY_IS_CUSTOM, false)) {
+            return mPrefs.getString(KEY_CUSTOM_ISO, "us").toLowerCase(Locale.ROOT);
+        } else {
+            String presetId = mPrefs.getString(KEY_PRESET_ID, CountryPreset.getDefault().getId());
+            CountryPreset preset = CountryPreset.getById(presetId);
+            return preset.getCountryIso().toLowerCase(Locale.ROOT);
+        }
+    }
+
+    private Set<String> getLanguagesForCountry(String countryIso) {
+        Set<String> set = new HashSet<>();
+        if (countryIso == null) return set;
+        String iso = countryIso.trim().toLowerCase(Locale.ROOT);
+        switch (iso) {
+            case "id":
+                set.add("id");
+                break;
+            case "my":
+                set.add("ms");
+                set.add("en");
+                break;
+            case "sg":
+                set.add("en");
+                set.add("zh");
+                break;
+            case "jp":
+                set.add("ja");
+                break;
+            case "kr":
+                set.add("ko");
+                break;
+            case "vn":
+                set.add("vi");
+                break;
+            case "th":
+                set.add("th");
+                break;
+            case "ph":
+                set.add("tl");
+                set.add("en");
+                break;
+            case "in":
+                set.add("en");
+                set.add("hi");
+                break;
+            case "es":
+            case "mx":
+            case "ar":
+            case "co":
+            case "cl":
+            case "pe":
+                set.add("es");
+                break;
+            case "br":
+            case "pt":
+                set.add("pt");
+                break;
+            case "fr":
+                set.add("fr");
+                break;
+            case "de":
+            case "at":
+            case "ch":
+                set.add("de");
+                break;
+            case "it":
+                set.add("it");
+                break;
+            case "ru":
+            case "by":
+            case "kz":
+                set.add("ru");
+                break;
+            case "sa":
+            case "ae":
+            case "eg":
+            case "qa":
+            case "kw":
+                set.add("ar");
+                break;
+            case "tr":
+                set.add("tr");
+                break;
+            case "nl":
+                set.add("nl");
+                set.add("en");
+                break;
+            case "pl":
+                set.add("pl");
+                break;
+            case "ua":
+                set.add("uk");
+                break;
+            case "cn":
+                set.add("zh");
+                break;
+            case "tw":
+            case "hk":
+                set.add("zh-Hant");
+                break;
+            case "us":
+            case "gb":
+            case "ca":
+            case "au":
+            case "nz":
+            case "ie":
+            default:
+                if (LanguageModel.findByCode(iso) != null) {
+                    set.add(iso);
+                } else {
+                    set.add("en");
+                }
+                break;
+        }
+        return set;
+    }
+
+    private void showLanguageSelectionDialog() {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_select_languages, null);
+        EditText etSearch = dialogView.findViewById(R.id.et_search_lang);
+        EditText etCustomLang = dialogView.findViewById(R.id.et_custom_lang_code);
+        View btnAddCustomLang = dialogView.findViewById(R.id.btn_add_custom_lang);
+        TextView tvLangCounter = dialogView.findViewById(R.id.tv_language_counter);
+        TextView btnSyncRegion = dialogView.findViewById(R.id.btn_sync_region_lang);
+        TextView btnClearAll = dialogView.findViewById(R.id.btn_clear_all_languages);
+        RecyclerView rvLanguages = dialogView.findViewById(R.id.rv_languages);
+        TextView tvEmptyState = dialogView.findViewById(R.id.tv_empty_languages_state);
+        View btnClose = dialogView.findViewById(R.id.btn_close_dialog);
+        View btnDone = dialogView.findViewById(R.id.btn_done_languages);
+
+        rvLanguages.setLayoutManager(new GridLayoutManager(this, 2));
+
+        String savedList = mPrefs.getString(KEY_ALLOWED_LANGUAGES, "");
+        Set<String> initialSelected = new HashSet<>();
+        if (savedList != null && !savedList.trim().isEmpty()) {
+            for (String code : savedList.split(",")) {
+                String clean = code.trim().toLowerCase(Locale.ROOT);
+                if (!clean.isEmpty()) {
+                    initialSelected.add(clean);
+                }
+            }
+        }
+
+        List<LanguageModel> allLanguages = new ArrayList<>(LanguageModel.getAll());
+        Set<String> knownCodes = new HashSet<>();
+        for (LanguageModel l : allLanguages) {
+            knownCodes.add(l.getCode().toLowerCase(Locale.ROOT));
+        }
+        for (String code : initialSelected) {
+            if (!knownCodes.contains(code)) {
+                LanguageModel custom = new LanguageModel(code, code.toUpperCase(Locale.ROOT), code.toUpperCase(Locale.ROOT));
+                allLanguages.add(0, custom);
+                knownCodes.add(code);
+            }
+        }
+
+        Dialog dialog = new Dialog(this, R.style.DialogDarkTheme);
+        dialog.setContentView(dialogView);
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            dialog.getWindow().setDimAmount(0.65f);
+
+            DisplayMetrics metrics = getResources().getDisplayMetrics();
+            int width = (int) (metrics.widthPixels * 0.90);
+            int height = (int) (metrics.heightPixels * 0.85);
+            dialog.getWindow().setLayout(width, height);
+        }
+
+        LanguageGridAdapter[] adapterHolder = new LanguageGridAdapter[1];
+
+        Runnable updateCounterUI = () -> {
+            int count = adapterHolder[0] != null ? adapterHolder[0].getSelectedCount() : initialSelected.size();
+            tvLangCounter.setText(getString(R.string.language_filter_count_format, count));
+            btnClearAll.setVisibility(count > 0 ? View.VISIBLE : View.GONE);
+        };
+
+        LanguageGridAdapter adapter = new LanguageGridAdapter(this, allLanguages, initialSelected,
+                (item, isSelected, totalSelectedCount) -> {
+                    tvLangCounter.setText(getString(R.string.language_filter_count_format, totalSelectedCount));
+                    btnClearAll.setVisibility(totalSelectedCount > 0 ? View.VISIBLE : View.GONE);
+                });
+        adapterHolder[0] = adapter;
+        rvLanguages.setAdapter(adapter);
+        updateCounterUI.run();
+
+        btnClearAll.setOnClickListener(v -> adapter.clearAll());
+
+        btnSyncRegion.setOnClickListener(v -> {
+            String regionIso = getCurrentRegionIso();
+            Set<String> matchedLangs = getLanguagesForCountry(regionIso);
+            for (String langCode : matchedLangs) {
+                if (!knownCodes.contains(langCode)) {
+                    LanguageModel custom = new LanguageModel(langCode, langCode.toUpperCase(Locale.ROOT), langCode.toUpperCase(Locale.ROOT));
+                    allLanguages.add(0, custom);
+                    knownCodes.add(langCode);
+                }
+            }
+            adapter.setSelectedCodes(matchedLangs);
+            Toast.makeText(this, "Matched languages for " + regionIso.toUpperCase(Locale.ROOT), Toast.LENGTH_SHORT).show();
+        });
+
+        btnAddCustomLang.setOnClickListener(v -> {
+            String code = etCustomLang.getText() != null ? etCustomLang.getText().toString().trim().toLowerCase(Locale.ROOT) : "";
+            if (code.length() < 2) {
+                Toast.makeText(this, "Enter valid language code (e.g. en, id, ja)", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            LanguageModel existing = LanguageModel.findByCode(code);
+            if (existing == null) {
+                existing = new LanguageModel(code, code.toUpperCase(Locale.ROOT), code.toUpperCase(Locale.ROOT));
+            }
+            adapter.addAndSelectLanguage(existing);
+            etCustomLang.setText("");
+            Toast.makeText(this, "Added " + existing.getDisplayName(), Toast.LENGTH_SHORT).show();
+        });
+
+        etSearch.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                String query = s != null ? s.toString().trim().toLowerCase(Locale.ROOT) : "";
+                List<LanguageModel> filtered = new ArrayList<>();
+                if (query.isEmpty()) {
+                    filtered.addAll(allLanguages);
+                } else {
+                    for (LanguageModel lang : allLanguages) {
+                        if (lang.getCode().toLowerCase(Locale.ROOT).contains(query)
+                                || lang.getName().toLowerCase(Locale.ROOT).contains(query)
+                                || lang.getNativeName().toLowerCase(Locale.ROOT).contains(query)) {
+                            filtered.add(lang);
+                        }
+                    }
+                }
+                adapter.updateList(filtered);
+                boolean isEmpty = filtered.isEmpty();
+                tvEmptyState.setVisibility(isEmpty ? View.VISIBLE : View.GONE);
+                rvLanguages.setVisibility(isEmpty ? View.GONE : View.VISIBLE);
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {}
+        });
+
+        Runnable saveAndDismiss = () -> {
+            Set<String> selected = adapter.getSelectedCodes();
+            StringBuilder sb = new StringBuilder();
+            for (String code : selected) {
+                if (sb.length() > 0) sb.append(",");
+                sb.append(code);
+            }
+            String joined = sb.toString();
+
+            if (!selected.isEmpty()) {
+                if (mSwitchLanguageFilter != null && !mSwitchLanguageFilter.isChecked()) {
+                    mSwitchLanguageFilter.setChecked(true);
+                }
+                mPrefs.edit().putBoolean(KEY_LANGUAGE_FILTER, true).apply();
+                saveToDeviceProtectedStorage(KEY_LANGUAGE_FILTER, true);
+            }
+
+            mPrefs.edit().putString(KEY_ALLOWED_LANGUAGES, joined).apply();
+            saveToDeviceProtectedStorage(KEY_ALLOWED_LANGUAGES, joined);
+            makePrefsWorldReadable();
+
+            updateLanguagesSummary();
+            Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            dialog.dismiss();
+        };
+
+        if (btnClose != null) {
+            btnClose.setOnClickListener(v -> saveAndDismiss.run());
+        }
+        if (btnDone != null) {
+            btnDone.setOnClickListener(v -> saveAndDismiss.run());
+        }
+        dialog.setOnCancelListener(d -> saveAndDismiss.run());
+
+        dialog.show();
+    }
+
     private void setLauncherIconHidden(boolean hide) {
         try {
             ComponentName aliasComponent = new ComponentName(this, getPackageName() + ".LauncherAlias");
@@ -803,15 +1173,22 @@ public class MainActivity extends AppCompatActivity {
             mDividerForceRegion.setVisibility(View.GONE);
             mRowStrictForceRegion.setVisibility(View.GONE);
             mDividerStrictForceRegion.setVisibility(View.GONE);
+            if (mRowLockedRegion != null) mRowLockedRegion.setVisibility(View.GONE);
+            if (mDividerLockedRegion != null) mDividerLockedRegion.setVisibility(View.GONE);
             mRowBlockCountries.setVisibility(View.GONE);
             mBtnManageBlockedCountries.setVisibility(View.GONE);
             mDividerBlockCountries.setVisibility(View.GONE);
+            if (mRowLanguageFilter != null) mRowLanguageFilter.setVisibility(View.GONE);
+            if (mBtnManageLanguages != null) mBtnManageLanguages.setVisibility(View.GONE);
+            if (mDividerLanguageFilter != null) mDividerLanguageFilter.setVisibility(View.GONE);
 
             mRowEnableSpoof.setVisibility(View.GONE);
             mDividerEnableSpoof.setVisibility(View.GONE);
             mRowSpoofLocale.setVisibility(View.GONE);
 
             if (mRowHDUpload != null) mRowHDUpload.setVisibility(View.GONE);
+            if (mRowHidePymk != null) mRowHidePymk.setVisibility(View.GONE);
+            if (mDividerHidePymk != null) mDividerHidePymk.setVisibility(View.GONE);
             if (mDividerDownloadStory != null) mDividerDownloadStory.setVisibility(View.GONE);
 
             mBtnForceStop.setText(R.string.btn_force_stop_tiktok);
@@ -828,15 +1205,22 @@ public class MainActivity extends AppCompatActivity {
             mDividerForceRegion.setVisibility(View.VISIBLE);
             mRowStrictForceRegion.setVisibility(View.VISIBLE);
             mDividerStrictForceRegion.setVisibility(View.VISIBLE);
+            if (mRowLockedRegion != null) mRowLockedRegion.setVisibility(View.VISIBLE);
+            if (mDividerLockedRegion != null) mDividerLockedRegion.setVisibility(View.VISIBLE);
             mRowBlockCountries.setVisibility(View.VISIBLE);
             mBtnManageBlockedCountries.setVisibility(View.VISIBLE);
             mDividerBlockCountries.setVisibility(View.VISIBLE);
+            if (mRowLanguageFilter != null) mRowLanguageFilter.setVisibility(View.VISIBLE);
+            if (mBtnManageLanguages != null) mBtnManageLanguages.setVisibility(View.VISIBLE);
+            if (mDividerLanguageFilter != null) mDividerLanguageFilter.setVisibility(View.VISIBLE);
 
             mRowEnableSpoof.setVisibility(View.VISIBLE);
             mDividerEnableSpoof.setVisibility(View.VISIBLE);
             mRowSpoofLocale.setVisibility(View.VISIBLE);
 
             if (mRowHDUpload != null) mRowHDUpload.setVisibility(View.VISIBLE);
+            if (mRowHidePymk != null) mRowHidePymk.setVisibility(View.VISIBLE);
+            if (mDividerHidePymk != null) mDividerHidePymk.setVisibility(View.VISIBLE);
             if (mDividerDownloadStory != null) mDividerDownloadStory.setVisibility(View.VISIBLE);
 
             mBtnForceStop.setText(R.string.btn_force_stop_tiktok);

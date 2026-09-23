@@ -385,11 +385,18 @@ public class AdsHook {
             return alreadyClean;
         }
 
+        if (!MainHook.isEnabled()) {
+            @SuppressWarnings("unchecked")
+            List<Object> raw = (List<Object>) sourceList;
+            return raw;
+        }
+
         MainHook.checkConfigRefreshAsync(null);
 
         List<Object> kept = new ArrayList<>(sourceList.size());
         boolean isChina = MainHook.isChinaPackage();
         boolean hideAds = MainHook.isHideAdsEnabled();
+        boolean hidePymk = !isChina && MainHook.isHidePymkEnabled();
         boolean strictRegion = !isChina && MainHook.isStrictForceRegionEnabled();
         boolean smartRegion = !isChina && !strictRegion && MainHook.isForceRegionEnabled() && isRecommendFeed(feedItemList);
         boolean anyRegionFilter = strictRegion || smartRegion;
@@ -399,10 +406,18 @@ public class AdsHook {
         boolean hasBlockedCountries = blockCountries && blockedCountries != null && !blockedCountries.isEmpty();
         BlockedCountryMatcher matcher = hasBlockedCountries ? getMatcher(blockedCountries) : null;
 
+        boolean lockedRegionFilter = !isChina && MainHook.isLockedRegionFilterEnabled();
+        boolean languageFilter = !isChina && MainHook.isLanguageFilterEnabled();
+        Set<String> allowedLanguages = languageFilter ? MainHook.getAllowedLanguages() : Collections.emptySet();
+        boolean hasAllowedLanguages = languageFilter && allowedLanguages != null && !allowedLanguages.isEmpty();
+
         int totalBefore = sourceList.size();
         int blockedCount = 0;
         int adCount = 0;
+        int pymkCount = 0;
         int regionFilterCount = 0;
+        int lockedRegionCount = 0;
+        int languageFilterCount = 0;
 
         for (Object item : sourceList) {
             if (item == null) continue;
@@ -412,8 +427,23 @@ public class AdsHook {
                 continue;
             }
 
+            if (hidePymk && isPymkAweme(item)) {
+                pymkCount++;
+                continue;
+            }
+
             if (matcher != null && matcher.matchesAweme(item)) {
                 blockedCount++;
+                continue;
+            }
+
+            if (lockedRegionFilter && shouldFilterForLockedRegion(item, targetRegion)) {
+                lockedRegionCount++;
+                continue;
+            }
+
+            if (hasAllowedLanguages && shouldFilterForLanguage(item, allowedLanguages)) {
+                languageFilterCount++;
                 continue;
             }
 
@@ -425,19 +455,64 @@ public class AdsHook {
             kept.add(item);
         }
 
-        if (blockedCount > 0 || adCount > 0 || regionFilterCount > 0) {
-            log("Feed filtered: " + totalBefore + " -> " + kept.size() + " kept (blocked=" + blockedCount + ", ads=" + adCount + ", nonTargetRegion=" + regionFilterCount + ")");
+        if (blockedCount > 0 || adCount > 0 || pymkCount > 0 || regionFilterCount > 0 || lockedRegionCount > 0 || languageFilterCount > 0) {
+            log("Feed filtered: " + totalBefore + " -> " + kept.size() + " kept (blocked=" + blockedCount
+                    + ", ads=" + adCount + ", pymk=" + pymkCount + ", nonTargetRegion=" + regionFilterCount
+                    + ", nonTargetLockedRegion=" + lockedRegionCount
+                    + ", nonAllowedLang=" + languageFilterCount + ")");
         }
 
         if (!strictRegion && kept.isEmpty() && !sourceList.isEmpty()) {
+            // Priority 1: rescue items that pass ad, pymk, blocked country, locked region, and language filters
             for (Object item : sourceList) {
                 if (item != null
                         && !(hideAds && isAdAweme(item))
-                        && !(matcher != null && matcher.matchesAweme(item))) {
+                        && !(hidePymk && isPymkAweme(item))
+                        && !(matcher != null && matcher.matchesAweme(item))
+                        && !(lockedRegionFilter && shouldFilterForLockedRegion(item, targetRegion))
+                        && !(hasAllowedLanguages && shouldFilterForLanguage(item, allowedLanguages))) {
                     kept.add(item);
                 }
             }
 
+            // Priority 2: rescue items that are not ads, not pymk, and not from blocked countries
+            if (kept.isEmpty()) {
+                for (Object item : sourceList) {
+                    if (item != null
+                            && !(hideAds && isAdAweme(item))
+                            && !(hidePymk && isPymkAweme(item))
+                            && !(matcher != null && matcher.matchesAweme(item))) {
+                        kept.add(item);
+                        if (kept.size() >= 2) break;
+                    }
+                }
+            }
+
+            // Priority 3: rescue any non-ad, non-blocked item to prevent TikTok "Something went wrong" crash
+            if (kept.isEmpty()) {
+                for (Object item : sourceList) {
+                    if (item != null
+                            && !(hideAds && isAdAweme(item))
+                            && !(matcher != null && matcher.matchesAweme(item))) {
+                        kept.add(item);
+                        if (kept.size() >= 2) break;
+                    }
+                }
+            }
+
+            // Priority 4: absolute fallback to preserve feed continuity if every item was somehow flagged
+            if (kept.isEmpty() && !sourceList.isEmpty()) {
+                for (Object item : sourceList) {
+                    if (item != null && !(hideAds && isAdAweme(item))) {
+                        kept.add(item);
+                        if (kept.size() >= 1) break;
+                    }
+                }
+            }
+
+            if (!kept.isEmpty()) {
+                log("Feed starvation safety floor activated: preserved " + kept.size() + " items to prevent feed reload error");
+            }
         }
 
         XposedHelpers.setAdditionalInstanceField(kept, "tiktok_enhancer_clean", Boolean.TRUE);
@@ -506,32 +581,267 @@ public class AdsHook {
         return false;
     }
 
+    private static boolean isPymkAweme(Object aweme) {
+        if (aweme == null) return false;
+
+        // 1. Aweme-level MatchedFriendStruct (TikTok explicit friend match)
+        try {
+            Object matchedFriend = getSafeObject(aweme, "getMatchedFriendStruct", "matchedFriendStruct");
+            if (matchedFriend != null) {
+                Boolean isPymk = (Boolean) getSafeObject(matchedFriend, "isPymk", "isPymk");
+                if (Boolean.TRUE.equals(isPymk)) return true;
+                Boolean avail = (Boolean) XposedHelpers.callMethod(matchedFriend, "isMatchedFriendAvailable");
+                if (Boolean.TRUE.equals(avail)) return true;
+                String friendType = getSafeString(matchedFriend, "getFriendTypeStr", "friendTypeStr");
+                if (friendType != null && !friendType.isEmpty()) return true;
+                return true;
+            }
+        } catch (Throwable ignored) {}
+
+        // 2. Recommend Card Types (PYMK / RecUser horizontal carousel cards)
+        try {
+            Object cardType = getSafeObject(aweme, "getRecommendCardType", "recommendCardType");
+            if (cardType instanceof Number && ((Number) cardType).intValue() > 0) return true;
+        } catch (Throwable ignored) {}
+
+        // 3. Recommend Aweme Items (RecUser cards containing suggested user profiles)
+        try {
+            Object recItems = getSafeObject(aweme, "getRecommendAwemeItems", "recommendAwemeItems");
+            if (recItems instanceof List && !((List<?>) recItems).isEmpty()) return true;
+        } catch (Throwable ignored) {}
+
+        // 4. Recommendation card Aweme types (101=RecUser, 102=RecFriends, 103=FindFriends, 222=SocialCard)
+        try {
+            Number awemeType = (Number) getSafeObject(aweme, "getAwemeType", "awemeType");
+            if (awemeType != null) {
+                int at = awemeType.intValue();
+                if (at == 101 || at == 102 || at == 103 || at == 222) return true;
+            }
+        } catch (Throwable ignored) {}
+
+        // 5. Author-level MatchedFriendStruct
+        try {
+            Object author = getSafeObject(aweme, "getAuthor", "author");
+            if (author != null) {
+                Object aMatched = getSafeObject(author, "getMatchedFriendStruct", "matchedFriendStruct");
+                if (aMatched != null) {
+                    Boolean isPymk = (Boolean) getSafeObject(aMatched, "isPymk", "isPymk");
+                    if (Boolean.TRUE.equals(isPymk)) return true;
+                    Boolean avail = (Boolean) XposedHelpers.callMethod(aMatched, "isMatchedFriendAvailable");
+                    if (Boolean.TRUE.equals(avail)) return true;
+                    String friendType = getSafeString(aMatched, "getFriendTypeStr", "friendTypeStr");
+                    if (friendType != null && !friendType.isEmpty()) return true;
+                    return true;
+                }
+                // Explicit external recommendation reason (e.g. from address book contacts)
+                Object extReason = getSafeObject(author, "getExternalRecommendReasonStruct", "externalRecommendReasonStruct");
+                if (extReason != null) return true;
+            }
+        } catch (Throwable ignored) {}
+
+        // 6. Social graph relation recommend model
+        try {
+            Object relationRecommend = getSafeObject(aweme, "getRelationRecommendInfo", "relationRecommendInfo");
+            if (relationRecommend != null) {
+                Number friendType = (Number) getSafeObject(relationRecommend, "getFriendType", "friendType");
+                if (friendType != null && friendType.longValue() > 0) return true;
+                String recType = getSafeString(relationRecommend, "getRecType", "recType");
+                if (recType != null && (recType.contains("contact") || recType.contains("friend") || recType.contains("pymk"))) return true;
+            }
+        } catch (Throwable ignored) {}
+
+        // 7. Inspect repost forwardItem recursively
+        try {
+            Object forwardItem = getSafeObject(aweme, "getForwardItem", "forwardItem");
+            if (forwardItem != null && forwardItem != aweme) {
+                if (isPymkAweme(forwardItem)) return true;
+            }
+        } catch (Throwable ignored) {}
+
+        return false;
+    }
+
     private static boolean shouldFilterForRegion(Object aweme, String targetRegion) {
         if (targetRegion == null || targetRegion.trim().isEmpty()) return false;
         String target = targetRegion.trim();
 
-        String region = getSafeString(aweme, "getRegion", "region");
-        if (region != null && !region.isEmpty()) {
-            return !region.equalsIgnoreCase(target);
-        }
-
+        // 1. Author locked account region takes priority
         Object author = getSafeObject(aweme, "getAuthor", "author");
         if (author != null) {
-            String aRegion = getSafeString(author, "getRegion", "region");
-            if (aRegion != null && !aRegion.isEmpty()) {
-                return !aRegion.equalsIgnoreCase(target);
+            String aAccount = getSafeString(author, "getAccountRegion", "accountRegion");
+            if (aAccount != null && !aAccount.isEmpty()) {
+                return !aAccount.equalsIgnoreCase(target);
             }
             String aIso = getSafeString(author, "getIsoCountryCode", "isoCountryCode");
             if (aIso != null && !aIso.isEmpty()) {
                 return !aIso.equalsIgnoreCase(target);
             }
-            String aAccount = getSafeString(author, "getAccountRegion", "accountRegion");
-            if (aAccount != null && !aAccount.isEmpty()) {
-                return !aAccount.equalsIgnoreCase(target);
+            String aRegion = getSafeString(author, "getRegion", "region");
+            if (aRegion != null && !aRegion.isEmpty()) {
+                return !aRegion.equalsIgnoreCase(target);
+            }
+        }
+
+        // 2. Check forwardItem (repost) author
+        Object forwardItem = getSafeObject(aweme, "getForwardItem", "forwardItem");
+        if (forwardItem != null) {
+            Object fAuthor = getSafeObject(forwardItem, "getAuthor", "author");
+            if (fAuthor != null) {
+                String fAccount = getSafeString(fAuthor, "getAccountRegion", "accountRegion");
+                if (fAccount != null && !fAccount.isEmpty()) {
+                    return !fAccount.equalsIgnoreCase(target);
+                }
+                String fIso = getSafeString(fAuthor, "getIsoCountryCode", "isoCountryCode");
+                if (fIso != null && !fIso.isEmpty()) {
+                    return !fIso.equalsIgnoreCase(target);
+                }
+            }
+        }
+
+        // 3. Fallback to Aweme region
+        String region = getSafeString(aweme, "getRegion", "region");
+        if (region != null && !region.isEmpty()) {
+            return !region.equalsIgnoreCase(target);
+        }
+
+        return false;
+    }
+
+    private static boolean shouldFilterForLockedRegion(Object aweme, String targetRegion) {
+        if (targetRegion == null || targetRegion.trim().isEmpty()) return false;
+        String target = targetRegion.trim();
+
+        // 1. Author locked account region
+        Object author = getSafeObject(aweme, "getAuthor", "author");
+        if (author != null) {
+            String accountRegion = getSafeString(author, "getAccountRegion", "accountRegion");
+            if (accountRegion != null && !accountRegion.isEmpty()) {
+                return !accountRegion.equalsIgnoreCase(target);
+            }
+            String iso = getSafeString(author, "getIsoCountryCode", "isoCountryCode");
+            if (iso != null && !iso.isEmpty()) {
+                return !iso.equalsIgnoreCase(target);
+            }
+        }
+
+        // 2. Forwarded / reposted item original author
+        Object forwardItem = getSafeObject(aweme, "getForwardItem", "forwardItem");
+        if (forwardItem != null) {
+            Object fAuthor = getSafeObject(forwardItem, "getAuthor", "author");
+            if (fAuthor != null) {
+                String fAccount = getSafeString(fAuthor, "getAccountRegion", "accountRegion");
+                if (fAccount != null && !fAccount.isEmpty()) {
+                    return !fAccount.equalsIgnoreCase(target);
+                }
+            }
+        }
+
+        // 3. Picked users (duets/stitches)
+        Object pickedUsers = getSafeObject(aweme, "getPickedUsers", "pickedUsers");
+        if (pickedUsers instanceof List) {
+            for (Object u : (List<?>) pickedUsers) {
+                if (u != null) {
+                    String pAccount = getSafeString(u, "getAccountRegion", "accountRegion");
+                    if (pAccount != null && !pAccount.isEmpty() && !pAccount.equalsIgnoreCase(target)) {
+                        return true;
+                    }
+                }
             }
         }
 
         return false;
+    }
+
+    private static boolean shouldFilterForLanguage(Object aweme, Set<String> allowedLanguages) {
+        if (allowedLanguages == null || allowedLanguages.isEmpty()) return false;
+
+        Set<String> detectedLangs = extractLanguages(aweme);
+        if (detectedLangs.isEmpty()) {
+            return false;
+        }
+
+        for (String lang : detectedLangs) {
+            if (allowedLanguages.contains(lang)) {
+                return false;
+            }
+            // Indonesian code aliasing: 'in' is legacy 'id'
+            if ("in".equals(lang) && allowedLanguages.contains("id")) return false;
+            if ("id".equals(lang) && allowedLanguages.contains("in")) return false;
+            // Hebrew code aliasing: 'iw' is legacy 'he'
+            if ("iw".equals(lang) && allowedLanguages.contains("he")) return false;
+            if ("he".equals(lang) && allowedLanguages.contains("iw")) return false;
+            // Chinese prefix match: 'zh-hant' vs 'zh'
+            if (lang.startsWith("zh") && (allowedLanguages.contains("zh") || allowedLanguages.contains("zh-hant"))) return false;
+        }
+
+        return true;
+    }
+
+    private static Set<String> extractLanguages(Object aweme) {
+        if (aweme == null) return Collections.emptySet();
+        Set<String> langs = new HashSet<>();
+
+        addNormalizedLang(langs, getSafeString(aweme, "getDescLanguage", "descLanguage"));
+        addNormalizedLang(langs, getSafeString(aweme, "getPhotoTitleLanguageCode", "photoTitleLanguageCode"));
+        addNormalizedLang(langs, getSafeString(aweme, "getContentLanguage", "contentLanguage"));
+        addNormalizedLang(langs, getSafeString(aweme, "getTextStickerMajorityLang", "textStickerMajorityLang"));
+
+        Object video = getSafeObject(aweme, "getVideo", "video");
+        if (video != null) {
+            Object captionModel = getSafeObject(video, "getCaptionModel", "captionModel");
+            if (captionModel != null) {
+                Object origCaptionLang = getSafeObject(captionModel, "getOriginalCaptionLanguage", "originalCaptionLanguage");
+                if (origCaptionLang != null) {
+                    addNormalizedLang(langs, getSafeString(origCaptionLang, "getLanguageCode", "languageCode"));
+                }
+                Object captionList = getSafeObject(captionModel, "getCaptionList", "captionList");
+                if (captionList instanceof List) {
+                    for (Object capItem : (List<?>) captionList) {
+                        if (capItem != null) {
+                            addNormalizedLang(langs, getSafeString(capItem, "getLanguageCode", "languageCode"));
+                        }
+                    }
+                }
+            }
+        }
+
+        Object author = getSafeObject(aweme, "getAuthor", "author");
+        if (author != null) {
+            addNormalizedLang(langs, getSafeString(author, "getLanguage", "language"));
+            addNormalizedLang(langs, getSafeString(author, "getSignatureLanguage", "signatureLanguage"));
+        }
+
+        Object forwardItem = getSafeObject(aweme, "getForwardItem", "forwardItem");
+        if (forwardItem != null && forwardItem != aweme) {
+            addNormalizedLang(langs, getSafeString(forwardItem, "getDescLanguage", "descLanguage"));
+            addNormalizedLang(langs, getSafeString(forwardItem, "getPhotoTitleLanguageCode", "photoTitleLanguageCode"));
+            addNormalizedLang(langs, getSafeString(forwardItem, "getTextStickerMajorityLang", "textStickerMajorityLang"));
+            Object fAuthor = getSafeObject(forwardItem, "getAuthor", "author");
+            if (fAuthor != null) {
+                addNormalizedLang(langs, getSafeString(fAuthor, "getLanguage", "language"));
+            }
+        }
+
+        return langs;
+    }
+
+    private static void addNormalizedLang(Set<String> set, String code) {
+        if (code == null) return;
+        String clean = code.trim().toLowerCase(Locale.ROOT);
+        if (clean.isEmpty() || "und".equals(clean) || "un".equals(clean)) return;
+        if (clean.contains("-")) {
+            set.add(clean);
+            String prefix = clean.split("-")[0];
+            if (!prefix.isEmpty()) set.add(prefix);
+        } else if (clean.contains("_")) {
+            set.add(clean);
+            String prefix = clean.split("_")[0];
+            if (!prefix.isEmpty()) set.add(prefix);
+        } else {
+            set.add(clean);
+        }
+        if ("in".equals(clean)) set.add("id");
+        if ("id".equals(clean)) set.add("in");
     }
 
     private static String getSafeString(Object obj, String getterName, String fieldName) {
@@ -838,6 +1148,39 @@ public class AdsHook {
                 return true;
             }
 
+            String textStickerLang = getSafeString(aweme, "getTextStickerMajorityLang", "textStickerMajorityLang");
+            if (matchesLanguageCode(textStickerLang)) {
+                AdsHook.log("Blocked Aweme [" + aid + "] by textStickerMajorityLang: " + textStickerLang);
+                return true;
+            }
+
+            Object video = getSafeObject(aweme, "getVideo", "video");
+            if (video != null) {
+                Object captionModel = getSafeObject(video, "getCaptionModel", "captionModel");
+                if (captionModel != null) {
+                    Object origCaptionLang = getSafeObject(captionModel, "getOriginalCaptionLanguage", "originalCaptionLanguage");
+                    if (origCaptionLang != null) {
+                        String capLangCode = getSafeString(origCaptionLang, "getLanguageCode", "languageCode");
+                        if (matchesLanguageCode(capLangCode)) {
+                            AdsHook.log("Blocked Aweme [" + aid + "] by originalCaptionLanguage: " + capLangCode);
+                            return true;
+                        }
+                    }
+                    Object captionList = getSafeObject(captionModel, "getCaptionList", "captionList");
+                    if (captionList instanceof List) {
+                        for (Object capItem : (List<?>) captionList) {
+                            if (capItem != null) {
+                                String clCode = getSafeString(capItem, "getLanguageCode", "languageCode");
+                                if (matchesLanguageCode(clCode)) {
+                                    AdsHook.log("Blocked Aweme [" + aid + "] by captionList language: " + clCode);
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             String desc = getSafeString(aweme, "getDesc", "desc");
             if (matchesText(desc)) {
                 String preview = desc != null && desc.length() > 60 ? desc.substring(0, 60) + "..." : desc;
@@ -848,8 +1191,28 @@ public class AdsHook {
             Object author = getSafeObject(aweme, "getAuthor", "author");
             if (checkUser(author, aid, "author")) return true;
 
-            Object originAuthor = getSafeObject(aweme, "getOriginAuthor", "originAuthor");
-            if (checkUser(originAuthor, aid, "originAuthor")) return true;
+            Object forwardItem = getSafeObject(aweme, "getForwardItem", "forwardItem");
+            if (forwardItem != null && forwardItem != aweme) {
+                Object fAuthor = getSafeObject(forwardItem, "getAuthor", "author");
+                if (checkUser(fAuthor, aid, "forwardItem.author")) return true;
+                String fDescLang = getSafeString(forwardItem, "getDescLanguage", "descLanguage");
+                if (matchesLanguageCode(fDescLang)) {
+                    AdsHook.log("Blocked Aweme [" + aid + "] by forwardItem.descLanguage: " + fDescLang);
+                    return true;
+                }
+                String fDesc = getSafeString(forwardItem, "getDesc", "desc");
+                if (matchesText(fDesc)) {
+                    AdsHook.log("Blocked Aweme [" + aid + "] by forwardItem.desc text");
+                    return true;
+                }
+            }
+
+            Object pickedUsers = getSafeObject(aweme, "getPickedUsers", "pickedUsers");
+            if (pickedUsers instanceof List) {
+                for (Object u : (List<?>) pickedUsers) {
+                    if (checkUser(u, aid, "pickedUser")) return true;
+                }
+            }
 
             Object nearby = getSafeObject(aweme, "getNearbyInfo", "nearbyInfo");
             if (nearby != null) {
@@ -953,6 +1316,12 @@ public class AdsHook {
         private boolean checkUser(Object user, String aid, String source) {
             if (user == null) return false;
 
+            String accountRegion = getSafeString(user, "getAccountRegion", "accountRegion");
+            if (matchesCode(accountRegion)) {
+                AdsHook.log("Blocked Aweme [" + aid + "] by " + source + ".accountRegion: " + accountRegion);
+                return true;
+            }
+
             String region = getSafeString(user, "getRegion", "region");
             if (matchesCode(region)) {
                 AdsHook.log("Blocked Aweme [" + aid + "] by " + source + ".region: " + region);
@@ -965,9 +1334,9 @@ public class AdsHook {
                 return true;
             }
 
-            String accountRegion = getSafeString(user, "getAccountRegion", "accountRegion");
-            if (matchesCode(accountRegion)) {
-                AdsHook.log("Blocked Aweme [" + aid + "] by " + source + ".accountRegion: " + accountRegion);
+            String language = getSafeString(user, "getLanguage", "language");
+            if (matchesLanguageCode(language)) {
+                AdsHook.log("Blocked Aweme [" + aid + "] by " + source + ".language: " + language);
                 return true;
             }
 
@@ -980,6 +1349,18 @@ public class AdsHook {
             String country = getSafeString(user, "getCountry", "country");
             if (matchesText(country)) {
                 AdsHook.log("Blocked Aweme [" + aid + "] by " + source + ".country: " + country);
+                return true;
+            }
+
+            String province = getSafeString(user, "getProvince", "province");
+            if (matchesText(province)) {
+                AdsHook.log("Blocked Aweme [" + aid + "] by " + source + ".province: " + province);
+                return true;
+            }
+
+            String district = getSafeString(user, "getDistrict", "district");
+            if (matchesText(district)) {
+                AdsHook.log("Blocked Aweme [" + aid + "] by " + source + ".district: " + district);
                 return true;
             }
 
@@ -1010,6 +1391,12 @@ public class AdsHook {
             String ipRegion = getSafeString(user, "getIpRegion", "ipRegion");
             if (matchesCode(ipRegion)) {
                 AdsHook.log("Blocked Aweme [" + aid + "] by " + source + ".ipRegion: " + ipRegion);
+                return true;
+            }
+
+            String registerFrom = getSafeString(user, "getRegisterFrom", "registerFrom");
+            if (matchesCode(registerFrom)) {
+                AdsHook.log("Blocked Aweme [" + aid + "] by " + source + ".registerFrom: " + registerFrom);
                 return true;
             }
 

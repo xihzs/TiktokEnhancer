@@ -27,8 +27,12 @@ public class ConfigProvider extends ContentProvider {
     public static final String KEY_BYPASS_DOWNLOAD_RESTRICTION = "bypass_download_restriction";
     public static final String KEY_HD_UPLOAD = "hd_upload";
     public static final String KEY_HIDE_ADS = "hide_ads";
+    public static final String KEY_HIDE_PYMK = "hide_pymk";
     public static final String KEY_FORCE_REGION = "force_region";
     public static final String KEY_STRICT_FORCE_REGION = "strict_force_region";
+    public static final String KEY_LOCKED_REGION_FILTER = "locked_region_filter";
+    public static final String KEY_LANGUAGE_FILTER = "language_filter";
+    public static final String KEY_ALLOWED_LANGUAGES = "allowed_languages";
     public static final String KEY_DOWNLOAD_STORY = "download_story";
     public static final String KEY_BLOCK_COUNTRIES = "block_countries";
     public static final String KEY_BLOCKED_COUNTRY_LIST = "blocked_country_list";
@@ -60,8 +64,12 @@ public class ConfigProvider extends ContentProvider {
                 boolean bypassDownload = sp.getBoolean(MainActivity.KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
                 boolean hdUpload = sp.getBoolean(MainActivity.KEY_HD_UPLOAD, true);
                 boolean hideAds = sp.getBoolean(MainActivity.KEY_HIDE_ADS, true);
+                boolean hidePymk = sp.getBoolean(MainActivity.KEY_HIDE_PYMK, false);
                 boolean forceRegion = sp.getBoolean(MainActivity.KEY_FORCE_REGION, true);
                 boolean strictForceRegion = sp.getBoolean(MainActivity.KEY_STRICT_FORCE_REGION, false);
+                boolean lockedRegionFilter = sp.getBoolean(MainActivity.KEY_LOCKED_REGION_FILTER, false);
+                boolean languageFilter = sp.getBoolean(MainActivity.KEY_LANGUAGE_FILTER, false);
+                String allowedLanguages = sp.getString(MainActivity.KEY_ALLOWED_LANGUAGES, "");
                 boolean downloadStory = sp.getBoolean(MainActivity.KEY_DOWNLOAD_STORY, true);
                 boolean blockCountries = sp.getBoolean(MainActivity.KEY_BLOCK_COUNTRIES, false);
                 String blockedCountryList = sp.getString(MainActivity.KEY_BLOCKED_COUNTRY_LIST, "");
@@ -99,8 +107,12 @@ public class ConfigProvider extends ContentProvider {
                 bundle.putBoolean(KEY_BYPASS_DOWNLOAD_RESTRICTION, bypassDownload);
                 bundle.putBoolean(KEY_HD_UPLOAD, hdUpload);
                 bundle.putBoolean(KEY_HIDE_ADS, hideAds);
+                bundle.putBoolean(KEY_HIDE_PYMK, hidePymk);
                 bundle.putBoolean(KEY_FORCE_REGION, forceRegion);
                 bundle.putBoolean(KEY_STRICT_FORCE_REGION, strictForceRegion);
+                bundle.putBoolean(KEY_LOCKED_REGION_FILTER, lockedRegionFilter);
+                bundle.putBoolean(KEY_LANGUAGE_FILTER, languageFilter);
+                bundle.putString(KEY_ALLOWED_LANGUAGES, allowedLanguages);
                 bundle.putBoolean(KEY_DOWNLOAD_STORY, downloadStory);
                 bundle.putBoolean(KEY_BLOCK_COUNTRIES, blockCountries);
                 bundle.putString(KEY_BLOCKED_COUNTRY_LIST, blockedCountryList);

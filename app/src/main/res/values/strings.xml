@@ -41,6 +41,8 @@
     <string name="menu_profile_subtitle">Configuring settings for active application</string>
     <string name="feature_hide_ads">Block Sponsored Ads</string>
     <string name="feature_hide_ads_desc">Filters commercial cards and promotional posts</string>
+    <string name="feature_hide_pymk">Hide "People You May Know"</string>
+    <string name="feature_hide_pymk_desc">Filter out contact suggestions, friend recommendation cards, and social graph videos</string>
     <string name="feature_bypass_download">Unlock Downloads</string>
     <string name="feature_bypass_download_desc">Allows saving videos even if disabled by author</string>
     <string name="feature_hd_upload">Ultra HD Upload</string>
@@ -59,6 +61,20 @@
     <string name="blocked_count_format">%d countries blocked</string>
 
     <string name="section_preferences">PREFERENCES</string>
+    <string name="feature_locked_region">Locked Region Filter</string>
+    <string name="feature_locked_region_desc">Only allow creators whose account is registered/locked in target region</string>
+    <string name="feature_language_filter">Content Language Filter</string>
+    <string name="feature_language_filter_desc">Filter feed videos by audio, subtitle, and description language</string>
+    <string name="btn_manage_languages">Manage Content Languages</string>
+    <string name="dialog_select_languages_title">Content Languages</string>
+    <string name="dialog_select_languages_subtitle">Select languages allowed in your video feed</string>
+    <string name="search_language">Search language or code...</string>
+    <string name="hint_custom_lang_code">Add code (e.g. ja, ko)</string>
+    <string name="no_languages_selected">All languages allowed (tap to manage)</string>
+    <string name="selected_languages_format">%d languages allowed</string>
+    <string name="language_filter_count_format">%d languages selected</string>
+    <string name="btn_match_region">Match Region</string>
+
     <string name="pref_enable_spoof">SIM Card Spoofing</string>
     <string name="pref_enable_spoof_desc">Override TelephonyManager and carrier properties</string>
     <string name="pref_spoof_locale">Match App Locale</string>
