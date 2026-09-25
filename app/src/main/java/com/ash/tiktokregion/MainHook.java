@@ -13,12 +13,16 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import android.os.Build;
+import android.os.LocaleList;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -189,6 +193,9 @@ public class MainHook implements IXposedHookLoadPackage {
             hookSubscriptionInfo(lpparam.classLoader);
             hookSystemProperties(lpparam.classLoader);
             hookLocale(lpparam.classLoader);
+            hookTimezone(lpparam.classLoader);
+            hookWifi(lpparam.classLoader);
+            hookByteDanceRegionEngine(lpparam.classLoader);
             hookUrlQueryParams(lpparam.classLoader);
         } else {
             XposedBridge.log(TAG + ": TikTok China (Douyin) detected - skipping telephony, locale, and network region spoofing");
@@ -401,6 +408,10 @@ public class MainHook implements IXposedHookLoadPackage {
             if (isChinaPackage()) {
                 DouyinWatermarkHook.hookVideoClass(clazz);
             }
+        } else if ("X.03bD".equals(name) || "LX.03bD".equals(name) || "X.C868003bD".equals(name)) {
+            hookByteDanceRegionClass(clazz);
+        } else if ("X.06yR".equals(name) || "LX.06yR".equals(name) || "X.C1776406yR".equals(name)) {
+            hookByteDanceMccMncClass(clazz);
         } else if ("com.ss.android.ugc.aweme.follow.presenter.FollowFeedList".equals(name)) {
             AdsHook.hookFollowFeedListClass(clazz);
         } else if ("com.ss.android.ugc.aweme.friendstab.api.FriendsFeedResponse".equals(name)) {
@@ -1544,6 +1555,46 @@ public class MainHook implements IXposedHookLoadPackage {
                 return sEnabled ? ("8901260" + sOperatorMccMnc + "12345") : null;
             }
         });
+
+        try {
+            Class<?> tmClass = XposedHelpers.findClassIfExists(className, classLoader);
+            if (tmClass != null) {
+                XposedHelpers.findAndHookMethod(tmClass, "getCellLocation", new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (sEnabled) {
+                            param.setResult(null);
+                        }
+                    }
+                });
+
+                XposedHelpers.findAndHookMethod(tmClass, "getAllCellInfo", new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (sEnabled) {
+                            param.setResult(Collections.emptyList());
+                        }
+                    }
+                });
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    try {
+                        XposedHelpers.findAndHookMethod(tmClass, "requestCellInfoUpdate",
+                                java.util.concurrent.Executor.class,
+                                android.telephony.TelephonyManager.CellInfoCallback.class,
+                                new XC_MethodHook() {
+                                    @Override
+                                    protected void beforeHookedMethod(MethodHookParam param) {
+                                        if (sEnabled) {
+                                            param.setResult(null);
+                                        }
+                                    }
+                                });
+                    } catch (Throwable ignored) {}
+                }
+                log("Hooked TelephonyManager cell location/info to suppress cell tower triangulation");
+            }
+        } catch (Throwable ignored) {}
     }
 
     private void hookSubscriptionManager(ClassLoader classLoader) {
@@ -1673,14 +1724,170 @@ public class MainHook implements IXposedHookLoadPackage {
                     new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) {
-                            if (sEnabled && sSpoofLocale) {
-                                param.setResult(sCachedSpoofedLocale != null ? sCachedSpoofedLocale : new Locale(sLocaleLang, sLocaleCountry));
+                            if (sEnabled) {
+                                if (sSpoofLocale && sCachedSpoofedLocale != null) {
+                                    param.setResult(sCachedSpoofedLocale);
+                                } else if (sCountryIso != null && !sCountryIso.isEmpty()) {
+                                    param.setResult(new Locale(sLocaleLang != null ? sLocaleLang : "en", sCountryIso.toUpperCase(Locale.ROOT)));
+                                }
                             }
                         }
                     }
             );
         } catch (Throwable t) {
             Log.d(TAG, "Locale hook failed: " + t.getMessage());
+        }
+
+        try {
+            XposedHelpers.findAndHookMethod(
+                    android.content.res.Resources.class,
+                    "getConfiguration",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (!sEnabled || sCountryIso == null || sCountryIso.isEmpty()) return;
+                            Object config = param.getResult();
+                            if (config instanceof android.content.res.Configuration) {
+                                android.content.res.Configuration cfg = (android.content.res.Configuration) config;
+                                Locale targetLoc = new Locale(sLocaleLang != null ? sLocaleLang : "en", sCountryIso.toUpperCase(Locale.ROOT));
+                                cfg.locale = targetLoc;
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                    cfg.setLocales(new LocaleList(targetLoc));
+                                }
+                            }
+                        }
+                    }
+            );
+            log("Hooked Resources.getConfiguration for system locale alignment");
+        } catch (Throwable ignored) {}
+    }
+
+    private void hookTimezone(ClassLoader classLoader) {
+        try {
+            XposedHelpers.findAndHookMethod(
+                    java.util.TimeZone.class,
+                    "getDefault",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (!sEnabled || sCountryIso == null || sCountryIso.isEmpty()) return;
+                            String tzId = getTimezoneForCountry(sCountryIso);
+                            if (tzId != null) {
+                                param.setResult(java.util.TimeZone.getTimeZone(tzId));
+                            }
+                        }
+                    }
+            );
+            log("Hooked TimeZone.getDefault to align timezone with " + sCountryIso);
+        } catch (Throwable t) {
+            logD("Failed to hook TimeZone.getDefault: " + t.getMessage());
+        }
+    }
+
+    private void hookWifi(ClassLoader classLoader) {
+        try {
+            Class<?> wifiInfoClass = XposedHelpers.findClassIfExists("android.net.wifi.WifiInfo", classLoader);
+            if (wifiInfoClass != null) {
+                XposedHelpers.findAndHookMethod(wifiInfoClass, "getBSSID", new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (sEnabled) {
+                            param.setResult("02:00:00:00:00:00");
+                        }
+                    }
+                });
+                XposedHelpers.findAndHookMethod(wifiInfoClass, "getSSID", new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (sEnabled) {
+                            param.setResult("<unknown ssid>");
+                        }
+                    }
+                });
+                log("Hooked WifiInfo.getBSSID and getSSID to suppress Wi-Fi router triangulation");
+            }
+        } catch (Throwable t) {
+            logD("Failed to hook WifiInfo: " + t.getMessage());
+        }
+
+        try {
+            Class<?> wifiManagerClass = XposedHelpers.findClassIfExists("android.net.wifi.WifiManager", classLoader);
+            if (wifiManagerClass != null) {
+                XposedHelpers.findAndHookMethod(wifiManagerClass, "getScanResults", new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (sEnabled) {
+                            param.setResult(Collections.emptyList());
+                        }
+                    }
+                });
+                log("Hooked WifiManager.getScanResults to suppress AP beacon scanning");
+            }
+        } catch (Throwable t) {
+            logD("Failed to hook WifiManager: " + t.getMessage());
+        }
+    }
+
+    private void hookByteDanceRegionEngine(ClassLoader classLoader) {
+        if (classLoader == null) return;
+        try {
+            Class<?> regionCls = XposedHelpers.findClassIfExists("X.03bD", classLoader);
+            if (regionCls == null) {
+                regionCls = XposedHelpers.findClassIfExists("X.C868003bD", classLoader);
+            }
+            if (regionCls != null) {
+                hookByteDanceRegionClass(regionCls);
+            }
+        } catch (Throwable ignored) {}
+
+        try {
+            Class<?> mccCls = XposedHelpers.findClassIfExists("X.06yR", classLoader);
+            if (mccCls == null) {
+                mccCls = XposedHelpers.findClassIfExists("X.C1776406yR", classLoader);
+            }
+            if (mccCls != null) {
+                hookByteDanceMccMncClass(mccCls);
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    private static void hookByteDanceRegionClass(Class<?> clazz) {
+        if (clazz == null) return;
+        try {
+            XC_MethodHook returnCountryUpper = new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (sEnabled && sCountryIso != null && !sCountryIso.isEmpty()) {
+                        param.setResult(sCountryIso.toUpperCase(Locale.ROOT));
+                    }
+                }
+            };
+
+            for (String method : new String[]{"LIZ", "LIZIZ", "LJ", "LJFF", "LIZLLL", "LIZJ"}) {
+                try {
+                    XposedHelpers.findAndHookMethod(clazz, method, returnCountryUpper);
+                } catch (Throwable ignored) {}
+            }
+            log("Hooked ByteDance region resolver: " + clazz.getName());
+        } catch (Throwable t) {
+            logD("Failed hooking ByteDance region class: " + t.getMessage());
+        }
+    }
+
+    private static void hookByteDanceMccMncClass(Class<?> clazz) {
+        if (clazz == null) return;
+        try {
+            XposedHelpers.findAndHookMethod(clazz, "LIZIZ", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (sEnabled && sOperatorMccMnc != null && !sOperatorMccMnc.isEmpty()) {
+                        param.setResult(sOperatorMccMnc);
+                    }
+                }
+            });
+            log("Hooked ByteDance MCC/MNC resolver: " + clazz.getName());
+        } catch (Throwable t) {
+            logD("Failed hooking ByteDance MCC/MNC class: " + t.getMessage());
         }
     }
 
