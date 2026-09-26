@@ -117,7 +117,7 @@ public class MainHook implements IXposedHookLoadPackage {
     }
 
     public static boolean isHDUploadEnabled() {
-        return sHDUpload || sUpload4K;
+        return sHDUpload;
     }
 
     public static boolean isUpload4KEnabled() {
@@ -323,6 +323,23 @@ public class MainHook implements IXposedHookLoadPackage {
         try {
             XposedHelpers.findAndHookMethod(
                     Activity.class,
+                    "onCreate",
+                    Bundle.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (param.thisObject instanceof Activity) {
+                                Activity act = (Activity) param.thisObject;
+                                HDUploadHook.onActivityLifecycle(act);
+                            }
+                        }
+                    }
+            );
+        } catch (Throwable ignored) {}
+
+        try {
+            XposedHelpers.findAndHookMethod(
+                    Activity.class,
                     "onResume",
                     new XC_MethodHook() {
                         @Override
@@ -333,10 +350,55 @@ public class MainHook implements IXposedHookLoadPackage {
                                     sAppContext = act.getApplication();
                                 }
                                 checkConfigRefreshAsync(act);
+                                HDUploadHook.onActivityLifecycle(act);
+                                checkAndNotifyVersion(act);
                             }
                         }
                     }
             );
+        } catch (Throwable ignored) {}
+    }
+
+    private static final AtomicBoolean sVersionNotified = new AtomicBoolean(false);
+
+    public static int compareVersions(String v1, String v2) {
+        if (v1 == null || v2 == null) return 0;
+        String clean1 = v1.replaceAll("[^0-9.]", "");
+        String clean2 = v2.replaceAll("[^0-9.]", "");
+        String[] parts1 = clean1.split("\\.");
+        String[] parts2 = clean2.split("\\.");
+        int length = Math.max(parts1.length, parts2.length);
+        for (int i = 0; i < length; i++) {
+            long num1 = (i < parts1.length && !parts1[i].isEmpty()) ? Long.parseLong(parts1[i]) : 0;
+            long num2 = (i < parts2.length && !parts2[i].isEmpty()) ? Long.parseLong(parts2[i]) : 0;
+            if (num1 != num2) {
+                return Long.compare(num1, num2);
+            }
+        }
+        return 0;
+    }
+
+    private static void checkAndNotifyVersion(Activity act) {
+        if (act == null || sVersionNotified.get()) return;
+        if (isChinaPackage()) return;
+        try {
+            String pkg = act.getPackageName();
+            String versionName = act.getPackageManager().getPackageInfo(pkg, 0).versionName;
+            if (versionName == null || versionName.isEmpty()) return;
+            int cmp = compareVersions(versionName, "47.1.3");
+            if (cmp != 0 && sVersionNotified.compareAndSet(false, true)) {
+                final String msg;
+                if (cmp < 0) {
+                    msg = "⚠️ TikTok Enhancer: TikTok version (" + versionName + ") is outdated. Tested on v47.1.3. Some features may break. Please upgrade TikTok.";
+                } else {
+                    msg = "⚠️ TikTok Enhancer: TikTok version (" + versionName + ") is newer than supported v47.1.3. Some features may break. Please wait until support is added or downgrade.";
+                }
+                act.runOnUiThread(() -> {
+                    try {
+                        android.widget.Toast.makeText(act.getApplicationContext(), msg, android.widget.Toast.LENGTH_LONG).show();
+                    } catch (Throwable ignored) {}
+                });
+            }
         } catch (Throwable ignored) {}
     }
 
@@ -436,9 +498,13 @@ public class MainHook implements IXposedHookLoadPackage {
             NearbyTabHook.onClassLoaded(clazz);
         } else if (name != null && (name.contains("Nearby") || name.equals("X.03nG") || name.contains("MainTabStrip") || name.contains("HomeTabViewModel") || name.contains("TabAbilityAssem"))) {
             NearbyTabHook.onClassLoaded(clazz);
+            if (!isChinaPackage()) {
+                FeedLandingHook.onClassLoaded(clazz);
+            }
         } else if (isChinaPackage()) {
             DouyinWatermarkHook.onClassLoaded(clazz);
         } else {
+            FeedLandingHook.onClassLoaded(clazz);
             HDUploadHook.onClassLoaded(clazz);
             QualityAndTelemetryHook.onClassLoaded(clazz);
         }
@@ -464,6 +530,7 @@ public class MainHook implements IXposedHookLoadPackage {
             HDUploadHook.hook(classLoader);
             QualityAndTelemetryHook.hook(classLoader);
             NearbyTabHook.hook(classLoader);
+            FeedLandingHook.hook(classLoader);
         }
     }
 

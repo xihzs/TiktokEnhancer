@@ -296,6 +296,64 @@
                     android:textSize="12sp" />
             </LinearLayout>
 
+            <!-- TikTok Version Warning Banner -->
+            <LinearLayout
+                android:id="@+id/layout_version_warning"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp"
+                android:background="@drawable/bg_warning_banner"
+                android:orientation="vertical"
+                android:padding="14dp"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tv_version_warning_icon"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="⚠️"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/tv_version_warning_title"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:text="@string/version_warning_title"
+                        android:textColor="@color/version_warning_accent"
+                        android:textSize="13.5sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_version_warning_badge"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_iso_badge"
+                        android:paddingHorizontal="7dp"
+                        android:paddingVertical="2dp"
+                        android:text="MISMATCH"
+                        android:textColor="@color/version_warning_accent"
+                        android:textSize="9.5sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tv_version_warning_desc"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:lineSpacingExtra="2dp"
+                    android:textColor="@color/text_primary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
             <!-- Section 1: Region & Telephony Routing -->
             <LinearLayout
                 android:id="@+id/layout_region_section"
@@ -674,11 +732,13 @@
                     android:layout_height="0.5dp"
                     android:background="@color/divider_glass" />
 
-                <!-- Force 4K Upload -->
+                <!-- Force 4K Upload (Experimental) -->
                 <LinearLayout
                     android:id="@+id/row_upload_4k"
                     android:layout_width="match_parent"
-                    android:layout_height="50dp"
+                    android:layout_height="wrap_content"
+                    android:minHeight="50dp"
+                    android:paddingVertical="4dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 

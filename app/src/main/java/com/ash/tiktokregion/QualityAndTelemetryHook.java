@@ -115,6 +115,22 @@ public class QualityAndTelemetryHook {
     public static void hookVideoQuality(Class<?> videoClass) {
         if (videoClass == null) return;
         try {
+            XC_MethodHook setBitrateHook = new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    if (!MainHook.isForceHighQualityEnabled()) return;
+                    if (param.args != null && param.args.length > 0 && param.args[0] instanceof List) {
+                        List<?> list = (List<?>) param.args[0];
+                        if (!list.isEmpty()) {
+                            param.args[0] = createSortedBitrateList(list);
+                        }
+                    }
+                }
+            };
+            try {
+                XposedHelpers.findAndHookMethod(videoClass, "setBitRate", List.class, setBitrateHook);
+            } catch (Throwable ignored) {}
+
             XC_MethodHook bitrateHook = new XC_MethodHook() {
                 @Override
                 @SuppressWarnings("unchecked")
@@ -133,8 +149,12 @@ public class QualityAndTelemetryHook {
                                 }
                             } catch (Throwable ignored) {}
                         }
-                        if (list != null && list.size() > 1) {
-                            param.setResult(createSortedBitrateList(list));
+                        if (list != null && !list.isEmpty()) {
+                            List<Object> sorted = createSortedBitrateList(list);
+                            param.setResult(sorted);
+                            try {
+                                XposedHelpers.setObjectField(param.thisObject, "bitRateList", sorted);
+                            } catch (Throwable ignored) {}
                         }
                     } finally {
                         sInQualityHook.set(Boolean.FALSE);
@@ -143,7 +163,42 @@ public class QualityAndTelemetryHook {
             };
 
             XposedHelpers.findAndHookMethod(videoClass, "getBitRate", bitrateHook);
-            Log.i(TAG, "Hooked Video.getBitRate safely without recursion");
+            try {
+                XposedHelpers.findAndHookMethod(videoClass, "getRawBitRate", bitrateHook);
+            } catch (Throwable ignored) {}
+
+            XC_MethodHook playAddrHook = new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (!MainHook.isForceHighQualityEnabled()) return;
+                    Object res = param.getResult();
+                    if (res == null) return;
+                    try {
+                        List<?> bitRates = (List<?>) XposedHelpers.getObjectField(param.thisObject, "bitRateList");
+                        if (bitRates != null && !bitRates.isEmpty()) {
+                            List<Object> sorted = createSortedBitrateList(bitRates);
+                            if (sorted != null && !sorted.isEmpty()) {
+                                Object top = sorted.get(0);
+                                Object topPlayAddr = XposedHelpers.getObjectField(top, "playAddr");
+                                if (topPlayAddr != null) {
+                                    Object topUrls = XposedHelpers.getObjectField(topPlayAddr, "urlList");
+                                    if (topUrls instanceof List && !((List<?>) topUrls).isEmpty()) {
+                                        XposedHelpers.setObjectField(res, "urlList", topUrls);
+                                    }
+                                    Object topUri = XposedHelpers.getObjectField(topPlayAddr, "uri");
+                                    if (topUri instanceof String && !((String) topUri).isEmpty()) {
+                                        XposedHelpers.setObjectField(res, "uri", topUri);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Throwable ignored) {}
+                }
+            };
+            try { XposedHelpers.findAndHookMethod(videoClass, "getPlayAddr", playAddrHook); } catch (Throwable ignored) {}
+            try { XposedHelpers.findAndHookMethod(videoClass, "getPlayAddrH264", playAddrHook); } catch (Throwable ignored) {}
+            try { XposedHelpers.findAndHookMethod(videoClass, "getPlayAddrBytevc1", playAddrHook); } catch (Throwable ignored) {}
+            try { XposedHelpers.findAndHookMethod(videoClass, "getProperPlayAddr", playAddrHook); } catch (Throwable ignored) {}
         } catch (Throwable t) {
             Log.d(TAG, "Failed hooking Video quality: " + t.getMessage());
         }
@@ -152,6 +207,22 @@ public class QualityAndTelemetryHook {
     public static void hookVideoUrlModelQuality(Class<?> videoUrlClass) {
         if (videoUrlClass == null) return;
         try {
+            XC_MethodHook setBitrateHook = new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    if (!MainHook.isForceHighQualityEnabled()) return;
+                    if (param.args != null && param.args.length > 0 && param.args[0] instanceof List) {
+                        List<?> list = (List<?>) param.args[0];
+                        if (!list.isEmpty()) {
+                            param.args[0] = createSortedBitrateList(list);
+                        }
+                    }
+                }
+            };
+            try {
+                XposedHelpers.findAndHookMethod(videoUrlClass, "setBitRate", List.class, setBitrateHook);
+            } catch (Throwable ignored) {}
+
             XC_MethodHook bitrateHook = new XC_MethodHook() {
                 @Override
                 @SuppressWarnings("unchecked")
@@ -163,8 +234,12 @@ public class QualityAndTelemetryHook {
                         Object result = param.getResult();
                         if (result instanceof List) {
                             List<?> list = (List<?>) result;
-                            if (list.size() > 1) {
-                                param.setResult(createSortedBitrateList(list));
+                            if (!list.isEmpty()) {
+                                List<Object> sorted = createSortedBitrateList(list);
+                                param.setResult(sorted);
+                                try {
+                                    XposedHelpers.setObjectField(param.thisObject, "bitRateList", sorted);
+                                } catch (Throwable ignored) {}
                             }
                         }
                     } finally {
@@ -173,12 +248,31 @@ public class QualityAndTelemetryHook {
                 }
             };
             XposedHelpers.findAndHookMethod(videoUrlClass, "getBitRate", bitrateHook);
+            try {
+                XposedHelpers.findAndHookMethod(videoUrlClass, "getRawBitRate", bitrateHook);
+            } catch (Throwable ignored) {}
         } catch (Throwable ignored) {}
     }
 
     public static void hookSimVideo(Class<?> simVideoClass) {
         if (simVideoClass == null) return;
         try {
+            XC_MethodHook setBitrateHook = new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    if (!MainHook.isForceHighQualityEnabled()) return;
+                    if (param.args != null && param.args.length > 0 && param.args[0] instanceof List) {
+                        List<?> list = (List<?>) param.args[0];
+                        if (!list.isEmpty()) {
+                            param.args[0] = createSortedBitrateList(list);
+                        }
+                    }
+                }
+            };
+            try {
+                XposedHelpers.findAndHookMethod(simVideoClass, "setBitRate", List.class, setBitrateHook);
+            } catch (Throwable ignored) {}
+
             XC_MethodHook simBitrateHook = new XC_MethodHook() {
                 @Override
                 @SuppressWarnings("unchecked")
@@ -197,8 +291,12 @@ public class QualityAndTelemetryHook {
                                 }
                             } catch (Throwable ignored) {}
                         }
-                        if (list != null && list.size() > 1) {
-                            param.setResult(createSortedBitrateList(list));
+                        if (list != null && !list.isEmpty()) {
+                            List<Object> sorted = createSortedBitrateList(list);
+                            param.setResult(sorted);
+                            try {
+                                XposedHelpers.setObjectField(param.thisObject, "bitRate", sorted);
+                            } catch (Throwable ignored) {}
                         }
                     } finally {
                         sInQualityHook.set(Boolean.FALSE);
@@ -207,13 +305,71 @@ public class QualityAndTelemetryHook {
             };
 
             XposedHelpers.findAndHookMethod(simVideoClass, "getBitRate", simBitrateHook);
+            try {
+                XposedHelpers.findAndHookMethod(simVideoClass, "getRawBitRate", simBitrateHook);
+            } catch (Throwable ignored) {}
+            try {
+                XposedHelpers.findAndHookMethod(simVideoClass, "getRawBitrate", simBitrateHook);
+            } catch (Throwable ignored) {}
+            try {
+                XposedHelpers.findAndHookMethod(simVideoClass, "getDashVideoBitRate", simBitrateHook);
+            } catch (Throwable ignored) {}
+
+            XC_MethodHook simPlayAddrHook = new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (!MainHook.isForceHighQualityEnabled()) return;
+                    Object res = param.getResult();
+                    if (res == null) return;
+                    try {
+                        List<?> bitRates = (List<?>) XposedHelpers.getObjectField(param.thisObject, "bitRate");
+                        if (bitRates != null && !bitRates.isEmpty()) {
+                            List<Object> sorted = createSortedBitrateList(bitRates);
+                            if (sorted != null && !sorted.isEmpty()) {
+                                Object top = sorted.get(0);
+                                Object topPlayAddr = XposedHelpers.getObjectField(top, "playAddr");
+                                if (topPlayAddr != null) {
+                                    Object topUrls = XposedHelpers.getObjectField(topPlayAddr, "urlList");
+                                    if (topUrls instanceof List && !((List<?>) topUrls).isEmpty()) {
+                                        XposedHelpers.setObjectField(res, "urlList", topUrls);
+                                    }
+                                    Object topUri = XposedHelpers.getObjectField(topPlayAddr, "uri");
+                                    if (topUri instanceof String && !((String) topUri).isEmpty()) {
+                                        XposedHelpers.setObjectField(res, "uri", topUri);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Throwable ignored) {}
+                }
+            };
+            try { XposedHelpers.findAndHookMethod(simVideoClass, "getPlayAddr", simPlayAddrHook); } catch (Throwable ignored) {}
+            try { XposedHelpers.findAndHookMethod(simVideoClass, "getPlayAddrH264", simPlayAddrHook); } catch (Throwable ignored) {}
+            try { XposedHelpers.findAndHookMethod(simVideoClass, "getPlayAddrBytevc1", simPlayAddrHook); } catch (Throwable ignored) {}
+            try { XposedHelpers.findAndHookMethod(simVideoClass, "getProperPlayAddr", simPlayAddrHook); } catch (Throwable ignored) {}
         } catch (Throwable ignored) {}
     }
 
     public static void hookSimVideoQuality(Class<?> simVideoUrlClass) {
         if (simVideoUrlClass == null) return;
         try {
-            XposedHelpers.findAndHookMethod(simVideoUrlClass, "getBitRate", new XC_MethodHook() {
+            XC_MethodHook setBitrateHook = new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    if (!MainHook.isForceHighQualityEnabled()) return;
+                    if (param.args != null && param.args.length > 0 && param.args[0] instanceof List) {
+                        List<?> list = (List<?>) param.args[0];
+                        if (!list.isEmpty()) {
+                            param.args[0] = createSortedBitrateList(list);
+                        }
+                    }
+                }
+            };
+            try {
+                XposedHelpers.findAndHookMethod(simVideoUrlClass, "setBitRate", List.class, setBitrateHook);
+            } catch (Throwable ignored) {}
+
+            XC_MethodHook simUrlHook = new XC_MethodHook() {
                 @Override
                 @SuppressWarnings("unchecked")
                 protected void afterHookedMethod(MethodHookParam param) {
@@ -224,16 +380,35 @@ public class QualityAndTelemetryHook {
                         Object result = param.getResult();
                         if (result instanceof List) {
                             List<?> list = (List<?>) result;
-                            if (list.size() > 1) {
-                                param.setResult(createSortedBitrateList(list));
+                            if (!list.isEmpty()) {
+                                List<Object> sorted = createSortedBitrateList(list);
+                                param.setResult(sorted);
+                                try {
+                                    XposedHelpers.setObjectField(param.thisObject, "bitRate", sorted);
+                                } catch (Throwable ignored) {}
                             }
                         }
                     } finally {
                         sInQualityHook.set(Boolean.FALSE);
                     }
                 }
-            });
-            Log.i(TAG, "Hooked SimVideoUrlModel.getBitRate() safely");
+            };
+            XposedHelpers.findAndHookMethod(simVideoUrlClass, "getBitRate", simUrlHook);
+            try {
+                XposedHelpers.findAndHookMethod(simVideoUrlClass, "getRawBitRate", simUrlHook);
+            } catch (Throwable ignored) {}
+            try {
+                XposedHelpers.findAndHookMethod(simVideoUrlClass, "getDashBitRate", simUrlHook);
+            } catch (Throwable ignored) {}
+            try {
+                XposedHelpers.findAndHookMethod(simVideoUrlClass, "getAdaptive", new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (!MainHook.isForceHighQualityEnabled()) return;
+                        param.setResult(Boolean.FALSE);
+                    }
+                });
+            } catch (Throwable ignored) {}
         } catch (Throwable t) {
             Log.d(TAG, "Failed hooking SimVideoUrlModel.getBitRate(): " + t.getMessage());
         }
@@ -250,7 +425,7 @@ public class QualityAndTelemetryHook {
     }
 
     private static List<Object> createSortedBitrateList(List<?> original) {
-        if (original == null || original.size() <= 1) {
+        if (original == null || original.isEmpty()) {
             return (List<Object>) original;
         }
         try {
@@ -269,14 +444,12 @@ public class QualityAndTelemetryHook {
                 long score = r + (b > 0 ? 500000L : 0L) + extra;
                 scored.add(new BitrateScoredItem(obj, score));
             }
-            if (scored.size() <= 1) {
+            if (scored.isEmpty()) {
                 return (List<Object>) original;
             }
             Collections.sort(scored, (a, b) -> Long.compare(b.score, a.score));
-            List<Object> result = new ArrayList<>(scored.size());
-            for (int i = 0; i < scored.size(); i++) {
-                result.add(scored.get(i).item);
-            }
+            List<Object> result = new ArrayList<>(1);
+            result.add(scored.get(0).item);
             return result;
         } catch (Throwable t) {
             return (List<Object>) original;

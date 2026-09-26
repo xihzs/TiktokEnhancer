@@ -60,4 +60,9 @@
     <color name="china_banner_bg">#161510</color>
     <color name="china_banner_border">#3D2F17</color>
     <color name="china_amber">#FF9F0A</color>
+
+    <!-- Version Compatibility Warning -->
+    <color name="version_warning_bg">#17140E</color>
+    <color name="version_warning_border">#4E320D</color>
+    <color name="version_warning_accent">#F59E0B</color>
 </resources>

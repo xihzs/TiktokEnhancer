@@ -135,6 +135,12 @@ public class MainActivity extends AppCompatActivity {
     private MaterialSwitch mSwitchUpload4K;
     private View mRowUpload4K;
     private View mDividerUpload4K;
+
+    private View mLayoutVersionWarning;
+    private TextView mTvVersionWarningTitle;
+    private TextView mTvVersionWarningDesc;
+    private TextView mTvVersionWarningBadge;
+
     private MaterialSwitch mSwitchForceHighQuality;
     private MaterialSwitch mSwitchTelemetryHUD;
     private MaterialSwitch mSwitchTelemetryPopup;
@@ -225,6 +231,12 @@ public class MainActivity extends AppCompatActivity {
         mSwitchUpload4K = findViewById(R.id.switch_upload_4k);
         mRowUpload4K = findViewById(R.id.row_upload_4k);
         mDividerUpload4K = findViewById(R.id.divider_upload_4k);
+
+        mLayoutVersionWarning = findViewById(R.id.layout_version_warning);
+        mTvVersionWarningTitle = findViewById(R.id.tv_version_warning_title);
+        mTvVersionWarningDesc = findViewById(R.id.tv_version_warning_desc);
+        mTvVersionWarningBadge = findViewById(R.id.tv_version_warning_badge);
+
         mSwitchForceHighQuality = findViewById(R.id.switch_force_high_quality);
         mSwitchTelemetryHUD = findViewById(R.id.switch_telemetry_hud);
         mSwitchTelemetryPopup = findViewById(R.id.switch_telemetry_popup);
@@ -318,6 +330,7 @@ public class MainActivity extends AppCompatActivity {
         boolean bypassDownload = mPrefs.getBoolean(KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
         boolean hdUpload = mPrefs.getBoolean(KEY_HD_UPLOAD, true);
         boolean upload4K = mPrefs.getBoolean(KEY_UPLOAD_4K, false);
+
         boolean forceHighQuality = mPrefs.getBoolean(KEY_FORCE_HIGH_QUALITY, true);
         boolean telemetryHUD = mPrefs.getBoolean(KEY_TELEMETRY_HUD, true);
         boolean telemetryPopup = mPrefs.getBoolean(KEY_TELEMETRY_POPUP, true);
@@ -337,6 +350,7 @@ public class MainActivity extends AppCompatActivity {
         mSwitchBypassDownload.setChecked(bypassDownload);
         if (mSwitchHDUpload != null) mSwitchHDUpload.setChecked(hdUpload);
         if (mSwitchUpload4K != null) mSwitchUpload4K.setChecked(upload4K);
+
         if (mSwitchForceHighQuality != null) mSwitchForceHighQuality.setChecked(forceHighQuality);
         if (mSwitchTelemetryHUD != null) mSwitchTelemetryHUD.setChecked(telemetryHUD);
         if (mSwitchTelemetryPopup != null) mSwitchTelemetryPopup.setChecked(telemetryPopup);
@@ -465,25 +479,33 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
         });
 
+        if (mRowHDUpload != null && mSwitchHDUpload != null) {
+            mRowHDUpload.setOnClickListener(v -> mSwitchHDUpload.toggle());
+        }
+
         if (mSwitchHDUpload != null) {
             mSwitchHDUpload.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                mPrefs.edit().putBoolean(KEY_HD_UPLOAD, isChecked).commit();
-                saveToDeviceProtectedStorage(KEY_HD_UPLOAD, isChecked);
                 if (!isChecked && mSwitchUpload4K != null && mSwitchUpload4K.isChecked()) {
                     mSwitchUpload4K.setChecked(false);
                 }
+                mPrefs.edit().putBoolean(KEY_HD_UPLOAD, isChecked).commit();
+                saveToDeviceProtectedStorage(KEY_HD_UPLOAD, isChecked);
                 makePrefsWorldReadable();
                 Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
             });
         }
 
+        if (mRowUpload4K != null && mSwitchUpload4K != null) {
+            mRowUpload4K.setOnClickListener(v -> mSwitchUpload4K.toggle());
+        }
+
         if (mSwitchUpload4K != null) {
             mSwitchUpload4K.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                mPrefs.edit().putBoolean(KEY_UPLOAD_4K, isChecked).commit();
-                saveToDeviceProtectedStorage(KEY_UPLOAD_4K, isChecked);
                 if (isChecked && mSwitchHDUpload != null && !mSwitchHDUpload.isChecked()) {
                     mSwitchHDUpload.setChecked(true);
                 }
+                mPrefs.edit().putBoolean(KEY_UPLOAD_4K, isChecked).commit();
+                saveToDeviceProtectedStorage(KEY_UPLOAD_4K, isChecked);
                 makePrefsWorldReadable();
                 Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
             });
@@ -557,6 +579,13 @@ public class MainActivity extends AppCompatActivity {
         mBtnLaunch.setOnClickListener(v -> launchCurrentProfileTarget());
 
         makePrefsWorldReadable();
+        checkTikTokVersionCompatibility();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        checkTikTokVersionCompatibility();
     }
 
     private void updateRegionDisplay() {
@@ -801,6 +830,7 @@ public class MainActivity extends AppCompatActivity {
             if (mRowHDUpload != null) mRowHDUpload.setVisibility(View.GONE);
             if (mRowUpload4K != null) mRowUpload4K.setVisibility(View.GONE);
             if (mDividerUpload4K != null) mDividerUpload4K.setVisibility(View.GONE);
+
             if (mDividerDownloadStory != null) mDividerDownloadStory.setVisibility(View.GONE);
             if (mRowHideNearbyTab != null) mRowHideNearbyTab.setVisibility(View.GONE);
             if (mDividerHideNearbyTab != null) mDividerHideNearbyTab.setVisibility(View.GONE);
@@ -835,6 +865,7 @@ public class MainActivity extends AppCompatActivity {
             if (mRowHDUpload != null) mRowHDUpload.setVisibility(View.VISIBLE);
             if (mRowUpload4K != null) mRowUpload4K.setVisibility(View.VISIBLE);
             if (mDividerUpload4K != null) mDividerUpload4K.setVisibility(View.VISIBLE);
+
             if (mDividerDownloadStory != null) mDividerDownloadStory.setVisibility(View.VISIBLE);
             if (mRowHideNearbyTab != null) mRowHideNearbyTab.setVisibility(View.VISIBLE);
             if (mDividerHideNearbyTab != null) mDividerHideNearbyTab.setVisibility(View.VISIBLE);
@@ -842,6 +873,8 @@ public class MainActivity extends AppCompatActivity {
             mBtnForceStop.setText(R.string.btn_force_stop_tiktok);
             mBtnLaunch.setText(R.string.btn_open_tiktok);
         }
+
+        checkTikTokVersionCompatibility();
     }
 
     private boolean isAppInstalled(String pkg) {
@@ -1057,6 +1090,72 @@ public class MainActivity extends AppCompatActivity {
         } catch (Throwable ignored) {}
 
         Toast.makeText(this, appName + " is not installed on device", Toast.LENGTH_SHORT).show();
+    }
+
+    public static int compareVersions(String v1, String v2) {
+        if (v1 == null || v2 == null) return 0;
+        String clean1 = v1.replaceAll("[^0-9.]", "");
+        String clean2 = v2.replaceAll("[^0-9.]", "");
+        String[] parts1 = clean1.split("\\.");
+        String[] parts2 = clean2.split("\\.");
+        int length = Math.max(parts1.length, parts2.length);
+        for (int i = 0; i < length; i++) {
+            long num1 = (i < parts1.length && !parts1[i].isEmpty()) ? Long.parseLong(parts1[i]) : 0;
+            long num2 = (i < parts2.length && !parts2[i].isEmpty()) ? Long.parseLong(parts2[i]) : 0;
+            if (num1 != num2) {
+                return Long.compare(num1, num2);
+            }
+        }
+        return 0;
+    }
+
+    private void checkTikTokVersionCompatibility() {
+        if (mLayoutVersionWarning == null) return;
+
+        if (PROFILE_CHINA.equals(mCurrentProfile)) {
+            mLayoutVersionWarning.setVisibility(View.GONE);
+            return;
+        }
+
+        String targetPkg = getTargetPackageForProfile(mCurrentProfile);
+        try {
+            String versionName = getPackageManager().getPackageInfo(targetPkg, 0).versionName;
+            if (versionName == null || versionName.isEmpty()) {
+                mLayoutVersionWarning.setVisibility(View.GONE);
+                return;
+            }
+
+            int cmp = compareVersions(versionName, "47.1.3");
+            if (cmp < 0) {
+                mLayoutVersionWarning.setVisibility(View.VISIBLE);
+                if (mTvVersionWarningTitle != null) {
+                    mTvVersionWarningTitle.setText(R.string.version_outdated_title);
+                }
+                if (mTvVersionWarningBadge != null) {
+                    mTvVersionWarningBadge.setText("OUTDATED");
+                    mTvVersionWarningBadge.setTextColor(ContextCompat.getColor(this, R.color.version_warning_accent));
+                }
+                if (mTvVersionWarningDesc != null) {
+                    mTvVersionWarningDesc.setText(getString(R.string.version_outdated_msg, versionName));
+                }
+            } else if (cmp > 0) {
+                mLayoutVersionWarning.setVisibility(View.VISIBLE);
+                if (mTvVersionWarningTitle != null) {
+                    mTvVersionWarningTitle.setText(R.string.version_unsupported_title);
+                }
+                if (mTvVersionWarningBadge != null) {
+                    mTvVersionWarningBadge.setText("UNSUPPORTED");
+                    mTvVersionWarningBadge.setTextColor(ContextCompat.getColor(this, R.color.version_warning_accent));
+                }
+                if (mTvVersionWarningDesc != null) {
+                    mTvVersionWarningDesc.setText(getString(R.string.version_unsupported_msg, versionName));
+                }
+            } else {
+                mLayoutVersionWarning.setVisibility(View.GONE);
+            }
+        } catch (PackageManager.NameNotFoundException e) {
+            mLayoutVersionWarning.setVisibility(View.GONE);
+        }
     }
 }
 
