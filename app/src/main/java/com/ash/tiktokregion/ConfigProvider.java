@@ -26,8 +26,11 @@ public class ConfigProvider extends ContentProvider {
     public static final String KEY_NO_WATERMARK = "no_watermark";
     public static final String KEY_BYPASS_DOWNLOAD_RESTRICTION = "bypass_download_restriction";
     public static final String KEY_HD_UPLOAD = "hd_upload";
+    public static final String KEY_UPLOAD_4K = "upload_4k";
+    public static final String KEY_FORCE_HIGH_QUALITY = "force_high_quality";
+    public static final String KEY_TELEMETRY_HUD = "telemetry_hud";
+    public static final String KEY_TELEMETRY_POPUP = "telemetry_popup";
     public static final String KEY_HIDE_ADS = "hide_ads";
-    public static final String KEY_HIDE_PYMK = "hide_pymk";
     public static final String KEY_FORCE_REGION = "force_region";
     public static final String KEY_STRICT_FORCE_REGION = "strict_force_region";
     public static final String KEY_LOCKED_REGION_FILTER = "locked_region_filter";
@@ -63,8 +66,11 @@ public class ConfigProvider extends ContentProvider {
                 boolean noWatermark = sp.getBoolean(MainActivity.KEY_NO_WATERMARK, true);
                 boolean bypassDownload = sp.getBoolean(MainActivity.KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
                 boolean hdUpload = sp.getBoolean(MainActivity.KEY_HD_UPLOAD, true);
+                boolean upload4K = sp.getBoolean(MainActivity.KEY_UPLOAD_4K, false);
+                boolean forceHighQuality = sp.getBoolean(MainActivity.KEY_FORCE_HIGH_QUALITY, true);
+                boolean telemetryHUD = sp.getBoolean(MainActivity.KEY_TELEMETRY_HUD, true);
+                boolean telemetryPopup = sp.getBoolean(MainActivity.KEY_TELEMETRY_POPUP, true);
                 boolean hideAds = sp.getBoolean(MainActivity.KEY_HIDE_ADS, true);
-                boolean hidePymk = sp.getBoolean(MainActivity.KEY_HIDE_PYMK, false);
                 boolean forceRegion = sp.getBoolean(MainActivity.KEY_FORCE_REGION, true);
                 boolean strictForceRegion = sp.getBoolean(MainActivity.KEY_STRICT_FORCE_REGION, false);
                 boolean lockedRegionFilter = sp.getBoolean(MainActivity.KEY_LOCKED_REGION_FILTER, false);
@@ -106,8 +112,11 @@ public class ConfigProvider extends ContentProvider {
                 bundle.putBoolean(KEY_NO_WATERMARK, noWatermark);
                 bundle.putBoolean(KEY_BYPASS_DOWNLOAD_RESTRICTION, bypassDownload);
                 bundle.putBoolean(KEY_HD_UPLOAD, hdUpload);
+                bundle.putBoolean(KEY_UPLOAD_4K, upload4K);
+                bundle.putBoolean(KEY_FORCE_HIGH_QUALITY, forceHighQuality);
+                bundle.putBoolean(KEY_TELEMETRY_HUD, telemetryHUD);
+                bundle.putBoolean(KEY_TELEMETRY_POPUP, telemetryPopup);
                 bundle.putBoolean(KEY_HIDE_ADS, hideAds);
-                bundle.putBoolean(KEY_HIDE_PYMK, hidePymk);
                 bundle.putBoolean(KEY_FORCE_REGION, forceRegion);
                 bundle.putBoolean(KEY_STRICT_FORCE_REGION, strictForceRegion);
                 bundle.putBoolean(KEY_LOCKED_REGION_FILTER, lockedRegionFilter);

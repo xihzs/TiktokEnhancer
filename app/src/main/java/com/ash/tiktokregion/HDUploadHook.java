@@ -28,6 +28,36 @@ public class HDUploadHook {
     public static final int HD_ENCODE_PROFILE_HIGH = 3;
     public static final int HD_COMPILE_SIZE_INDEX_1080P = 7;
 
+    public static final int HD_WIDTH_4K = 2160;
+    public static final int HD_HEIGHT_4K = 3840;
+    public static final int HD_TARGET_BPS_4K = 50_000_000;
+    public static final int HD_MAX_BPS_4K = 75_000_000;
+    public static final int HD_SW_CRF_4K = 14;
+
+    public static int getTargetWidth() {
+        return MainHook.isUpload4KEnabled() ? HD_WIDTH_4K : HD_WIDTH;
+    }
+
+    public static int getTargetHeight() {
+        return MainHook.isUpload4KEnabled() ? HD_HEIGHT_4K : HD_HEIGHT;
+    }
+
+    public static int getTargetBps() {
+        return MainHook.isUpload4KEnabled() ? HD_TARGET_BPS_4K : HD_TARGET_BPS;
+    }
+
+    public static int getMaxBps() {
+        return MainHook.isUpload4KEnabled() ? HD_MAX_BPS_4K : HD_MAX_BPS;
+    }
+
+    public static int getSwCrf() {
+        return MainHook.isUpload4KEnabled() ? HD_SW_CRF_4K : HD_SW_CRF;
+    }
+
+    public static long getDirectUploadThresholdMb() {
+        return MainHook.isUpload4KEnabled() ? 1500L : 500L;
+    }
+
     public static void log(String msg) {
         Log.i(TAG, msg);
         try {
@@ -274,7 +304,7 @@ public class HDUploadHook {
                         if (arg instanceof String) {
                             String key = (String) arg;
                             if ("studio_upload_direct_long_video_threshold_mb".equals(key)) {
-                                param.setResult(500L);
+                                param.setResult(getDirectUploadThresholdMb());
                                 break;
                             }
                         }
@@ -306,19 +336,19 @@ public class HDUploadHook {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
                     if (!MainHook.isHDUploadEnabled()) return;
+                    int targetW = getTargetWidth();
+                    int targetH = getTargetHeight();
                     int[] orig = (int[]) param.getResult();
                     if (orig != null && orig.length == 2) {
                         int w = orig[0];
                         int h = orig[1];
                         if (h >= w) {
-
-                            param.setResult(new int[]{HD_WIDTH, HD_HEIGHT});
+                            param.setResult(new int[]{targetW, targetH});
                         } else {
-
-                            param.setResult(new int[]{HD_HEIGHT, HD_WIDTH});
+                            param.setResult(new int[]{targetH, targetW});
                         }
                     } else {
-                        param.setResult(new int[]{HD_WIDTH, HD_HEIGHT});
+                        param.setResult(new int[]{targetW, targetH});
                     }
                 }
             });
@@ -327,11 +357,13 @@ public class HDUploadHook {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
                     if (!MainHook.isHDUploadEnabled()) return;
+                    int targetW = getTargetWidth();
+                    int targetH = getTargetHeight();
                     int[] orig = (int[]) param.getResult();
                     if (orig != null && orig.length == 2 && orig[1] < orig[0]) {
-                        param.setResult(new int[]{HD_HEIGHT, HD_WIDTH});
+                        param.setResult(new int[]{targetH, targetW});
                     } else {
-                        param.setResult(new int[]{HD_WIDTH, HD_HEIGHT});
+                        param.setResult(new int[]{targetW, targetH});
                     }
                 }
             });
@@ -341,10 +373,11 @@ public class HDUploadHook {
                 protected void afterHookedMethod(MethodHookParam param) {
                     if (!MainHook.isHDUploadEnabled()) return;
                     Object res = param.getResult();
+                    float minBitrate = MainHook.isUpload4KEnabled() ? 6.0f : 2.5f;
                     if (res instanceof Float) {
                         float val = (Float) res;
-                        if (val < 2.5f) {
-                            param.setResult(2.5f);
+                        if (val < minBitrate) {
+                            param.setResult(minBitrate);
                         }
                     }
                 }
@@ -438,20 +471,19 @@ public class HDUploadHook {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) {
                         if (!MainHook.isHDUploadEnabled()) return;
+                        int targetW = getTargetWidth();
                         if (param.args != null && param.args.length >= 2) {
                             int w = ((Number) param.args[0]).intValue();
                             int h = ((Number) param.args[1]).intValue();
                             if (w > 0 && h > 0) {
-                                if (h >= w && w < HD_WIDTH) {
-
+                                if (h >= w && w < targetW) {
                                     float aspect = (float) h / (float) w;
-                                    param.args[0] = HD_WIDTH;
-                                    param.args[1] = ((int) (HD_WIDTH * aspect) / 16) * 16;
-                                } else if (w > h && h < HD_WIDTH) {
-
+                                    param.args[0] = targetW;
+                                    param.args[1] = ((int) (targetW * aspect) / 16) * 16;
+                                } else if (w > h && h < targetW) {
                                     float aspect = (float) w / (float) h;
-                                    param.args[1] = HD_WIDTH;
-                                    param.args[0] = ((int) (HD_WIDTH * aspect) / 16) * 16;
+                                    param.args[1] = targetW;
+                                    param.args[0] = ((int) (targetW * aspect) / 16) * 16;
                                 }
                             }
                         }
@@ -464,10 +496,11 @@ public class HDUploadHook {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) {
                         if (!MainHook.isHDUploadEnabled()) return;
+                        int targetBps = getTargetBps();
                         if (param.args != null && param.args.length >= 1) {
                             int bps = ((Number) param.args[0]).intValue();
-                            if (bps > 0 && bps < HD_TARGET_BPS) {
-                                param.args[0] = HD_TARGET_BPS;
+                            if (bps > 0 && bps < targetBps) {
+                                param.args[0] = targetBps;
                             }
                         }
                     }
@@ -484,6 +517,11 @@ public class HDUploadHook {
         if (encodeSettings == null) return;
         try {
             Class<?> clazz = encodeSettings.getClass();
+            int targetW = getTargetWidth();
+            int targetH = getTargetHeight();
+            int targetBps = getTargetBps();
+            int maxBps = getMaxBps();
+            int swCrf = getSwCrf();
 
             Field outputSizeField = findFieldSafely(clazz, "outputSize");
             if (outputSizeField != null) {
@@ -497,29 +535,27 @@ public class HDUploadHook {
 
                         if (width > 0 && height > 0) {
                             if (height >= width) {
-
-                                if (width < HD_WIDTH) {
+                                if (width < targetW) {
                                     float aspect = (float) height / (float) width;
-                                    int newWidth = HD_WIDTH;
-                                    int newHeight = ((int) (HD_WIDTH * aspect) / 16) * 16;
+                                    int newWidth = targetW;
+                                    int newHeight = ((int) (targetW * aspect) / 16) * 16;
                                     wField.setInt(outputSize, newWidth);
                                     hField.setInt(outputSize, newHeight);
                                     log("Upgraded portrait outputSize: " + width + "x" + height + " -> " + newWidth + "x" + newHeight);
                                 }
                             } else {
-
-                                if (height < HD_WIDTH) {
+                                if (height < targetW) {
                                     float aspect = (float) width / (float) height;
-                                    int newHeight = HD_WIDTH;
-                                    int newWidth = ((int) (HD_WIDTH * aspect) / 16) * 16;
+                                    int newHeight = targetW;
+                                    int newWidth = ((int) (targetW * aspect) / 16) * 16;
                                     wField.setInt(outputSize, newWidth);
                                     hField.setInt(outputSize, newHeight);
                                     log("Upgraded landscape outputSize: " + width + "x" + height + " -> " + newWidth + "x" + newHeight);
                                 }
                             }
                         } else {
-                            wField.setInt(outputSize, HD_WIDTH);
-                            hField.setInt(outputSize, HD_HEIGHT);
+                            wField.setInt(outputSize, targetW);
+                            hField.setInt(outputSize, targetH);
                         }
                     }
                 }
@@ -528,30 +564,30 @@ public class HDUploadHook {
             Field bpsField = findFieldSafely(clazz, "bps");
             if (bpsField != null) {
                 int currentBps = bpsField.getInt(encodeSettings);
-                if (currentBps < HD_TARGET_BPS) {
-                    bpsField.setInt(encodeSettings, HD_TARGET_BPS);
+                if (currentBps < targetBps) {
+                    bpsField.setInt(encodeSettings, targetBps);
                 }
             }
 
             Field hwBpsField = findFieldSafely(clazz, "HwBps");
             if (hwBpsField != null) {
                 int currentHwBps = hwBpsField.getInt(encodeSettings);
-                if (currentHwBps < HD_TARGET_BPS) {
-                    hwBpsField.setInt(encodeSettings, HD_TARGET_BPS);
+                if (currentHwBps < targetBps) {
+                    hwBpsField.setInt(encodeSettings, targetBps);
                 }
             }
 
             Field swMaxrateField = findFieldSafely(clazz, "swMaxrate");
             if (swMaxrateField != null) {
                 long currentMax = swMaxrateField.getLong(encodeSettings);
-                if (currentMax < HD_MAX_BPS) {
-                    swMaxrateField.setLong(encodeSettings, (long) HD_MAX_BPS);
+                if (currentMax < maxBps) {
+                    swMaxrateField.setLong(encodeSettings, (long) maxBps);
                 }
             }
 
             Field swCRFField = findFieldSafely(clazz, "swCRF");
             if (swCRFField != null) {
-                swCRFField.setInt(encodeSettings, HD_SW_CRF);
+                swCRFField.setInt(encodeSettings, swCrf);
             }
 
             Field fpsField = findFieldSafely(clazz, "fps");

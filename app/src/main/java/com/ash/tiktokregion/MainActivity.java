@@ -57,8 +57,11 @@ public class MainActivity extends AppCompatActivity {
     public static final String KEY_NO_WATERMARK = "no_watermark";
     public static final String KEY_BYPASS_DOWNLOAD_RESTRICTION = "bypass_download_restriction";
     public static final String KEY_HD_UPLOAD = "hd_upload";
+    public static final String KEY_UPLOAD_4K = "upload_4k";
+    public static final String KEY_FORCE_HIGH_QUALITY = "force_high_quality";
+    public static final String KEY_TELEMETRY_HUD = "telemetry_hud";
+    public static final String KEY_TELEMETRY_POPUP = "telemetry_popup";
     public static final String KEY_HIDE_ADS = "hide_ads";
-    public static final String KEY_HIDE_PYMK = "hide_pymk";
     public static final String KEY_FORCE_REGION = "force_region";
     public static final String KEY_STRICT_FORCE_REGION = "strict_force_region";
     public static final String KEY_LOCKED_REGION_FILTER = "locked_region_filter";
@@ -124,13 +127,16 @@ public class MainActivity extends AppCompatActivity {
     private MaterialSwitch mSwitchDownloadStory;
     private View mDividerDownloadStory;
     private MaterialSwitch mSwitchHideAds;
-    private View mRowHidePymk;
-    private View mDividerHidePymk;
-    private MaterialSwitch mSwitchHidePymk;
     private MaterialSwitch mSwitchNoWatermark;
     private MaterialSwitch mSwitchBypassDownload;
     private MaterialSwitch mSwitchHDUpload;
     private View mRowHDUpload;
+    private MaterialSwitch mSwitchUpload4K;
+    private View mRowUpload4K;
+    private View mDividerUpload4K;
+    private MaterialSwitch mSwitchForceHighQuality;
+    private MaterialSwitch mSwitchTelemetryHUD;
+    private MaterialSwitch mSwitchTelemetryPopup;
     private MaterialSwitch mSwitchCustomOverride;
     private LinearLayout mLayoutCustomInputs;
     private TextInputEditText mEtCustomIso;
@@ -208,13 +214,16 @@ public class MainActivity extends AppCompatActivity {
         mSwitchDownloadStory = findViewById(R.id.switch_download_story);
         mDividerDownloadStory = findViewById(R.id.divider_download_story);
         mSwitchHideAds = findViewById(R.id.switch_hide_ads);
-        mRowHidePymk = findViewById(R.id.row_hide_pymk);
-        mDividerHidePymk = findViewById(R.id.divider_hide_pymk);
-        mSwitchHidePymk = findViewById(R.id.switch_hide_pymk);
         mSwitchNoWatermark = findViewById(R.id.switch_no_watermark);
         mSwitchBypassDownload = findViewById(R.id.switch_bypass_download);
         mSwitchHDUpload = findViewById(R.id.switch_hd_upload);
         mRowHDUpload = findViewById(R.id.row_hd_upload);
+        mSwitchUpload4K = findViewById(R.id.switch_upload_4k);
+        mRowUpload4K = findViewById(R.id.row_upload_4k);
+        mDividerUpload4K = findViewById(R.id.divider_upload_4k);
+        mSwitchForceHighQuality = findViewById(R.id.switch_force_high_quality);
+        mSwitchTelemetryHUD = findViewById(R.id.switch_telemetry_hud);
+        mSwitchTelemetryPopup = findViewById(R.id.switch_telemetry_popup);
         mSwitchSpoof = findViewById(R.id.switch_enable_spoof);
         mSwitchLocale = findViewById(R.id.switch_spoof_locale);
         mSwitchHideIcon = findViewById(R.id.switch_hide_icon);
@@ -298,10 +307,13 @@ public class MainActivity extends AppCompatActivity {
         boolean languageFilter = mPrefs.getBoolean(KEY_LANGUAGE_FILTER, false);
         boolean downloadStory = mPrefs.getBoolean(KEY_DOWNLOAD_STORY, true);
         boolean hideAds = mPrefs.getBoolean(KEY_HIDE_ADS, true);
-        boolean hidePymk = mPrefs.getBoolean(KEY_HIDE_PYMK, false);
         boolean noWatermark = mPrefs.getBoolean(KEY_NO_WATERMARK, true);
         boolean bypassDownload = mPrefs.getBoolean(KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
         boolean hdUpload = mPrefs.getBoolean(KEY_HD_UPLOAD, true);
+        boolean upload4K = mPrefs.getBoolean(KEY_UPLOAD_4K, false);
+        boolean forceHighQuality = mPrefs.getBoolean(KEY_FORCE_HIGH_QUALITY, true);
+        boolean telemetryHUD = mPrefs.getBoolean(KEY_TELEMETRY_HUD, true);
+        boolean telemetryPopup = mPrefs.getBoolean(KEY_TELEMETRY_POPUP, true);
 
         mSwitchSpoof.setChecked(enabled);
         mSwitchLocale.setChecked(spoofLocale);
@@ -313,10 +325,13 @@ public class MainActivity extends AppCompatActivity {
         if (mSwitchLanguageFilter != null) mSwitchLanguageFilter.setChecked(languageFilter);
         mSwitchDownloadStory.setChecked(downloadStory);
         mSwitchHideAds.setChecked(hideAds);
-        if (mSwitchHidePymk != null) mSwitchHidePymk.setChecked(hidePymk);
         mSwitchNoWatermark.setChecked(noWatermark);
         mSwitchBypassDownload.setChecked(bypassDownload);
         if (mSwitchHDUpload != null) mSwitchHDUpload.setChecked(hdUpload);
+        if (mSwitchUpload4K != null) mSwitchUpload4K.setChecked(upload4K);
+        if (mSwitchForceHighQuality != null) mSwitchForceHighQuality.setChecked(forceHighQuality);
+        if (mSwitchTelemetryHUD != null) mSwitchTelemetryHUD.setChecked(telemetryHUD);
+        if (mSwitchTelemetryPopup != null) mSwitchTelemetryPopup.setChecked(telemetryPopup);
         mSwitchCustomOverride.setChecked(isCustom);
         mLayoutCustomInputs.setVisibility(isCustom ? View.VISIBLE : View.GONE);
 
@@ -427,15 +442,6 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
         });
 
-        if (mSwitchHidePymk != null) {
-            mSwitchHidePymk.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                mPrefs.edit().putBoolean(KEY_HIDE_PYMK, isChecked).apply();
-                saveToDeviceProtectedStorage(KEY_HIDE_PYMK, isChecked);
-                makePrefsWorldReadable();
-                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
-            });
-        }
-
         mSwitchNoWatermark.setOnCheckedChangeListener((buttonView, isChecked) -> {
             mPrefs.edit().putBoolean(KEY_NO_WATERMARK, isChecked).apply();
             saveToDeviceProtectedStorage(KEY_NO_WATERMARK, isChecked);
@@ -454,6 +460,48 @@ public class MainActivity extends AppCompatActivity {
             mSwitchHDUpload.setOnCheckedChangeListener((buttonView, isChecked) -> {
                 mPrefs.edit().putBoolean(KEY_HD_UPLOAD, isChecked).apply();
                 saveToDeviceProtectedStorage(KEY_HD_UPLOAD, isChecked);
+                if (!isChecked && mSwitchUpload4K != null && mSwitchUpload4K.isChecked()) {
+                    mSwitchUpload4K.setChecked(false);
+                }
+                makePrefsWorldReadable();
+                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        if (mSwitchUpload4K != null) {
+            mSwitchUpload4K.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                mPrefs.edit().putBoolean(KEY_UPLOAD_4K, isChecked).apply();
+                saveToDeviceProtectedStorage(KEY_UPLOAD_4K, isChecked);
+                if (isChecked && mSwitchHDUpload != null && !mSwitchHDUpload.isChecked()) {
+                    mSwitchHDUpload.setChecked(true);
+                }
+                makePrefsWorldReadable();
+                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        if (mSwitchForceHighQuality != null) {
+            mSwitchForceHighQuality.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                mPrefs.edit().putBoolean(KEY_FORCE_HIGH_QUALITY, isChecked).apply();
+                saveToDeviceProtectedStorage(KEY_FORCE_HIGH_QUALITY, isChecked);
+                makePrefsWorldReadable();
+                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        if (mSwitchTelemetryHUD != null) {
+            mSwitchTelemetryHUD.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                mPrefs.edit().putBoolean(KEY_TELEMETRY_HUD, isChecked).apply();
+                saveToDeviceProtectedStorage(KEY_TELEMETRY_HUD, isChecked);
+                makePrefsWorldReadable();
+                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        if (mSwitchTelemetryPopup != null) {
+            mSwitchTelemetryPopup.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                mPrefs.edit().putBoolean(KEY_TELEMETRY_POPUP, isChecked).apply();
+                saveToDeviceProtectedStorage(KEY_TELEMETRY_POPUP, isChecked);
                 makePrefsWorldReadable();
                 Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
             });
@@ -1187,8 +1235,8 @@ public class MainActivity extends AppCompatActivity {
             mRowSpoofLocale.setVisibility(View.GONE);
 
             if (mRowHDUpload != null) mRowHDUpload.setVisibility(View.GONE);
-            if (mRowHidePymk != null) mRowHidePymk.setVisibility(View.GONE);
-            if (mDividerHidePymk != null) mDividerHidePymk.setVisibility(View.GONE);
+            if (mRowUpload4K != null) mRowUpload4K.setVisibility(View.GONE);
+            if (mDividerUpload4K != null) mDividerUpload4K.setVisibility(View.GONE);
             if (mDividerDownloadStory != null) mDividerDownloadStory.setVisibility(View.GONE);
 
             mBtnForceStop.setText(R.string.btn_force_stop_tiktok);
@@ -1219,8 +1267,8 @@ public class MainActivity extends AppCompatActivity {
             mRowSpoofLocale.setVisibility(View.VISIBLE);
 
             if (mRowHDUpload != null) mRowHDUpload.setVisibility(View.VISIBLE);
-            if (mRowHidePymk != null) mRowHidePymk.setVisibility(View.VISIBLE);
-            if (mDividerHidePymk != null) mDividerHidePymk.setVisibility(View.VISIBLE);
+            if (mRowUpload4K != null) mRowUpload4K.setVisibility(View.VISIBLE);
+            if (mDividerUpload4K != null) mDividerUpload4K.setVisibility(View.VISIBLE);
             if (mDividerDownloadStory != null) mDividerDownloadStory.setVisibility(View.VISIBLE);
 
             mBtnForceStop.setText(R.string.btn_force_stop_tiktok);

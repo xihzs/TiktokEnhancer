@@ -82,8 +82,8 @@ public class MainHook implements IXposedHookLoadPackage {
     private static volatile boolean sNoWatermark = true;
     private static volatile boolean sBypassDownloadRestriction = true;
     private static volatile boolean sHDUpload = true;
+    private static volatile boolean sUpload4K = false;
     private static volatile boolean sHideAds = true;
-    private static volatile boolean sHidePymk = false;
     private static volatile boolean sForceRegion = true;
     private static volatile boolean sStrictForceRegion = false;
     private static volatile boolean sLockedRegionFilter = false;
@@ -93,6 +93,9 @@ public class MainHook implements IXposedHookLoadPackage {
     private static volatile boolean sDownloadStory = true;
     private static volatile boolean sBlockCountries = false;
     private static volatile Set<String> sBlockedCountries = java.util.Collections.emptySet();
+    private static volatile boolean sForceHighQuality = true;
+    private static volatile boolean sTelemetryHUD = true;
+    private static volatile boolean sTelemetryPopup = true;
 
     private static volatile Context sAppContext = null;
     private static volatile long sLastConfigFetchTime = 0;
@@ -111,15 +114,27 @@ public class MainHook implements IXposedHookLoadPackage {
     }
 
     public static boolean isHDUploadEnabled() {
-        return sHDUpload;
+        return sHDUpload || sUpload4K;
+    }
+
+    public static boolean isUpload4KEnabled() {
+        return sUpload4K;
+    }
+
+    public static boolean isForceHighQualityEnabled() {
+        return sForceHighQuality;
+    }
+
+    public static boolean isTelemetryHUDEnabled() {
+        return sTelemetryHUD;
+    }
+
+    public static boolean isTelemetryPopupEnabled() {
+        return sTelemetryPopup;
     }
 
     public static boolean isHideAdsEnabled() {
         return sHideAds;
-    }
-
-    public static boolean isHidePymkEnabled() {
-        return sHidePymk;
     }
 
     public static boolean isForceRegionEnabled() {
@@ -230,6 +245,11 @@ public class MainHook implements IXposedHookLoadPackage {
             try {
                 hookContentLanguageService(lpparam.classLoader);
             } catch (Throwable ignored) {}
+            try {
+                QualityAndTelemetryHook.hook(lpparam.classLoader);
+            } catch (Throwable t) {
+                XposedBridge.log(TAG + ": QualityAndTelemetryHook.hook error: " + t.getMessage());
+            }
         }
 
         XposedBridge.log(TAG + ": All initial hooks dispatched for " + lpparam.packageName);
@@ -420,6 +440,7 @@ public class MainHook implements IXposedHookLoadPackage {
             DouyinWatermarkHook.onClassLoaded(clazz);
         } else {
             HDUploadHook.onClassLoaded(clazz);
+            QualityAndTelemetryHook.onClassLoaded(clazz);
         }
     }
 
@@ -441,6 +462,7 @@ public class MainHook implements IXposedHookLoadPackage {
         AdsHook.hook(classLoader);
         if (!isChina) {
             HDUploadHook.hook(classLoader);
+            QualityAndTelemetryHook.hook(classLoader);
         }
     }
 
@@ -483,8 +505,8 @@ public class MainHook implements IXposedHookLoadPackage {
                     sNoWatermark = bundle.getBoolean(ConfigProvider.KEY_NO_WATERMARK, true);
                     sBypassDownloadRestriction = bundle.getBoolean(ConfigProvider.KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
                     sHDUpload = bundle.getBoolean(ConfigProvider.KEY_HD_UPLOAD, true);
+                    sUpload4K = bundle.getBoolean(ConfigProvider.KEY_UPLOAD_4K, false);
                     sHideAds = bundle.getBoolean(ConfigProvider.KEY_HIDE_ADS, true);
-                    sHidePymk = bundle.getBoolean(ConfigProvider.KEY_HIDE_PYMK, false);
                     sForceRegion = bundle.getBoolean(ConfigProvider.KEY_FORCE_REGION, true);
                     sStrictForceRegion = bundle.getBoolean(ConfigProvider.KEY_STRICT_FORCE_REGION, false);
                     sLockedRegionFilter = bundle.getBoolean(ConfigProvider.KEY_LOCKED_REGION_FILTER, false);
@@ -494,13 +516,16 @@ public class MainHook implements IXposedHookLoadPackage {
                     sDownloadStory = bundle.getBoolean(ConfigProvider.KEY_DOWNLOAD_STORY, true);
                     sBlockCountries = bundle.getBoolean(ConfigProvider.KEY_BLOCK_COUNTRIES, false);
                     sBlockedCountries = parseIsoSet(bundle.getString(ConfigProvider.KEY_BLOCKED_COUNTRY_LIST, ""));
+                    sForceHighQuality = bundle.getBoolean(ConfigProvider.KEY_FORCE_HIGH_QUALITY, true);
+                    sTelemetryHUD = bundle.getBoolean(ConfigProvider.KEY_TELEMETRY_HUD, true);
+                    sTelemetryPopup = bundle.getBoolean(ConfigProvider.KEY_TELEMETRY_POPUP, true);
 
                     log("Config loaded via ContentProvider IPC: enabled=" + sEnabled
                             + ", country=" + sCountryIso + ", op=" + sOperatorName + " (" + sOperatorMccMnc + ")"
                             + ", forceRegion=" + sForceRegion + ", strictForceRegion=" + sStrictForceRegion
                             + ", lockedRegionFilter=" + sLockedRegionFilter + ", languageFilter=" + sLanguageFilter + " (" + sAllowedLanguages.size() + ")"
                             + ", blockCountries=" + sBlockCountries + " (" + sBlockedCountries.size() + ")"
-                            + ", hideAds=" + sHideAds + ", hidePymk=" + sHidePymk + ", downloadStory=" + sDownloadStory);
+                            + ", hideAds=" + sHideAds + ", downloadStory=" + sDownloadStory);
                     return;
                 }
             } catch (Throwable t) {
@@ -540,8 +565,8 @@ public class MainHook implements IXposedHookLoadPackage {
             sNoWatermark = prefs.getBoolean(MainActivity.KEY_NO_WATERMARK, true);
             sBypassDownloadRestriction = prefs.getBoolean(MainActivity.KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
             sHDUpload = prefs.getBoolean(MainActivity.KEY_HD_UPLOAD, true);
+            sUpload4K = prefs.getBoolean(MainActivity.KEY_UPLOAD_4K, false);
             sHideAds = prefs.getBoolean(MainActivity.KEY_HIDE_ADS, true);
-            sHidePymk = prefs.getBoolean(MainActivity.KEY_HIDE_PYMK, false);
             sForceRegion = prefs.getBoolean(MainActivity.KEY_FORCE_REGION, true);
             sStrictForceRegion = prefs.getBoolean(MainActivity.KEY_STRICT_FORCE_REGION, false);
             sLockedRegionFilter = prefs.getBoolean(MainActivity.KEY_LOCKED_REGION_FILTER, false);
@@ -551,6 +576,9 @@ public class MainHook implements IXposedHookLoadPackage {
             sDownloadStory = prefs.getBoolean(MainActivity.KEY_DOWNLOAD_STORY, true);
             sBlockCountries = prefs.getBoolean(MainActivity.KEY_BLOCK_COUNTRIES, false);
             sBlockedCountries = parseIsoSet(prefs.getString(MainActivity.KEY_BLOCKED_COUNTRY_LIST, ""));
+            sForceHighQuality = prefs.getBoolean(MainActivity.KEY_FORCE_HIGH_QUALITY, true);
+            sTelemetryHUD = prefs.getBoolean(MainActivity.KEY_TELEMETRY_HUD, true);
+            sTelemetryPopup = prefs.getBoolean(MainActivity.KEY_TELEMETRY_POPUP, true);
 
             if (isCustom) {
                 sCountryIso = prefs.getString(MainActivity.KEY_CUSTOM_ISO, preset.getCountryIso()).toLowerCase();

@@ -85,10 +85,7 @@ public class CountryPreset {
         list.add(new CountryPreset("KR_LGU", "🇰🇷", "South Korea", "kr", "450", "06", "45006", "LG U+", "ko", "KR"));
         list.add(new CountryPreset("TW_CHUNGHWA", "🇹🇼", "Taiwan", "tw", "466", "92", "46692", "Chunghwa", "zh", "TW"));
         list.add(new CountryPreset("TW_TAIWANMO", "🇹🇼", "Taiwan", "tw", "466", "97", "46697", "Taiwan Mobile", "zh", "TW"));
-        list.add(new CountryPreset("HK_CSL", "🇭🇰", "Hong Kong", "hk", "454", "00", "45400", "CSL", "zh", "HK"));
 
-        list.add(new CountryPreset("IN_AIRTEL", "🇮🇳", "India", "in", "404", "10", "40410", "Airtel", "en", "IN"));
-        list.add(new CountryPreset("IN_JIO", "🇮🇳", "India", "in", "405", "840", "405840", "Jio", "en", "IN"));
         list.add(new CountryPreset("PK_JAZZ", "🇵🇰", "Pakistan", "pk", "410", "01", "41001", "Jazz", "ur", "PK"));
         list.add(new CountryPreset("BD_GRAMEEN", "🇧🇩", "Bangladesh", "bd", "470", "01", "47001", "Grameenphone", "bn", "BD"));
 
@@ -270,6 +267,8 @@ public class CountryPreset {
         }
 
         String[][] additional = {
+                {"in", "India", "🇮🇳"},
+                {"hk", "Hong Kong", "🇭🇰"},
                 {"ru", "Russia", "🇷🇺"},
                 {"cn", "China", "🇨🇳"},
                 {"ir", "Iran", "🇮🇷"},

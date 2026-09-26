@@ -4,6 +4,7 @@ import android.util.Log;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -451,7 +452,6 @@ public class AdsHook {
         }
 
         boolean hideAds = MainHook.isHideAdsEnabled();
-        boolean hidePymk = !isProfile && !isChina && MainHook.isHidePymkEnabled();
         boolean strictRegion = !isProfile && !isChina && MainHook.isStrictForceRegionEnabled();
         boolean smartRegion = !isProfile && !isChina && !strictRegion && MainHook.isForceRegionEnabled() && isRecommendFeed(feedItemList);
         boolean anyRegionFilter = strictRegion || smartRegion;
@@ -469,7 +469,6 @@ public class AdsHook {
         int totalBefore = sourceList.size();
         int blockedCount = 0;
         int adCount = 0;
-        int pymkCount = 0;
         int regionFilterCount = 0;
         int lockedRegionCount = 0;
         int languageFilterCount = 0;
@@ -479,11 +478,6 @@ public class AdsHook {
 
             if (hideAds && isAdAweme(item)) {
                 adCount++;
-                continue;
-            }
-
-            if (hidePymk && isPymkAweme(item)) {
-                pymkCount++;
                 continue;
             }
 
@@ -510,19 +504,18 @@ public class AdsHook {
             kept.add(item);
         }
 
-        if (blockedCount > 0 || adCount > 0 || pymkCount > 0 || regionFilterCount > 0 || lockedRegionCount > 0 || languageFilterCount > 0) {
+        if (blockedCount > 0 || adCount > 0 || regionFilterCount > 0 || lockedRegionCount > 0 || languageFilterCount > 0) {
             log("Feed filtered: " + totalBefore + " -> " + kept.size() + " kept (blocked=" + blockedCount
-                    + ", ads=" + adCount + ", pymk=" + pymkCount + ", nonTargetRegion=" + regionFilterCount
+                    + ", ads=" + adCount + ", nonTargetRegion=" + regionFilterCount
                     + ", nonTargetLockedRegion=" + lockedRegionCount
                     + ", nonAllowedLang=" + languageFilterCount + ")");
         }
 
         if (!strictRegion && kept.isEmpty() && !sourceList.isEmpty()) {
-            // Priority 1: rescue items that pass ad, pymk, blocked country, locked region, and language filters
+            // Priority 1: rescue items that pass ad, blocked country, locked region, and language filters
             for (Object item : sourceList) {
                 if (item != null
                         && !(hideAds && isAdAweme(item))
-                        && !(hidePymk && isPymkAweme(item))
                         && !(matcher != null && matcher.matchesAweme(item))
                         && !(lockedRegionFilter && shouldFilterForLockedRegion(item, targetRegion))
                         && !(hasAllowedLanguages && shouldFilterForLanguage(item, allowedLanguages))) {
@@ -530,20 +523,7 @@ public class AdsHook {
                 }
             }
 
-            // Priority 2: rescue items that are not ads, not pymk, and not from blocked countries
-            if (kept.isEmpty()) {
-                for (Object item : sourceList) {
-                    if (item != null
-                            && !(hideAds && isAdAweme(item))
-                            && !(hidePymk && isPymkAweme(item))
-                            && !(matcher != null && matcher.matchesAweme(item))) {
-                        kept.add(item);
-                        if (kept.size() >= 2) break;
-                    }
-                }
-            }
-
-            // Priority 3: rescue any non-ad, non-blocked item to prevent TikTok "Something went wrong" crash
+            // Priority 2: rescue items that are not ads and not from blocked countries
             if (kept.isEmpty()) {
                 for (Object item : sourceList) {
                     if (item != null
@@ -555,18 +535,50 @@ public class AdsHook {
                 }
             }
 
-            // Priority 4: absolute fallback to preserve feed continuity if every item was somehow flagged
-            if (kept.isEmpty() && !sourceList.isEmpty()) {
+            // Priority 3: rescue non-ad items
+            if (kept.isEmpty()) {
                 for (Object item : sourceList) {
                     if (item != null && !(hideAds && isAdAweme(item))) {
                         kept.add(item);
-                        if (kept.size() >= 1) break;
+                        if (kept.size() >= 2) break;
+                    }
+                }
+            }
+
+            // Priority 4: absolute fallback to preserve feed continuity (strictly excluding ads & full-screen card views)
+            if (kept.isEmpty() && !sourceList.isEmpty()) {
+                for (Object item : sourceList) {
+                    if (item != null && !(hideAds && isAdAweme(item))) {
+                        int at = 0;
+                        try {
+                            Number n = (Number) getSafeObject(item, "getAwemeType", "awemeType");
+                            if (n != null) at = n.intValue();
+                        } catch (Throwable ignored) {}
+
+                        // Exclude pure recommendation card placeholders (4004, 101, 102, 103, 301, 302)
+                        if (at != 4004 && at != 101 && at != 102 && at != 103 && at != 301 && at != 302) {
+                            kept.add(item);
+                            if (kept.size() >= 2) break;
+                        }
                     }
                 }
             }
 
             if (!kept.isEmpty()) {
                 log("Feed starvation safety floor activated: preserved " + kept.size() + " items to prevent feed reload error");
+            }
+        }
+
+        // Absolute emergency fallback: ensure TikTok feed state machine never starves into "Something went wrong"
+        if (kept.isEmpty() && !sourceList.isEmpty()) {
+            for (Object item : sourceList) {
+                if (item != null && !(hideAds && isAdAweme(item))) {
+                    kept.add(item);
+                    if (kept.size() >= 1) break;
+                }
+            }
+            if (!kept.isEmpty()) {
+                log("Feed emergency continuity guard: preserved " + kept.size() + " non-ad video(s)");
             }
         }
 
@@ -636,85 +648,7 @@ public class AdsHook {
         return false;
     }
 
-    private static boolean isPymkAweme(Object aweme) {
-        if (aweme == null) return false;
 
-        // 1. Aweme-level MatchedFriendStruct (TikTok explicit friend match)
-        try {
-            Object matchedFriend = getSafeObject(aweme, "getMatchedFriendStruct", "matchedFriendStruct");
-            if (matchedFriend != null) {
-                Boolean isPymk = (Boolean) getSafeObject(matchedFriend, "isPymk", "isPymk");
-                if (Boolean.TRUE.equals(isPymk)) return true;
-                Boolean avail = (Boolean) XposedHelpers.callMethod(matchedFriend, "isMatchedFriendAvailable");
-                if (Boolean.TRUE.equals(avail)) return true;
-                String friendType = getSafeString(matchedFriend, "getFriendTypeStr", "friendTypeStr");
-                if (friendType != null && !friendType.isEmpty()) return true;
-                return true;
-            }
-        } catch (Throwable ignored) {}
-
-        // 2. Recommend Card Types (PYMK / RecUser horizontal carousel cards)
-        try {
-            Object cardType = getSafeObject(aweme, "getRecommendCardType", "recommendCardType");
-            if (cardType instanceof Number && ((Number) cardType).intValue() > 0) return true;
-        } catch (Throwable ignored) {}
-
-        // 3. Recommend Aweme Items (RecUser cards containing suggested user profiles)
-        try {
-            Object recItems = getSafeObject(aweme, "getRecommendAwemeItems", "recommendAwemeItems");
-            if (recItems instanceof List && !((List<?>) recItems).isEmpty()) return true;
-        } catch (Throwable ignored) {}
-
-        // 4. Recommendation card Aweme types (101=RecUser, 102=RecFriends, 103=FindFriends, 222=SocialCard)
-        try {
-            Number awemeType = (Number) getSafeObject(aweme, "getAwemeType", "awemeType");
-            if (awemeType != null) {
-                int at = awemeType.intValue();
-                if (at == 101 || at == 102 || at == 103 || at == 222) return true;
-            }
-        } catch (Throwable ignored) {}
-
-        // 5. Author-level MatchedFriendStruct
-        try {
-            Object author = getSafeObject(aweme, "getAuthor", "author");
-            if (author != null) {
-                Object aMatched = getSafeObject(author, "getMatchedFriendStruct", "matchedFriendStruct");
-                if (aMatched != null) {
-                    Boolean isPymk = (Boolean) getSafeObject(aMatched, "isPymk", "isPymk");
-                    if (Boolean.TRUE.equals(isPymk)) return true;
-                    Boolean avail = (Boolean) XposedHelpers.callMethod(aMatched, "isMatchedFriendAvailable");
-                    if (Boolean.TRUE.equals(avail)) return true;
-                    String friendType = getSafeString(aMatched, "getFriendTypeStr", "friendTypeStr");
-                    if (friendType != null && !friendType.isEmpty()) return true;
-                    return true;
-                }
-                // Explicit external recommendation reason (e.g. from address book contacts)
-                Object extReason = getSafeObject(author, "getExternalRecommendReasonStruct", "externalRecommendReasonStruct");
-                if (extReason != null) return true;
-            }
-        } catch (Throwable ignored) {}
-
-        // 6. Social graph relation recommend model
-        try {
-            Object relationRecommend = getSafeObject(aweme, "getRelationRecommendInfo", "relationRecommendInfo");
-            if (relationRecommend != null) {
-                Number friendType = (Number) getSafeObject(relationRecommend, "getFriendType", "friendType");
-                if (friendType != null && friendType.longValue() > 0) return true;
-                String recType = getSafeString(relationRecommend, "getRecType", "recType");
-                if (recType != null && (recType.contains("contact") || recType.contains("friend") || recType.contains("pymk"))) return true;
-            }
-        } catch (Throwable ignored) {}
-
-        // 7. Inspect repost forwardItem recursively
-        try {
-            Object forwardItem = getSafeObject(aweme, "getForwardItem", "forwardItem");
-            if (forwardItem != null && forwardItem != aweme) {
-                if (isPymkAweme(forwardItem)) return true;
-            }
-        } catch (Throwable ignored) {}
-
-        return false;
-    }
 
     private static boolean shouldFilterForRegion(Object aweme, String targetRegion) {
         if (targetRegion == null || targetRegion.trim().isEmpty()) return false;
