@@ -119,6 +119,9 @@ public class CountryPreset {
         list.add(new CountryPreset("RO_ORANGE", "🇷🇴", "Romania", "ro", "226", "10", "22610", "Orange", "ro", "RO"));
         list.add(new CountryPreset("HU_TELEKOM", "🇭🇺", "Hungary", "hu", "216", "30", "21630", "Telekom", "hu", "HU"));
         list.add(new CountryPreset("UA_KYIVSTAR", "🇺🇦", "Ukraine", "ua", "255", "03", "25503", "Kyivstar", "uk", "UA"));
+        list.add(new CountryPreset("KZ_BEELINE", "🇰🇿", "Kazakhstan", "kz", "401", "01", "40101", "Beeline", "kk", "KZ"));
+        list.add(new CountryPreset("KZ_KCELL", "🇰🇿", "Kazakhstan", "kz", "401", "02", "40102", "Kcell", "kk", "KZ"));
+        list.add(new CountryPreset("KZ_TELE2", "🇰🇿", "Kazakhstan", "kz", "401", "77", "40177", "Tele2", "kk", "KZ"));
 
         list.add(new CountryPreset("AE_ETISALAT", "🇦🇪", "United Arab Emirates", "ae", "424", "02", "42402", "Etisalat", "ar", "AE"));
         list.add(new CountryPreset("AE_DU", "🇦🇪", "United Arab Emirates", "ae", "424", "03", "42403", "du", "ar", "AE"));

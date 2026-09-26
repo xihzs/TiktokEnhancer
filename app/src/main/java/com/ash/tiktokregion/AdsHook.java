@@ -21,11 +21,12 @@ public class AdsHook {
 
     private static final String TAG = "TikTokFeedFilter";
 
+    private static final boolean DEBUG = false;
+
     public static void log(String msg) {
-        Log.i(TAG, msg);
-        try {
-            XposedBridge.log(TAG + ": " + msg);
-        } catch (Throwable ignored) {}
+        if (DEBUG) {
+            Log.i(TAG, msg);
+        }
     }
 
     private static volatile boolean sFeedItemListHooked = false;
@@ -62,6 +63,8 @@ public class AdsHook {
                     }
 
                     List<Object> cleanList = filterAwemeList(list, feedItemList);
+                    XposedHelpers.setAdditionalInstanceField(cleanList, "tiktok_enhancer_clean", Boolean.TRUE);
+                    XposedHelpers.setAdditionalInstanceField(list, "tiktok_enhancer_clean", Boolean.TRUE);
 
                     if (cleanList.size() != list.size()) {
                         try {
@@ -76,7 +79,7 @@ public class AdsHook {
 
                         param.setResult(cleanList);
                     } else {
-                        XposedHelpers.setAdditionalInstanceField(list, "tiktok_enhancer_clean", Boolean.TRUE);
+                        param.setResult(cleanList);
                     }
                 }
             }
@@ -105,6 +108,8 @@ public class AdsHook {
                                 return;
                             }
                             List<Object> cleanList = filterAwemeList(incoming, param.thisObject);
+                            XposedHelpers.setAdditionalInstanceField(cleanList, "tiktok_enhancer_clean", Boolean.TRUE);
+                            XposedHelpers.setAdditionalInstanceField(incoming, "tiktok_enhancer_clean", Boolean.TRUE);
                             param.args[0] = cleanList;
                         }
                     }
@@ -523,66 +528,35 @@ public class AdsHook {
                 }
             }
 
-            // Priority 2: rescue items that are not ads and not from blocked countries
+            // Priority 2: rescue items that are strictly not ads and not from blocked countries
             if (kept.isEmpty()) {
                 for (Object item : sourceList) {
                     if (item != null
                             && !(hideAds && isAdAweme(item))
                             && !(matcher != null && matcher.matchesAweme(item))) {
                         kept.add(item);
-                        if (kept.size() >= 2) break;
-                    }
-                }
-            }
-
-            // Priority 3: rescue non-ad items
-            if (kept.isEmpty()) {
-                for (Object item : sourceList) {
-                    if (item != null && !(hideAds && isAdAweme(item))) {
-                        kept.add(item);
-                        if (kept.size() >= 2) break;
-                    }
-                }
-            }
-
-            // Priority 4: absolute fallback to preserve feed continuity (strictly excluding ads & full-screen card views)
-            if (kept.isEmpty() && !sourceList.isEmpty()) {
-                for (Object item : sourceList) {
-                    if (item != null && !(hideAds && isAdAweme(item))) {
-                        int at = 0;
-                        try {
-                            Number n = (Number) getSafeObject(item, "getAwemeType", "awemeType");
-                            if (n != null) at = n.intValue();
-                        } catch (Throwable ignored) {}
-
-                        // Exclude pure recommendation card placeholders (4004, 101, 102, 103, 301, 302)
-                        if (at != 4004 && at != 101 && at != 102 && at != 103 && at != 301 && at != 302) {
-                            kept.add(item);
-                            if (kept.size() >= 2) break;
-                        }
                     }
                 }
             }
 
             if (!kept.isEmpty()) {
-                log("Feed starvation safety floor activated: preserved " + kept.size() + " items to prevent feed reload error");
+                log("Feed safety floor activated: preserved " + kept.size() + " non-blocked items");
             }
         }
 
-        // Absolute emergency fallback: ensure TikTok feed state machine never starves into "Something went wrong"
-        if (kept.isEmpty() && !sourceList.isEmpty()) {
+        // Emergency fallback: only when strictRegion is false, preserve non-ad and non-blocked items
+        if (!strictRegion && kept.isEmpty() && !sourceList.isEmpty()) {
             for (Object item : sourceList) {
-                if (item != null && !(hideAds && isAdAweme(item))) {
+                if (item != null
+                        && !(hideAds && isAdAweme(item))
+                        && !(matcher != null && matcher.matchesAweme(item))) {
                     kept.add(item);
-                    if (kept.size() >= 1) break;
                 }
-            }
-            if (!kept.isEmpty()) {
-                log("Feed emergency continuity guard: preserved " + kept.size() + " non-ad video(s)");
             }
         }
 
         XposedHelpers.setAdditionalInstanceField(kept, "tiktok_enhancer_clean", Boolean.TRUE);
+        XposedHelpers.setAdditionalInstanceField(sourceList, "tiktok_enhancer_clean", Boolean.TRUE);
 
         for (Object item : kept) {
             try {
@@ -669,6 +643,14 @@ public class AdsHook {
             if (aRegion != null && !aRegion.isEmpty()) {
                 return !aRegion.equalsIgnoreCase(target);
             }
+            String aCountry = getSafeString(author, "getCountry", "country");
+            if (aCountry != null && !aCountry.isEmpty()) {
+                return !aCountry.equalsIgnoreCase(target);
+            }
+            String aDeviceRegion = getSafeString(author, "getDeviceRegion", "deviceRegion");
+            if (aDeviceRegion != null && !aDeviceRegion.isEmpty()) {
+                return !aDeviceRegion.equalsIgnoreCase(target);
+            }
         }
 
         // 2. Check forwardItem (repost) author
@@ -684,6 +666,10 @@ public class AdsHook {
                 if (fIso != null && !fIso.isEmpty()) {
                     return !fIso.equalsIgnoreCase(target);
                 }
+                String fCountry = getSafeString(fAuthor, "getCountry", "country");
+                if (fCountry != null && !fCountry.isEmpty()) {
+                    return !fCountry.equalsIgnoreCase(target);
+                }
             }
         }
 
@@ -691,6 +677,34 @@ public class AdsHook {
         String region = getSafeString(aweme, "getRegion", "region");
         if (region != null && !region.isEmpty()) {
             return !region.equalsIgnoreCase(target);
+        }
+
+        // 4. Geofencing regions
+        Object geoObj = getSafeObject(aweme, "getGeofencingRegions", "geofencingRegions");
+        if (geoObj instanceof List) {
+            List<?> geos = (List<?>) geoObj;
+            if (!geos.isEmpty()) {
+                boolean match = false;
+                for (Object g : geos) {
+                    if (g instanceof String && target.equalsIgnoreCase(((String) g).trim())) {
+                        match = true;
+                        break;
+                    }
+                }
+                if (!match) return true;
+            }
+        }
+
+        // 5. POI address info region
+        Object poi = getSafeObject(aweme, "getPoiDataStruct", "poiDataStruct");
+        if (poi != null) {
+            Object addrInfo = getSafeObject(poi, "getAddressInfo", "addressInfo");
+            if (addrInfo != null) {
+                String regCode = getSafeString(addrInfo, "getRegionCode", "regionCode");
+                if (regCode != null && !regCode.isEmpty()) {
+                    return !regCode.equalsIgnoreCase(target);
+                }
+            }
         }
 
         return false;

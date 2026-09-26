@@ -70,6 +70,7 @@ public class MainActivity extends AppCompatActivity {
     public static final String KEY_LANGUAGE_FILTER = "language_filter";
     public static final String KEY_ALLOWED_LANGUAGES = "allowed_languages";
     public static final String KEY_DOWNLOAD_STORY = "download_story";
+    public static final String KEY_HIDE_NEARBY_TAB = "hide_nearby_tab";
 
     public static final String KEY_ACTIVE_PROFILE = "active_profile";
     public static final String PROFILE_GLOBAL = "global";
@@ -137,6 +138,9 @@ public class MainActivity extends AppCompatActivity {
     private MaterialSwitch mSwitchForceHighQuality;
     private MaterialSwitch mSwitchTelemetryHUD;
     private MaterialSwitch mSwitchTelemetryPopup;
+    private MaterialSwitch mSwitchHideNearbyTab;
+    private View mRowHideNearbyTab;
+    private View mDividerHideNearbyTab;
     private MaterialSwitch mSwitchCustomOverride;
     private LinearLayout mLayoutCustomInputs;
     private TextInputEditText mEtCustomIso;
@@ -224,6 +228,9 @@ public class MainActivity extends AppCompatActivity {
         mSwitchForceHighQuality = findViewById(R.id.switch_force_high_quality);
         mSwitchTelemetryHUD = findViewById(R.id.switch_telemetry_hud);
         mSwitchTelemetryPopup = findViewById(R.id.switch_telemetry_popup);
+        mRowHideNearbyTab = findViewById(R.id.row_hide_nearby_tab);
+        mDividerHideNearbyTab = findViewById(R.id.divider_hide_nearby_tab);
+        mSwitchHideNearbyTab = findViewById(R.id.switch_hide_nearby_tab);
         mSwitchSpoof = findViewById(R.id.switch_enable_spoof);
         mSwitchLocale = findViewById(R.id.switch_spoof_locale);
         mSwitchHideIcon = findViewById(R.id.switch_hide_icon);
@@ -314,6 +321,7 @@ public class MainActivity extends AppCompatActivity {
         boolean forceHighQuality = mPrefs.getBoolean(KEY_FORCE_HIGH_QUALITY, true);
         boolean telemetryHUD = mPrefs.getBoolean(KEY_TELEMETRY_HUD, true);
         boolean telemetryPopup = mPrefs.getBoolean(KEY_TELEMETRY_POPUP, true);
+        boolean hideNearbyTab = mPrefs.getBoolean(KEY_HIDE_NEARBY_TAB, false);
 
         mSwitchSpoof.setChecked(enabled);
         mSwitchLocale.setChecked(spoofLocale);
@@ -332,6 +340,7 @@ public class MainActivity extends AppCompatActivity {
         if (mSwitchForceHighQuality != null) mSwitchForceHighQuality.setChecked(forceHighQuality);
         if (mSwitchTelemetryHUD != null) mSwitchTelemetryHUD.setChecked(telemetryHUD);
         if (mSwitchTelemetryPopup != null) mSwitchTelemetryPopup.setChecked(telemetryPopup);
+        if (mSwitchHideNearbyTab != null) mSwitchHideNearbyTab.setChecked(hideNearbyTab);
         mSwitchCustomOverride.setChecked(isCustom);
         mLayoutCustomInputs.setVisibility(isCustom ? View.VISIBLE : View.GONE);
 
@@ -458,7 +467,7 @@ public class MainActivity extends AppCompatActivity {
 
         if (mSwitchHDUpload != null) {
             mSwitchHDUpload.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                mPrefs.edit().putBoolean(KEY_HD_UPLOAD, isChecked).apply();
+                mPrefs.edit().putBoolean(KEY_HD_UPLOAD, isChecked).commit();
                 saveToDeviceProtectedStorage(KEY_HD_UPLOAD, isChecked);
                 if (!isChecked && mSwitchUpload4K != null && mSwitchUpload4K.isChecked()) {
                     mSwitchUpload4K.setChecked(false);
@@ -470,7 +479,7 @@ public class MainActivity extends AppCompatActivity {
 
         if (mSwitchUpload4K != null) {
             mSwitchUpload4K.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                mPrefs.edit().putBoolean(KEY_UPLOAD_4K, isChecked).apply();
+                mPrefs.edit().putBoolean(KEY_UPLOAD_4K, isChecked).commit();
                 saveToDeviceProtectedStorage(KEY_UPLOAD_4K, isChecked);
                 if (isChecked && mSwitchHDUpload != null && !mSwitchHDUpload.isChecked()) {
                     mSwitchHDUpload.setChecked(true);
@@ -502,6 +511,19 @@ public class MainActivity extends AppCompatActivity {
             mSwitchTelemetryPopup.setOnCheckedChangeListener((buttonView, isChecked) -> {
                 mPrefs.edit().putBoolean(KEY_TELEMETRY_POPUP, isChecked).apply();
                 saveToDeviceProtectedStorage(KEY_TELEMETRY_POPUP, isChecked);
+                makePrefsWorldReadable();
+                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        if (mRowHideNearbyTab != null && mSwitchHideNearbyTab != null) {
+            mRowHideNearbyTab.setOnClickListener(v -> mSwitchHideNearbyTab.toggle());
+        }
+
+        if (mSwitchHideNearbyTab != null) {
+            mSwitchHideNearbyTab.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                mPrefs.edit().putBoolean(KEY_HIDE_NEARBY_TAB, isChecked).commit();
+                saveToDeviceProtectedStorage(KEY_HIDE_NEARBY_TAB, isChecked);
                 makePrefsWorldReadable();
                 Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
             });
@@ -560,75 +582,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showSearchablePresetDialog() {
-        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_select_preset, null);
-        EditText etSearch = dialogView.findViewById(R.id.et_search_country);
-        RecyclerView rvPresets = dialogView.findViewById(R.id.rv_presets);
-        TextView tvEmptyState = dialogView.findViewById(R.id.tv_empty_state);
-        View btnClose = dialogView.findViewById(R.id.btn_close_dialog);
-
-        rvPresets.setLayoutManager(new GridLayoutManager(this, 2));
-
-        String currentPresetId = mPrefs.getString(KEY_PRESET_ID, CountryPreset.getDefault().getId());
-        if (mPrefs.getBoolean(KEY_IS_CUSTOM, false)) {
-            currentPresetId = null;
-        }
-
-        Dialog dialog = new Dialog(this, R.style.DialogDarkTheme);
-        dialog.setContentView(dialogView);
-
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-            dialog.getWindow().setDimAmount(0.65f);
-
-            DisplayMetrics metrics = getResources().getDisplayMetrics();
-            int width = (int) (metrics.widthPixels * 0.90);
-            int height = (int) (metrics.heightPixels * 0.78);
-            dialog.getWindow().setLayout(width, height);
-        }
-
-        if (btnClose != null) {
-            btnClose.setOnClickListener(v -> dialog.dismiss());
-        }
-
-        CountryGridAdapter adapter = new CountryGridAdapter(this, CountryPreset.PRESETS, currentPresetId, selected -> {
-            mPrefs.edit()
-                    .putString(KEY_PRESET_ID, selected.getId())
-                    .putBoolean(KEY_IS_CUSTOM, false)
-                    .apply();
-
-            saveToDeviceProtectedStorage(KEY_PRESET_ID, selected.getId());
-            saveToDeviceProtectedStorage(KEY_IS_CUSTOM, false);
-            makePrefsWorldReadable();
-
+        CarrierPresetDialog.show(this, selected -> {
             mSwitchCustomOverride.setChecked(false);
             mLayoutCustomInputs.setVisibility(View.GONE);
-
             updateRegionDisplay();
-            Toast.makeText(this, "Region set to " + selected.getFlag() + " " + selected.getCountryName(), Toast.LENGTH_SHORT).show();
-            dialog.dismiss();
         });
-        rvPresets.setAdapter(adapter);
-
-        etSearch.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                String query = s != null ? s.toString() : "";
-                List<CountryPreset> filtered = CountryPreset.filter(query);
-                adapter.updateList(filtered);
-                boolean isEmpty = filtered.isEmpty();
-                tvEmptyState.setVisibility(isEmpty ? View.VISIBLE : View.GONE);
-                rvPresets.setVisibility(isEmpty ? View.GONE : View.VISIBLE);
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {}
-        });
-
-        dialog.show();
     }
 
     private void updateBlockedCountriesSummary() {
@@ -651,147 +609,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showBlockedCountriesDialog() {
-        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_block_countries, null);
-        EditText etSearch = dialogView.findViewById(R.id.et_search_blocked);
-        EditText etCustomIso = dialogView.findViewById(R.id.et_custom_blocked_iso);
-        View btnAddCustomIso = dialogView.findViewById(R.id.btn_add_custom_iso);
-        TextView tvBlockedCounter = dialogView.findViewById(R.id.tv_blocked_counter);
-        TextView btnClearAll = dialogView.findViewById(R.id.btn_clear_all_blocked);
-        RecyclerView rvBlockedPresets = dialogView.findViewById(R.id.rv_blocked_presets);
-        TextView tvEmptyState = dialogView.findViewById(R.id.tv_empty_blocked_state);
-        View btnClose = dialogView.findViewById(R.id.btn_close_dialog);
-        View btnDone = dialogView.findViewById(R.id.btn_done_blocked);
-
-        rvBlockedPresets.setLayoutManager(new GridLayoutManager(this, 2));
-
-        String savedList = mPrefs.getString(KEY_BLOCKED_COUNTRY_LIST, "");
-        Set<String> initialBlocked = new HashSet<>();
-        if (savedList != null && !savedList.trim().isEmpty()) {
-            for (String iso : savedList.split(",")) {
-                String clean = iso.trim().toLowerCase(Locale.ROOT);
-                if (!clean.isEmpty()) {
-                    initialBlocked.add(clean);
-                }
-            }
-        }
-
-        List<CountryPreset.CountryItem> allCountries = CountryPreset.getUniqueCountries();
-        Set<String> knownIsos = new HashSet<>();
-        for (CountryPreset.CountryItem c : allCountries) {
-            knownIsos.add(c.getIso().toLowerCase(Locale.ROOT));
-        }
-        for (String iso : initialBlocked) {
-            if (!knownIsos.contains(iso)) {
-                CountryPreset.CountryItem customItem = CountryPreset.createCountryItem(iso);
-                if (customItem != null) {
-                    allCountries.add(0, customItem);
-                    knownIsos.add(iso);
-                }
-            }
-        }
-
-        Dialog dialog = new Dialog(this, R.style.DialogDarkTheme);
-        dialog.setContentView(dialogView);
-
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-            dialog.getWindow().setDimAmount(0.65f);
-
-            DisplayMetrics metrics = getResources().getDisplayMetrics();
-            int width = (int) (metrics.widthPixels * 0.90);
-            int height = (int) (metrics.heightPixels * 0.85);
-            dialog.getWindow().setLayout(width, height);
-        }
-
-        BlockedCountryGridAdapter[] adapterHolder = new BlockedCountryGridAdapter[1];
-
-        Runnable updateCounterUI = () -> {
-            int count = adapterHolder[0] != null ? adapterHolder[0].getBlockedCount() : initialBlocked.size();
-            tvBlockedCounter.setText(getString(R.string.blocked_count_format, count));
-            btnClearAll.setVisibility(count > 0 ? View.VISIBLE : View.GONE);
-        };
-
-        BlockedCountryGridAdapter adapter = new BlockedCountryGridAdapter(this, allCountries, initialBlocked,
-                (item, isBlocked, totalBlockedCount) -> {
-                    tvBlockedCounter.setText(getString(R.string.blocked_count_format, totalBlockedCount));
-                    btnClearAll.setVisibility(totalBlockedCount > 0 ? View.VISIBLE : View.GONE);
-                });
-        adapterHolder[0] = adapter;
-        rvBlockedPresets.setAdapter(adapter);
-        updateCounterUI.run();
-
-        btnClearAll.setOnClickListener(v -> adapter.clearAll());
-
-        btnAddCustomIso.setOnClickListener(v -> {
-            String iso = etCustomIso.getText() != null ? etCustomIso.getText().toString().trim().toLowerCase(Locale.ROOT) : "";
-            if (iso.length() != 2) {
-                Toast.makeText(this, "Enter a 2-letter country code", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            CountryPreset.CountryItem customItem = CountryPreset.createCountryItem(iso);
-            if (customItem == null) {
-                Toast.makeText(this, "Invalid country code", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            adapter.addAndSelectCountry(customItem);
-            etCustomIso.setText("");
-            Toast.makeText(this, "Added " + customItem.getFlag() + " " + iso.toUpperCase(Locale.ROOT), Toast.LENGTH_SHORT).show();
-        });
-
-        etSearch.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                String query = s != null ? s.toString() : "";
-                List<CountryPreset.CountryItem> filtered = CountryPreset.filterCountries(allCountries, query);
-                adapter.updateList(filtered);
-                boolean isEmpty = filtered.isEmpty();
-                tvEmptyState.setVisibility(isEmpty ? View.VISIBLE : View.GONE);
-                rvBlockedPresets.setVisibility(isEmpty ? View.GONE : View.VISIBLE);
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {}
-        });
-
-        Runnable saveAndDismiss = () -> {
-            Set<String> blockedSet = adapter.getBlockedIsoSet();
-            StringBuilder sb = new StringBuilder();
-            for (String iso : blockedSet) {
-                if (sb.length() > 0) sb.append(",");
-                sb.append(iso);
-            }
-            String joined = sb.toString();
-
-            if (!blockedSet.isEmpty()) {
-                if (mSwitchBlockCountries != null && !mSwitchBlockCountries.isChecked()) {
-                    mSwitchBlockCountries.setChecked(true);
-                }
-                mPrefs.edit().putBoolean(KEY_BLOCK_COUNTRIES, true).apply();
-                saveToDeviceProtectedStorage(KEY_BLOCK_COUNTRIES, true);
-            }
-
-            mPrefs.edit().putString(KEY_BLOCKED_COUNTRY_LIST, joined).apply();
-            saveToDeviceProtectedStorage(KEY_BLOCKED_COUNTRY_LIST, joined);
-            makePrefsWorldReadable();
-
-            updateBlockedCountriesSummary();
-            Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
-            dialog.dismiss();
-        };
-
-        if (btnClose != null) {
-            btnClose.setOnClickListener(v -> saveAndDismiss.run());
-        }
-        if (btnDone != null) {
-            btnDone.setOnClickListener(v -> saveAndDismiss.run());
-        }
-        dialog.setOnCancelListener(d -> saveAndDismiss.run());
-
-        dialog.show();
+        BlockedCountriesDialog.show(this, this::updateBlockedCountriesSummary);
     }
 
     private void updateLanguagesSummary() {
@@ -813,7 +631,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private String getCurrentRegionIso() {
+    public String getCurrentRegionIso() {
         if (mPrefs.getBoolean(KEY_IS_CUSTOM, false)) {
             return mPrefs.getString(KEY_CUSTOM_ISO, "us").toLowerCase(Locale.ROOT);
         } else {
@@ -824,279 +642,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private Set<String> getLanguagesForCountry(String countryIso) {
-        Set<String> set = new HashSet<>();
-        if (countryIso == null) return set;
-        String iso = countryIso.trim().toLowerCase(Locale.ROOT);
-        switch (iso) {
-            case "id":
-                set.add("id");
-                break;
-            case "my":
-                set.add("ms");
-                set.add("en");
-                break;
-            case "sg":
-                set.add("en");
-                set.add("zh");
-                break;
-            case "jp":
-                set.add("ja");
-                break;
-            case "kr":
-                set.add("ko");
-                break;
-            case "vn":
-                set.add("vi");
-                break;
-            case "th":
-                set.add("th");
-                break;
-            case "ph":
-                set.add("tl");
-                set.add("en");
-                break;
-            case "in":
-                set.add("en");
-                set.add("hi");
-                break;
-            case "es":
-            case "mx":
-            case "ar":
-            case "co":
-            case "cl":
-            case "pe":
-                set.add("es");
-                break;
-            case "br":
-            case "pt":
-                set.add("pt");
-                break;
-            case "fr":
-                set.add("fr");
-                break;
-            case "de":
-            case "at":
-            case "ch":
-                set.add("de");
-                break;
-            case "it":
-                set.add("it");
-                break;
-            case "ru":
-            case "by":
-            case "kz":
-                set.add("ru");
-                break;
-            case "sa":
-            case "ae":
-            case "eg":
-            case "qa":
-            case "kw":
-                set.add("ar");
-                break;
-            case "tr":
-                set.add("tr");
-                break;
-            case "nl":
-                set.add("nl");
-                set.add("en");
-                break;
-            case "pl":
-                set.add("pl");
-                break;
-            case "ua":
-                set.add("uk");
-                break;
-            case "cn":
-                set.add("zh");
-                break;
-            case "tw":
-            case "hk":
-                set.add("zh-Hant");
-                break;
-            case "us":
-            case "gb":
-            case "ca":
-            case "au":
-            case "nz":
-            case "ie":
-            default:
-                if (LanguageModel.findByCode(iso) != null) {
-                    set.add(iso);
-                } else {
-                    set.add("en");
-                }
-                break;
-        }
-        return set;
+        return LanguageFilterDialog.getLanguagesForCountry(countryIso);
     }
 
     private void showLanguageSelectionDialog() {
-        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_select_languages, null);
-        EditText etSearch = dialogView.findViewById(R.id.et_search_lang);
-        EditText etCustomLang = dialogView.findViewById(R.id.et_custom_lang_code);
-        View btnAddCustomLang = dialogView.findViewById(R.id.btn_add_custom_lang);
-        TextView tvLangCounter = dialogView.findViewById(R.id.tv_language_counter);
-        TextView btnSyncRegion = dialogView.findViewById(R.id.btn_sync_region_lang);
-        TextView btnClearAll = dialogView.findViewById(R.id.btn_clear_all_languages);
-        RecyclerView rvLanguages = dialogView.findViewById(R.id.rv_languages);
-        TextView tvEmptyState = dialogView.findViewById(R.id.tv_empty_languages_state);
-        View btnClose = dialogView.findViewById(R.id.btn_close_dialog);
-        View btnDone = dialogView.findViewById(R.id.btn_done_languages);
-
-        rvLanguages.setLayoutManager(new GridLayoutManager(this, 2));
-
-        String savedList = mPrefs.getString(KEY_ALLOWED_LANGUAGES, "");
-        Set<String> initialSelected = new HashSet<>();
-        if (savedList != null && !savedList.trim().isEmpty()) {
-            for (String code : savedList.split(",")) {
-                String clean = code.trim().toLowerCase(Locale.ROOT);
-                if (!clean.isEmpty()) {
-                    initialSelected.add(clean);
-                }
-            }
-        }
-
-        List<LanguageModel> allLanguages = new ArrayList<>(LanguageModel.getAll());
-        Set<String> knownCodes = new HashSet<>();
-        for (LanguageModel l : allLanguages) {
-            knownCodes.add(l.getCode().toLowerCase(Locale.ROOT));
-        }
-        for (String code : initialSelected) {
-            if (!knownCodes.contains(code)) {
-                LanguageModel custom = new LanguageModel(code, code.toUpperCase(Locale.ROOT), code.toUpperCase(Locale.ROOT));
-                allLanguages.add(0, custom);
-                knownCodes.add(code);
-            }
-        }
-
-        Dialog dialog = new Dialog(this, R.style.DialogDarkTheme);
-        dialog.setContentView(dialogView);
-
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-            dialog.getWindow().setDimAmount(0.65f);
-
-            DisplayMetrics metrics = getResources().getDisplayMetrics();
-            int width = (int) (metrics.widthPixels * 0.90);
-            int height = (int) (metrics.heightPixels * 0.85);
-            dialog.getWindow().setLayout(width, height);
-        }
-
-        LanguageGridAdapter[] adapterHolder = new LanguageGridAdapter[1];
-
-        Runnable updateCounterUI = () -> {
-            int count = adapterHolder[0] != null ? adapterHolder[0].getSelectedCount() : initialSelected.size();
-            tvLangCounter.setText(getString(R.string.language_filter_count_format, count));
-            btnClearAll.setVisibility(count > 0 ? View.VISIBLE : View.GONE);
-        };
-
-        LanguageGridAdapter adapter = new LanguageGridAdapter(this, allLanguages, initialSelected,
-                (item, isSelected, totalSelectedCount) -> {
-                    tvLangCounter.setText(getString(R.string.language_filter_count_format, totalSelectedCount));
-                    btnClearAll.setVisibility(totalSelectedCount > 0 ? View.VISIBLE : View.GONE);
-                });
-        adapterHolder[0] = adapter;
-        rvLanguages.setAdapter(adapter);
-        updateCounterUI.run();
-
-        btnClearAll.setOnClickListener(v -> adapter.clearAll());
-
-        btnSyncRegion.setOnClickListener(v -> {
-            String regionIso = getCurrentRegionIso();
-            Set<String> matchedLangs = getLanguagesForCountry(regionIso);
-            for (String langCode : matchedLangs) {
-                if (!knownCodes.contains(langCode)) {
-                    LanguageModel custom = new LanguageModel(langCode, langCode.toUpperCase(Locale.ROOT), langCode.toUpperCase(Locale.ROOT));
-                    allLanguages.add(0, custom);
-                    knownCodes.add(langCode);
-                }
-            }
-            adapter.setSelectedCodes(matchedLangs);
-            Toast.makeText(this, "Matched languages for " + regionIso.toUpperCase(Locale.ROOT), Toast.LENGTH_SHORT).show();
-        });
-
-        btnAddCustomLang.setOnClickListener(v -> {
-            String code = etCustomLang.getText() != null ? etCustomLang.getText().toString().trim().toLowerCase(Locale.ROOT) : "";
-            if (code.length() < 2) {
-                Toast.makeText(this, "Enter valid language code (e.g. en, id, ja)", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            LanguageModel existing = LanguageModel.findByCode(code);
-            if (existing == null) {
-                existing = new LanguageModel(code, code.toUpperCase(Locale.ROOT), code.toUpperCase(Locale.ROOT));
-            }
-            adapter.addAndSelectLanguage(existing);
-            etCustomLang.setText("");
-            Toast.makeText(this, "Added " + existing.getDisplayName(), Toast.LENGTH_SHORT).show();
-        });
-
-        etSearch.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                String query = s != null ? s.toString().trim().toLowerCase(Locale.ROOT) : "";
-                List<LanguageModel> filtered = new ArrayList<>();
-                if (query.isEmpty()) {
-                    filtered.addAll(allLanguages);
-                } else {
-                    for (LanguageModel lang : allLanguages) {
-                        if (lang.getCode().toLowerCase(Locale.ROOT).contains(query)
-                                || lang.getName().toLowerCase(Locale.ROOT).contains(query)
-                                || lang.getNativeName().toLowerCase(Locale.ROOT).contains(query)) {
-                            filtered.add(lang);
-                        }
-                    }
-                }
-                adapter.updateList(filtered);
-                boolean isEmpty = filtered.isEmpty();
-                tvEmptyState.setVisibility(isEmpty ? View.VISIBLE : View.GONE);
-                rvLanguages.setVisibility(isEmpty ? View.GONE : View.VISIBLE);
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {}
-        });
-
-        Runnable saveAndDismiss = () -> {
-            Set<String> selected = adapter.getSelectedCodes();
-            StringBuilder sb = new StringBuilder();
-            for (String code : selected) {
-                if (sb.length() > 0) sb.append(",");
-                sb.append(code);
-            }
-            String joined = sb.toString();
-
-            if (!selected.isEmpty()) {
-                if (mSwitchLanguageFilter != null && !mSwitchLanguageFilter.isChecked()) {
-                    mSwitchLanguageFilter.setChecked(true);
-                }
-                mPrefs.edit().putBoolean(KEY_LANGUAGE_FILTER, true).apply();
-                saveToDeviceProtectedStorage(KEY_LANGUAGE_FILTER, true);
-            }
-
-            mPrefs.edit().putString(KEY_ALLOWED_LANGUAGES, joined).apply();
-            saveToDeviceProtectedStorage(KEY_ALLOWED_LANGUAGES, joined);
-            makePrefsWorldReadable();
-
-            updateLanguagesSummary();
-            Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
-            dialog.dismiss();
-        };
-
-        if (btnClose != null) {
-            btnClose.setOnClickListener(v -> saveAndDismiss.run());
-        }
-        if (btnDone != null) {
-            btnDone.setOnClickListener(v -> saveAndDismiss.run());
-        }
-        dialog.setOnCancelListener(d -> saveAndDismiss.run());
-
-        dialog.show();
+        LanguageFilterDialog.show(this, this::updateLanguagesSummary);
     }
+
 
     private void setLauncherIconHidden(boolean hide) {
         try {
@@ -1124,25 +676,37 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void saveToDeviceProtectedStorage(String key, boolean value) {
+    public SharedPreferences getPrefs() {
+        return mPrefs;
+    }
+
+    public MaterialSwitch getSwitchBlockCountries() {
+        return mSwitchBlockCountries;
+    }
+
+    public MaterialSwitch getSwitchLanguageFilter() {
+        return mSwitchLanguageFilter;
+    }
+
+    void saveToDeviceProtectedStorage(String key, boolean value) {
         try {
             Context deContext = createDeviceProtectedStorageContext();
             SharedPreferences dePrefs = deContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-            dePrefs.edit().putBoolean(key, value).apply();
+            dePrefs.edit().putBoolean(key, value).commit();
         } catch (Throwable ignored) {
         }
     }
 
-    private void saveToDeviceProtectedStorage(String key, String value) {
+    void saveToDeviceProtectedStorage(String key, String value) {
         try {
             Context deContext = createDeviceProtectedStorageContext();
             SharedPreferences dePrefs = deContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-            dePrefs.edit().putString(key, value).apply();
+            dePrefs.edit().putString(key, value).commit();
         } catch (Throwable ignored) {
         }
     }
 
-    private void makePrefsWorldReadable() {
+    void makePrefsWorldReadable() {
         try {
             File prefsDir = new File(getApplicationInfo().dataDir, "shared_prefs");
             if (prefsDir.exists()) {
@@ -1238,6 +802,8 @@ public class MainActivity extends AppCompatActivity {
             if (mRowUpload4K != null) mRowUpload4K.setVisibility(View.GONE);
             if (mDividerUpload4K != null) mDividerUpload4K.setVisibility(View.GONE);
             if (mDividerDownloadStory != null) mDividerDownloadStory.setVisibility(View.GONE);
+            if (mRowHideNearbyTab != null) mRowHideNearbyTab.setVisibility(View.GONE);
+            if (mDividerHideNearbyTab != null) mDividerHideNearbyTab.setVisibility(View.GONE);
 
             mBtnForceStop.setText(R.string.btn_force_stop_tiktok);
             mBtnLaunch.setText(R.string.btn_open_tiktok);
@@ -1270,6 +836,8 @@ public class MainActivity extends AppCompatActivity {
             if (mRowUpload4K != null) mRowUpload4K.setVisibility(View.VISIBLE);
             if (mDividerUpload4K != null) mDividerUpload4K.setVisibility(View.VISIBLE);
             if (mDividerDownloadStory != null) mDividerDownloadStory.setVisibility(View.VISIBLE);
+            if (mRowHideNearbyTab != null) mRowHideNearbyTab.setVisibility(View.VISIBLE);
+            if (mDividerHideNearbyTab != null) mDividerHideNearbyTab.setVisibility(View.VISIBLE);
 
             mBtnForceStop.setText(R.string.btn_force_stop_tiktok);
             mBtnLaunch.setText(R.string.btn_open_tiktok);

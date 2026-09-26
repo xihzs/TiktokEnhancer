@@ -73,6 +73,7 @@ public class LanguageModel implements Serializable {
         ALL_LANGUAGES.add(new LanguageModel("no", "Norwegian", "Norsk"));
         ALL_LANGUAGES.add(new LanguageModel("he", "Hebrew", "עברית"));
         ALL_LANGUAGES.add(new LanguageModel("fa", "Persian", "فارسی"));
+        ALL_LANGUAGES.add(new LanguageModel("kk", "Kazakh", "Қазақ тілі"));
     }
 
     public static List<LanguageModel> getAll() {

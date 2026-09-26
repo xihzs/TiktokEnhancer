@@ -58,11 +58,12 @@ public class HDUploadHook {
         return MainHook.isUpload4KEnabled() ? 1500L : 500L;
     }
 
+    private static final boolean DEBUG = false;
+
     public static void log(String msg) {
-        Log.i(TAG, msg);
-        try {
-            XposedBridge.log(TAG + ": " + msg);
-        } catch (Throwable ignored) {}
+        if (DEBUG) {
+            Log.i(TAG, msg);
+        }
     }
 
     public static void logD(String msg) {
@@ -156,25 +157,33 @@ public class HDUploadHook {
 
         try {
 
-            XposedBridge.hookAllMethods(kevaClass, "getInt", new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) {
-                    if (!MainHook.isHDUploadEnabled()) return;
-                    if (param.args != null && param.args.length >= 1 && "USER_HD_VIDEO_SWITCH_SETTING".equals(param.args[0])) {
-                        param.setResult(1);
-                    }
-                }
-            });
+            Class<?> kevaImpl = XposedHelpers.findClassIfExists("com.bytedance.keva.KevaImpl", kevaClass.getClassLoader());
+            Class<?> targetClass = (kevaImpl != null) ? kevaImpl : kevaClass;
 
-            XposedBridge.hookAllMethods(kevaClass, "storeInt", new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) {
-                    if (!MainHook.isHDUploadEnabled()) return;
-                    if (param.args != null && param.args.length >= 2 && "USER_HD_VIDEO_SWITCH_SETTING".equals(param.args[0])) {
-                        param.args[1] = 1;
-                    }
+            for (Method m : targetClass.getDeclaredMethods()) {
+                if (java.lang.reflect.Modifier.isAbstract(m.getModifiers())) continue;
+                if ("getInt".equals(m.getName())) {
+                    XposedBridge.hookMethod(m, new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (!MainHook.isHDUploadEnabled()) return;
+                            if (param.args != null && param.args.length >= 1 && "USER_HD_VIDEO_SWITCH_SETTING".equals(param.args[0])) {
+                                param.setResult(1);
+                            }
+                        }
+                    });
+                } else if ("storeInt".equals(m.getName())) {
+                    XposedBridge.hookMethod(m, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            if (!MainHook.isHDUploadEnabled()) return;
+                            if (param.args != null && param.args.length >= 2 && "USER_HD_VIDEO_SWITCH_SETTING".equals(param.args[0])) {
+                                param.args[1] = 1;
+                            }
+                        }
+                    });
                 }
-            });
+            }
 
             log("Hooked Keva for USER_HD_VIDEO_SWITCH_SETTING");
         } catch (Throwable t) {
@@ -207,7 +216,13 @@ public class HDUploadHook {
                             || "high_quality_use_smart_compile".equals(key)
                             || "use_synthetic_hardcode".equals(key)
                             || "use_hardcode".equals(key)
-                            || "studio_enable_upload_source_file_directly".equals(key)) {
+                            || "studio_enable_upload_source_file_directly".equals(key)
+                            || "ame_enable_upload_direct".equals(key)
+                            || "is_upload_direct_enter".equals(key)
+                            || "key_upload_direct_enter".equals(key)
+                            || "empty_uid_upload_directly".equals(key)
+                            || "studio_enable_continue_compile_on_upload_directly".equals(key)
+                            || "ve_enable_pic_upload_directly".equals(key)) {
                         param.setResult(true);
                     }
                 }
@@ -219,14 +234,35 @@ public class HDUploadHook {
                     if (!MainHook.isHDUploadEnabled()) return;
                     if (param.args == null || param.args.length < 1 || !(param.args[0] instanceof String)) return;
                     String key = (String) param.args[0];
-                    if ("high_quality_compile_video_size_index".equals(key)
+                    boolean is4k = MainHook.isUpload4KEnabled();
+                    if ("upload_video_size_index".equals(key)) {
+                        param.setResult(is4k ? 6 : 4);
+                    } else if ("high_quality_compile_video_size_index".equals(key)
                             || "compile_video_size_index".equals(key)
-                            || "upload_video_size_index".equals(key)) {
-                        param.setResult(HD_COMPILE_SIZE_INDEX_1080P);
+                            || "video_size_index".equals(key)) {
+                        param.setResult(is4k ? 9 : 7);
                     } else if ("video_bitrate_category_index".equals(key)) {
                         param.setResult(10);
                     } else if ("video_quality".equals(key)) {
                         param.setResult(51);
+                    }
+                }
+            });
+
+            XposedBridge.hookAllMethods(smClass, "LJIIIIZZ", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (!MainHook.isHDUploadEnabled()) return;
+                    if (param.args == null || param.args.length < 1 || !(param.args[0] instanceof String)) return;
+                    String key = (String) param.args[0];
+                    if ("upload_video_size_category".equals(key)) {
+                        param.setResult(new String[]{
+                                "576x1024", "720x1280", "720x1280", "720x1280", "1080x1920", "1440x2560", "2160x3840"
+                        });
+                    } else if ("video_size_category".equals(key)) {
+                        param.setResult(new String[]{
+                                "576x1024", "720x1280", "720x1280", "720x1280", "480x848", "544x960", "944x1680", "1080x1920", "1440x2560", "2160x3840"
+                        });
                     }
                 }
             });
@@ -238,8 +274,41 @@ public class HDUploadHook {
                         if (!MainHook.isHDUploadEnabled()) return;
                         if (param.args == null || param.args.length < 1 || !(param.args[0] instanceof String)) return;
                         String key = (String) param.args[0];
-                        if ("high_quality_compile_video_size_index".equals(key) || "compile_video_size_index".equals(key)) {
-                            param.setResult(HD_COMPILE_SIZE_INDEX_1080P);
+                        boolean is4k = MainHook.isUpload4KEnabled();
+                        if ("upload_video_size_index".equals(key)) {
+                            param.setResult(is4k ? 6 : 4);
+                        } else if ("high_quality_compile_video_size_index".equals(key)
+                                || "compile_video_size_index".equals(key)
+                                || "video_size_index".equals(key)) {
+                            param.setResult(is4k ? 9 : 7);
+                        }
+                    }
+                });
+            }
+
+            if (hasMethod(smClass, "LJI")) {
+                XposedBridge.hookAllMethods(smClass, "LJI", new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (!MainHook.isHDUploadEnabled()) return;
+                        if (param.args == null || param.args.length < 1 || !(param.args[0] instanceof String)) return;
+                        String key = (String) param.args[0];
+                        if ("video_size".equals(key)) {
+                            param.setResult(MainHook.isUpload4KEnabled() ? "2160x3840" : "1080x1920");
+                        }
+                    }
+                });
+            }
+
+            if (hasMethod(smClass, "getStringValue")) {
+                XposedBridge.hookAllMethods(smClass, "getStringValue", new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (!MainHook.isHDUploadEnabled()) return;
+                        if (param.args == null || param.args.length < 1 || !(param.args[0] instanceof String)) return;
+                        String key = (String) param.args[0];
+                        if ("video_size".equals(key)) {
+                            param.setResult(MainHook.isUpload4KEnabled() ? "2160x3840" : "1080x1920");
                         }
                     }
                 });
@@ -266,7 +335,13 @@ public class HDUploadHook {
                             String key = (String) arg;
                             if ("studio_enable_upload_source_file_directly".equals(key)
                                     || "high_quality_upload".equals(key)
-                                    || "upload_save_local".equals(key)) {
+                                    || "upload_save_local".equals(key)
+                                    || "ame_enable_upload_direct".equals(key)
+                                    || "is_upload_direct_enter".equals(key)
+                                    || "key_upload_direct_enter".equals(key)
+                                    || "empty_uid_upload_directly".equals(key)
+                                    || "studio_enable_continue_compile_on_upload_directly".equals(key)
+                                    || "ve_enable_pic_upload_directly".equals(key)) {
                                 param.setResult(true);
                                 break;
                             }
@@ -280,11 +355,17 @@ public class HDUploadHook {
                 protected void afterHookedMethod(MethodHookParam param) {
                     if (!MainHook.isHDUploadEnabled()) return;
                     if (param.args == null) return;
+                    boolean is4k = MainHook.isUpload4KEnabled();
                     for (Object arg : param.args) {
                         if (arg instanceof String) {
                             String key = (String) arg;
-                            if ("compile_video_size_index".equals(key) || "upload_video_size_index".equals(key)) {
-                                param.setResult(HD_COMPILE_SIZE_INDEX_1080P);
+                            if ("upload_video_size_index".equals(key)) {
+                                param.setResult(is4k ? 6 : 4);
+                                break;
+                            } else if ("compile_video_size_index".equals(key)
+                                    || "high_quality_compile_video_size_index".equals(key)
+                                    || "video_size_index".equals(key)) {
+                                param.setResult(is4k ? 9 : 7);
                                 break;
                             } else if ("video_bitrate_category_index".equals(key)) {
                                 param.setResult(10);
@@ -332,6 +413,45 @@ public class HDUploadHook {
 
         try {
 
+            XposedBridge.hookAllMethods(avClass, "getImportVideoSize", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (!MainHook.isHDUploadEnabled()) return;
+                    int targetW = getTargetWidth();
+                    int targetH = getTargetHeight();
+                    int[] orig = (int[]) param.getResult();
+                    if (orig != null && orig.length == 2 && orig[1] < orig[0]) {
+                        param.setResult(new int[]{targetH, targetW});
+                    } else {
+                        param.setResult(new int[]{targetW, targetH});
+                    }
+                }
+            });
+
+            XposedBridge.hookAllMethods(avClass, "getImportVideoResolution", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (!MainHook.isHDUploadEnabled()) return;
+                    int targetW = getTargetWidth();
+                    int targetH = getTargetHeight();
+                    String orig = (String) param.getResult();
+                    if (orig != null && orig.contains("*")) {
+                        String[] parts = orig.split("\\*");
+                        if (parts.length == 2) {
+                            try {
+                                int w = Integer.parseInt(parts[0]);
+                                int h = Integer.parseInt(parts[1]);
+                                if (w > h) {
+                                    param.setResult(targetH + "*" + targetW);
+                                    return;
+                                }
+                            } catch (Throwable ignored) {}
+                        }
+                    }
+                    param.setResult(targetW + "*" + targetH);
+                }
+            });
+
             XposedBridge.hookAllMethods(avClass, "getCompileVideoSize", new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
@@ -354,6 +474,36 @@ public class HDUploadHook {
             });
 
             XposedBridge.hookAllMethods(avClass, "getRecordVideoSize", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (!MainHook.isHDUploadEnabled()) return;
+                    int targetW = getTargetWidth();
+                    int targetH = getTargetHeight();
+                    int[] orig = (int[]) param.getResult();
+                    if (orig != null && orig.length == 2 && orig[1] < orig[0]) {
+                        param.setResult(new int[]{targetH, targetW});
+                    } else {
+                        param.setResult(new int[]{targetW, targetH});
+                    }
+                }
+            });
+
+            XposedBridge.hookAllMethods(avClass, "getNowEncodeSize", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (!MainHook.isHDUploadEnabled()) return;
+                    int targetW = getTargetWidth();
+                    int targetH = getTargetHeight();
+                    int[] orig = (int[]) param.getResult();
+                    if (orig != null && orig.length == 2 && orig[1] < orig[0]) {
+                        param.setResult(new int[]{targetH, targetW});
+                    } else {
+                        param.setResult(new int[]{targetW, targetH});
+                    }
+                }
+            });
+
+            XposedBridge.hookAllMethods(avClass, "getNowShotScreenEncodeSize", new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
                     if (!MainHook.isHDUploadEnabled()) return;
@@ -391,7 +541,23 @@ public class HDUploadHook {
                 }
             });
 
-            log("Hooked AVSettingsWrapper for 1080p compile size and synthetic encoding");
+            XposedBridge.hookAllMethods(avClass, "enableHardEncodeForRecord", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (!MainHook.isHDUploadEnabled()) return;
+                    param.setResult(true);
+                }
+            });
+
+            XposedBridge.hookAllMethods(avClass, "enableHardEncodeForWaterMark", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (!MainHook.isHDUploadEnabled()) return;
+                    param.setResult(true);
+                }
+            });
+
+            log("Hooked AVSettingsWrapper for 4K/HD compile, import, and synthetic encoding");
         } catch (Throwable t) {
             logD("hookAVSettingsWrapperClass error: " + t.getMessage());
         }
@@ -507,7 +673,21 @@ public class HDUploadHook {
                 });
             }
 
-            log("Hooked VEVideoEncodeSettings constructors and resolution setters");
+            try {
+                for (Class<?> inner : settingsClass.getDeclaredClasses()) {
+                    if (inner.getName().endsWith("Builder")) {
+                        XposedBridge.hookAllMethods(inner, "build", new XC_MethodHook() {
+                            @Override
+                            protected void afterHookedMethod(MethodHookParam param) {
+                                if (!MainHook.isHDUploadEnabled()) return;
+                                upgradeVEVideoEncodeSettings(param.getResult());
+                            }
+                        });
+                    }
+                }
+            } catch (Throwable ignored) {}
+
+            log("Hooked VEVideoEncodeSettings constructors, builder, and resolution setters");
         } catch (Throwable t) {
             logD("hookVEVideoEncodeSettingsClass error: " + t.getMessage());
         }
@@ -637,6 +817,41 @@ public class HDUploadHook {
             Field enableCopyWithMetadataField = findFieldSafely(clazz, "enableCopyWithMetadata");
             if (enableCopyWithMetadataField != null) {
                 enableCopyWithMetadataField.setBoolean(encodeSettings, true);
+            }
+
+            Field enableUploadDirectlyField = findFieldSafely(clazz, "enableUploadDirectly");
+            if (enableUploadDirectlyField != null) {
+                enableUploadDirectlyField.setBoolean(encodeSettings, true);
+            }
+
+            Field enableByteVCRemuxVideoField = findFieldSafely(clazz, "enableByteVCRemuxVideo");
+            if (enableByteVCRemuxVideoField != null) {
+                enableByteVCRemuxVideoField.setBoolean(encodeSettings, true);
+            }
+
+            Field enableVideoAndAudioRemuxField = findFieldSafely(clazz, "enableVideoAndAudioRemux");
+            if (enableVideoAndAudioRemuxField != null) {
+                enableVideoAndAudioRemuxField.setBoolean(encodeSettings, true);
+            }
+
+            Field mOptRemuxWithCopyField = findFieldSafely(clazz, "mOptRemuxWithCopy");
+            if (mOptRemuxWithCopyField != null) {
+                mOptRemuxWithCopyField.setBoolean(encodeSettings, true);
+            }
+
+            Field enableRemuxVideoResField = findFieldSafely(clazz, "enableRemuxVideoRes");
+            if (enableRemuxVideoResField != null) {
+                enableRemuxVideoResField.setInt(encodeSettings, -1);
+            }
+
+            Field m2kBitrateRatioField = findFieldSafely(clazz, "m2kBitrateRatio");
+            if (m2kBitrateRatioField != null) {
+                m2kBitrateRatioField.setDouble(encodeSettings, 1.0d);
+            }
+
+            Field m4kBitrateRatioField = findFieldSafely(clazz, "m4kBitrateRatio");
+            if (m4kBitrateRatioField != null) {
+                m4kBitrateRatioField.setDouble(encodeSettings, 1.0d);
             }
 
             Field resolutionAlignField = findFieldSafely(clazz, "mResolutionAlign");

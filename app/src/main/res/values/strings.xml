@@ -92,6 +92,13 @@
     <string name="btn_force_stop_tiktok">Restart</string>
     <string name="btn_open_tiktok">Launch</string>
 
+    <string name="feature_hide_nearby_tab">Hide Nearby / City Tab</string>
+    <string name="feature_hide_nearby_tab_desc">Removes the local city feed tab (e.g. Sleman, Nearby) from TikTok top navigation bar</string>
+
+    <string name="section_disclaimer">DISCLAIMER</string>
+    <string name="disclaimer_title">Do With Your Own Risk</string>
+    <string name="disclaimer_text">This module is provided for educational and research purposes only. The developer assumes NO responsibility or liability for any account bans, shadowbans, content restrictions, device penalties, or violations of TikTok Terms of Service. You are solely responsible for your actions and use of this tool.</string>
+
     <string name="pref_saved_notice">Settings updated</string>
     <string name="icon_hidden_notice">Icon hidden. Open module from Vector Manager</string>
     <string name="icon_restored_notice">Icon restored to launcher</string>
