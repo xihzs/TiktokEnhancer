@@ -43,8 +43,16 @@
     <string name="feature_hide_ads_desc">Filters commercial cards and promotional posts</string>
     <string name="feature_bypass_download">Unlock Downloads</string>
     <string name="feature_bypass_download_desc">Allows saving videos even if disabled by author</string>
-    <string name="feature_hd_upload">Ultra HD Upload</string>
-    <string name="feature_hd_upload_desc">Forces 1080p 60fps synthesis, 18–25 Mbps bitrate, and direct HD upload without compression loss</string>
+    <string name="feature_hd_upload">Force Ultra HD Upload (1080p 60fps)</string>
+    <string name="feature_hd_upload_desc">Forces 1080p 60fps synthesis (1080×1920), 18–25 Mbps bitrate, and direct HD upload without downscaling</string>
+    <string name="feature_upload_4k">Force 4K Master Upload (Experimental)</string>
+    <string name="feature_upload_4k_desc">Forces 2160×3840 4K synthesis at 50–75 Mbps. Note: Highly experimental; server ingest may downscale depending on account test buckets.</string>
+    <string name="feature_force_high_quality">Force Max Quality (1080p60 &amp; AV1)</string>
+    <string name="feature_force_high_quality_desc">Uncaps player bitrate ladder to force 1080p 60fps and ByteVC1/AV1 stream playback</string>
+    <string name="feature_telemetry_hud">Show Country Flag on Feed PFP</string>
+    <string name="feature_telemetry_hud_desc">Displays creator country flag emoji above author profile picture in FYP videos</string>
+    <string name="feature_telemetry_popup">Long-Press Flag for Telemetry</string>
+    <string name="feature_telemetry_popup_desc">Hold country flag to inspect video specs, creator location, and registration time</string>
     <string name="feature_block_countries">Block Selected Countries</string>
     <string name="feature_block_countries_desc">Filters out videos and creators from blocked countries</string>
     <string name="btn_manage_blocked_countries">Manage Blocked Countries</string>
@@ -59,6 +67,20 @@
     <string name="blocked_count_format">%d countries blocked</string>
 
     <string name="section_preferences">PREFERENCES</string>
+    <string name="feature_locked_region">Locked Region Filter</string>
+    <string name="feature_locked_region_desc">Only allow creators whose account is registered/locked in target region</string>
+    <string name="feature_language_filter">Content Language Filter</string>
+    <string name="feature_language_filter_desc">Filter feed videos by audio, subtitle, and description language</string>
+    <string name="btn_manage_languages">Manage Content Languages</string>
+    <string name="dialog_select_languages_title">Content Languages</string>
+    <string name="dialog_select_languages_subtitle">Select languages allowed in your video feed</string>
+    <string name="search_language">Search language or code...</string>
+    <string name="hint_custom_lang_code">Add code (e.g. ja, ko)</string>
+    <string name="no_languages_selected">All languages allowed (tap to manage)</string>
+    <string name="selected_languages_format">%d languages allowed</string>
+    <string name="language_filter_count_format">%d languages selected</string>
+    <string name="btn_match_region">Match Region</string>
+
     <string name="pref_enable_spoof">SIM Card Spoofing</string>
     <string name="pref_enable_spoof_desc">Override TelephonyManager and carrier properties</string>
     <string name="pref_spoof_locale">Match App Locale</string>
@@ -70,7 +92,21 @@
     <string name="btn_force_stop_tiktok">Restart</string>
     <string name="btn_open_tiktok">Launch</string>
 
+    <string name="feature_hide_nearby_tab">Hide Nearby / City Tab</string>
+    <string name="feature_hide_nearby_tab_desc">Removes the local city feed tab (e.g. Sleman, Nearby) from TikTok top navigation bar</string>
+
+    <string name="section_disclaimer">DISCLAIMER</string>
+    <string name="disclaimer_title">Do With Your Own Risk</string>
+    <string name="disclaimer_text">This module is provided for educational and research purposes only. The developer assumes NO responsibility or liability for any account bans, shadowbans, content restrictions, device penalties, or violations of TikTok Terms of Service. You are solely responsible for your actions and use of this tool.</string>
+
     <string name="pref_saved_notice">Settings updated</string>
     <string name="icon_hidden_notice">Icon hidden. Open module from Vector Manager</string>
     <string name="icon_restored_notice">Icon restored to launcher</string>
+
+    <string name="version_warning_title">Compatibility Warning</string>
+    <string name="version_outdated_title">TikTok Version Outdated</string>
+    <string name="version_outdated_msg">This TikTok version (%s) is outdated. TikTok Enhancer is tested on v47.1.3. Some features may not work or break. Please upgrade TikTok to v47.1.3.</string>
+    <string name="version_unsupported_title">TikTok Version Not Supported Yet</string>
+    <string name="version_unsupported_msg">This TikTok version (%s) is newer than supported v47.1.3. Some features may break. Please wait until support is added or downgrade to v47.1.3.</string>
+    <string name="version_compatible">TikTok v47.1.3 Compatible</string>
 </resources>

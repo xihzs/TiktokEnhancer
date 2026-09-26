@@ -26,10 +26,18 @@ public class ConfigProvider extends ContentProvider {
     public static final String KEY_NO_WATERMARK = "no_watermark";
     public static final String KEY_BYPASS_DOWNLOAD_RESTRICTION = "bypass_download_restriction";
     public static final String KEY_HD_UPLOAD = "hd_upload";
+    public static final String KEY_UPLOAD_4K = "upload_4k";
+    public static final String KEY_FORCE_HIGH_QUALITY = "force_high_quality";
+    public static final String KEY_TELEMETRY_HUD = "telemetry_hud";
+    public static final String KEY_TELEMETRY_POPUP = "telemetry_popup";
     public static final String KEY_HIDE_ADS = "hide_ads";
     public static final String KEY_FORCE_REGION = "force_region";
     public static final String KEY_STRICT_FORCE_REGION = "strict_force_region";
+    public static final String KEY_LOCKED_REGION_FILTER = "locked_region_filter";
+    public static final String KEY_LANGUAGE_FILTER = "language_filter";
+    public static final String KEY_ALLOWED_LANGUAGES = "allowed_languages";
     public static final String KEY_DOWNLOAD_STORY = "download_story";
+    public static final String KEY_HIDE_NEARBY_TAB = "hide_nearby_tab";
     public static final String KEY_BLOCK_COUNTRIES = "block_countries";
     public static final String KEY_BLOCKED_COUNTRY_LIST = "blocked_country_list";
     public static final String KEY_ACTIVE_PROFILE = "active_profile";
@@ -59,10 +67,32 @@ public class ConfigProvider extends ContentProvider {
                 boolean noWatermark = sp.getBoolean(MainActivity.KEY_NO_WATERMARK, true);
                 boolean bypassDownload = sp.getBoolean(MainActivity.KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
                 boolean hdUpload = sp.getBoolean(MainActivity.KEY_HD_UPLOAD, true);
+                boolean upload4K = sp.getBoolean(MainActivity.KEY_UPLOAD_4K, false);
+                if (!upload4K) {
+                    try {
+                        Context deContext = context.createDeviceProtectedStorageContext();
+                        SharedPreferences dePrefs = deContext.getSharedPreferences(MainActivity.PREF_NAME, Context.MODE_PRIVATE);
+                        upload4K = dePrefs.getBoolean(MainActivity.KEY_UPLOAD_4K, false);
+                    } catch (Throwable ignored) {}
+                }
+                boolean forceHighQuality = sp.getBoolean(MainActivity.KEY_FORCE_HIGH_QUALITY, true);
+                boolean telemetryHUD = sp.getBoolean(MainActivity.KEY_TELEMETRY_HUD, true);
+                boolean telemetryPopup = sp.getBoolean(MainActivity.KEY_TELEMETRY_POPUP, true);
                 boolean hideAds = sp.getBoolean(MainActivity.KEY_HIDE_ADS, true);
                 boolean forceRegion = sp.getBoolean(MainActivity.KEY_FORCE_REGION, true);
                 boolean strictForceRegion = sp.getBoolean(MainActivity.KEY_STRICT_FORCE_REGION, false);
+                boolean lockedRegionFilter = sp.getBoolean(MainActivity.KEY_LOCKED_REGION_FILTER, false);
+                boolean languageFilter = sp.getBoolean(MainActivity.KEY_LANGUAGE_FILTER, false);
+                String allowedLanguages = sp.getString(MainActivity.KEY_ALLOWED_LANGUAGES, "");
                 boolean downloadStory = sp.getBoolean(MainActivity.KEY_DOWNLOAD_STORY, true);
+                boolean hideNearbyTab = sp.getBoolean(MainActivity.KEY_HIDE_NEARBY_TAB, false);
+                if (!hideNearbyTab) {
+                    try {
+                        Context deContext = context.createDeviceProtectedStorageContext();
+                        SharedPreferences dePrefs = deContext.getSharedPreferences(MainActivity.PREF_NAME, Context.MODE_PRIVATE);
+                        hideNearbyTab = dePrefs.getBoolean(MainActivity.KEY_HIDE_NEARBY_TAB, false);
+                    } catch (Throwable ignored) {}
+                }
                 boolean blockCountries = sp.getBoolean(MainActivity.KEY_BLOCK_COUNTRIES, false);
                 String blockedCountryList = sp.getString(MainActivity.KEY_BLOCKED_COUNTRY_LIST, "");
                 String activeProfile = sp.getString(MainActivity.KEY_ACTIVE_PROFILE, MainActivity.PROFILE_GLOBAL);
@@ -98,10 +128,18 @@ public class ConfigProvider extends ContentProvider {
                 bundle.putBoolean(KEY_NO_WATERMARK, noWatermark);
                 bundle.putBoolean(KEY_BYPASS_DOWNLOAD_RESTRICTION, bypassDownload);
                 bundle.putBoolean(KEY_HD_UPLOAD, hdUpload);
+                bundle.putBoolean(KEY_UPLOAD_4K, upload4K);
+                bundle.putBoolean(KEY_FORCE_HIGH_QUALITY, forceHighQuality);
+                bundle.putBoolean(KEY_TELEMETRY_HUD, telemetryHUD);
+                bundle.putBoolean(KEY_TELEMETRY_POPUP, telemetryPopup);
                 bundle.putBoolean(KEY_HIDE_ADS, hideAds);
                 bundle.putBoolean(KEY_FORCE_REGION, forceRegion);
                 bundle.putBoolean(KEY_STRICT_FORCE_REGION, strictForceRegion);
+                bundle.putBoolean(KEY_LOCKED_REGION_FILTER, lockedRegionFilter);
+                bundle.putBoolean(KEY_LANGUAGE_FILTER, languageFilter);
+                bundle.putString(KEY_ALLOWED_LANGUAGES, allowedLanguages);
                 bundle.putBoolean(KEY_DOWNLOAD_STORY, downloadStory);
+                bundle.putBoolean(KEY_HIDE_NEARBY_TAB, hideNearbyTab);
                 bundle.putBoolean(KEY_BLOCK_COUNTRIES, blockCountries);
                 bundle.putString(KEY_BLOCKED_COUNTRY_LIST, blockedCountryList);
 

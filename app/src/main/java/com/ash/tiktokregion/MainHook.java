@@ -3,6 +3,7 @@ package com.ash.tiktokregion;
 import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
@@ -11,12 +12,18 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import android.os.Build;
+import android.os.LocaleList;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -30,11 +37,12 @@ public class MainHook implements IXposedHookLoadPackage {
     private static final String TAG = "TikTokRegion";
     public static final String MODULE_PACKAGE = "com.ash.tiktokregion";
 
+    private static final boolean DEBUG = false;
+
     public static void log(String msg) {
-        Log.i(TAG, msg);
-        try {
-            XposedBridge.log(TAG + ": " + msg);
-        } catch (Throwable ignored) {}
+        if (DEBUG) {
+            Log.i(TAG, msg);
+        }
     }
 
     public static void logD(String msg) {
@@ -63,29 +71,42 @@ public class MainHook implements IXposedHookLoadPackage {
         return sCurrentPackage;
     }
 
-    private static volatile boolean sEnabled = true;
-    private static volatile String sCountryIso = "us";
-    private static volatile String sOperatorMccMnc = "310260";
-    private static volatile String sOperatorName = "T-Mobile";
-    private static volatile String sMcc = "310";
-    private static volatile String sMnc = "260";
-    private static volatile boolean sSpoofLocale = false;
-    private static volatile String sLocaleLang = "en";
-    private static volatile String sLocaleCountry = "US";
-    private static volatile Locale sCachedSpoofedLocale = new Locale("en", "US");
+    static volatile boolean sEnabled = true;
+    static volatile String sCountryIso = "us";
+    static volatile String sOperatorMccMnc = "310260";
+    static volatile String sOperatorName = "T-Mobile";
+    static volatile String sMcc = "310";
+    static volatile String sMnc = "260";
+    static volatile boolean sSpoofLocale = false;
+    static volatile String sLocaleLang = "en";
+    static volatile String sLocaleCountry = "US";
+    static volatile Locale sCachedSpoofedLocale = new Locale("en", "US");
     private static volatile boolean sNoWatermark = true;
     private static volatile boolean sBypassDownloadRestriction = true;
     private static volatile boolean sHDUpload = true;
+    private static volatile boolean sUpload4K = false;
     private static volatile boolean sHideAds = true;
     private static volatile boolean sForceRegion = true;
     private static volatile boolean sStrictForceRegion = false;
+    private static volatile boolean sLockedRegionFilter = false;
+    private static volatile boolean sLanguageFilter = false;
+    private static volatile Set<String> sAllowedLanguages = java.util.Collections.emptySet();
+    private static volatile String sAllowedLanguagesRaw = "";
     private static volatile boolean sDownloadStory = true;
     private static volatile boolean sBlockCountries = false;
     private static volatile Set<String> sBlockedCountries = java.util.Collections.emptySet();
+    private static volatile boolean sForceHighQuality = true;
+    private static volatile boolean sTelemetryHUD = true;
+    private static volatile boolean sTelemetryPopup = true;
+    private static volatile boolean sHideNearbyTab = false;
 
     private static volatile Context sAppContext = null;
     private static volatile long sLastConfigFetchTime = 0;
     private static final long CONFIG_CACHE_MS = 5000;
+
+    public static boolean isEnabled() {
+        return sEnabled;
+    }
 
     public static boolean isNoWatermarkEnabled() {
         return sNoWatermark;
@@ -99,6 +120,26 @@ public class MainHook implements IXposedHookLoadPackage {
         return sHDUpload;
     }
 
+    public static boolean isUpload4KEnabled() {
+        return sUpload4K;
+    }
+
+    public static boolean isForceHighQualityEnabled() {
+        return sForceHighQuality;
+    }
+
+    public static boolean isTelemetryHUDEnabled() {
+        return sTelemetryHUD;
+    }
+
+    public static boolean isTelemetryPopupEnabled() {
+        return sTelemetryPopup;
+    }
+
+    public static boolean isHideNearbyTabEnabled() {
+        return sHideNearbyTab;
+    }
+
     public static boolean isHideAdsEnabled() {
         return sHideAds;
     }
@@ -109,6 +150,22 @@ public class MainHook implements IXposedHookLoadPackage {
 
     public static boolean isStrictForceRegionEnabled() {
         return sStrictForceRegion;
+    }
+
+    public static boolean isLockedRegionFilterEnabled() {
+        return sLockedRegionFilter;
+    }
+
+    public static boolean isLanguageFilterEnabled() {
+        return sLanguageFilter;
+    }
+
+    public static Set<String> getAllowedLanguages() {
+        return sAllowedLanguages;
+    }
+
+    public static String getAllowedLanguagesRaw() {
+        return sAllowedLanguagesRaw;
     }
 
     public static boolean isDownloadStoryEnabled() {
@@ -142,7 +199,7 @@ public class MainHook implements IXposedHookLoadPackage {
         sCurrentPackage = lpparam.packageName;
         boolean isChina = isChinaPackage();
 
-        XposedBridge.log(TAG + ": Initializing TikTok hooks for package: " + lpparam.packageName + " (isChina=" + isChina + ")");
+        log("Initializing TikTok hooks for package: " + lpparam.packageName + " (isChina=" + isChina + ")");
 
         loadConfigFromPrefs();
 
@@ -153,45 +210,45 @@ public class MainHook implements IXposedHookLoadPackage {
             hookCronetNetworkStack(lpparam.classLoader);
             hookClientAIFeatures(lpparam.classLoader);
             hookNetworkCommonParams(lpparam.classLoader);
-            hookTelephonyManager(lpparam.classLoader);
-            hookSubscriptionManager(lpparam.classLoader);
-            hookSubscriptionInfo(lpparam.classLoader);
-            hookSystemProperties(lpparam.classLoader);
-            hookLocale(lpparam.classLoader);
+            TelephonyAndSystemHook.hook(lpparam.classLoader);
             hookUrlQueryParams(lpparam.classLoader);
         } else {
-            XposedBridge.log(TAG + ": TikTok China (Douyin) detected - skipping telephony, locale, and network region spoofing");
+            log("TikTok China (Douyin) detected - skipping telephony, locale, and network region spoofing");
         }
 
         if (isChina) {
-            XposedBridge.log(TAG + ": TikTok China (Douyin) detected - hooks will be initialized deferred after SafeMode loader");
+            log("TikTok China (Douyin) detected - hooks will be initialized deferred after SafeMode loader");
         } else {
             try {
-                XposedBridge.log(TAG + ": STEP 1: Calling WatermarkHook.hook");
                 WatermarkHook.hook(lpparam.classLoader);
-                XposedBridge.log(TAG + ": STEP 1: WatermarkHook.hook finished");
             } catch (Throwable t) {
-                XposedBridge.log(TAG + ": WatermarkHook.hook error: " + t.getMessage());
+                logD("WatermarkHook.hook error: " + t.getMessage());
             }
         }
 
         try {
-            XposedBridge.log(TAG + ": STEP 3: Calling AdsHook.hook");
             AdsHook.hook(lpparam.classLoader);
-            XposedBridge.log(TAG + ": STEP 3: AdsHook.hook finished");
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": AdsHook.hook error: " + t.getMessage());
+            logD("AdsHook.hook error: " + t.getMessage());
         }
 
         if (!isChina) {
             try {
                 HDUploadHook.hook(lpparam.classLoader);
             } catch (Throwable t) {
-                XposedBridge.log(TAG + ": HDUploadHook.hook error: " + t.getMessage());
+                logD("HDUploadHook.hook error: " + t.getMessage());
+            }
+            try {
+                hookContentLanguageService(lpparam.classLoader);
+            } catch (Throwable ignored) {}
+            try {
+                QualityAndTelemetryHook.hook(lpparam.classLoader);
+            } catch (Throwable t) {
+                logD("QualityAndTelemetryHook.hook error: " + t.getMessage());
             }
         }
 
-        XposedBridge.log(TAG + ": All initial hooks dispatched for " + lpparam.packageName);
+        log("All initial hooks dispatched for " + lpparam.packageName);
     }
 
     private void hookSelfStatus(ClassLoader classLoader) {
@@ -229,8 +286,8 @@ public class MainHook implements IXposedHookLoadPackage {
                 }
                 final Context ctx = (context != null) ? context : sAppContext;
                 if (ctx != null && sLifecycleInitialized.compareAndSet(false, true)) {
+                    refreshConfig(ctx, true);
                     installDeferredHooks(ctx.getClassLoader());
-                    new Thread(() -> refreshConfig(ctx), "TikTokEnhancer-ConfigRefresh").start();
                 }
             }
         };
@@ -255,8 +312,25 @@ public class MainHook implements IXposedHookLoadPackage {
                             }
                             final Context ctx = sAppContext;
                             if (ctx != null && sLifecycleInitialized.compareAndSet(false, true)) {
+                                refreshConfig(ctx, true);
                                 installDeferredHooks(ctx.getClassLoader());
-                                new Thread(() -> refreshConfig(ctx), "TikTokEnhancer-ConfigRefresh").start();
+                            }
+                        }
+                    }
+            );
+        } catch (Throwable ignored) {}
+
+        try {
+            XposedHelpers.findAndHookMethod(
+                    Activity.class,
+                    "onCreate",
+                    Bundle.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (param.thisObject instanceof Activity) {
+                                Activity act = (Activity) param.thisObject;
+                                HDUploadHook.onActivityLifecycle(act);
                             }
                         }
                     }
@@ -276,10 +350,55 @@ public class MainHook implements IXposedHookLoadPackage {
                                     sAppContext = act.getApplication();
                                 }
                                 checkConfigRefreshAsync(act);
+                                HDUploadHook.onActivityLifecycle(act);
+                                checkAndNotifyVersion(act);
                             }
                         }
                     }
             );
+        } catch (Throwable ignored) {}
+    }
+
+    private static final AtomicBoolean sVersionNotified = new AtomicBoolean(false);
+
+    public static int compareVersions(String v1, String v2) {
+        if (v1 == null || v2 == null) return 0;
+        String clean1 = v1.replaceAll("[^0-9.]", "");
+        String clean2 = v2.replaceAll("[^0-9.]", "");
+        String[] parts1 = clean1.split("\\.");
+        String[] parts2 = clean2.split("\\.");
+        int length = Math.max(parts1.length, parts2.length);
+        for (int i = 0; i < length; i++) {
+            long num1 = (i < parts1.length && !parts1[i].isEmpty()) ? Long.parseLong(parts1[i]) : 0;
+            long num2 = (i < parts2.length && !parts2[i].isEmpty()) ? Long.parseLong(parts2[i]) : 0;
+            if (num1 != num2) {
+                return Long.compare(num1, num2);
+            }
+        }
+        return 0;
+    }
+
+    private static void checkAndNotifyVersion(Activity act) {
+        if (act == null || sVersionNotified.get()) return;
+        if (isChinaPackage()) return;
+        try {
+            String pkg = act.getPackageName();
+            String versionName = act.getPackageManager().getPackageInfo(pkg, 0).versionName;
+            if (versionName == null || versionName.isEmpty()) return;
+            int cmp = compareVersions(versionName, "47.1.3");
+            if (cmp != 0 && sVersionNotified.compareAndSet(false, true)) {
+                final String msg;
+                if (cmp < 0) {
+                    msg = "⚠️ TikTok Enhancer: TikTok version (" + versionName + ") is outdated. Tested on v47.1.3. Some features may break. Please upgrade TikTok.";
+                } else {
+                    msg = "⚠️ TikTok Enhancer: TikTok version (" + versionName + ") is newer than supported v47.1.3. Some features may break. Please wait until support is added or downgrade.";
+                }
+                act.runOnUiThread(() -> {
+                    try {
+                        android.widget.Toast.makeText(act.getApplicationContext(), msg, android.widget.Toast.LENGTH_LONG).show();
+                    } catch (Throwable ignored) {}
+                });
+            }
         } catch (Throwable ignored) {}
     }
 
@@ -367,14 +486,27 @@ public class MainHook implements IXposedHookLoadPackage {
             if (isChinaPackage()) {
                 DouyinWatermarkHook.hookVideoClass(clazz);
             }
+        } else if ("X.03bD".equals(name) || "LX.03bD".equals(name) || "X.C868003bD".equals(name)) {
+            TelephonyAndSystemHook.hookByteDanceRegionClass(clazz);
+        } else if ("X.06yR".equals(name) || "LX.06yR".equals(name) || "X.C1776406yR".equals(name)) {
+            TelephonyAndSystemHook.hookByteDanceMccMncClass(clazz);
         } else if ("com.ss.android.ugc.aweme.follow.presenter.FollowFeedList".equals(name)) {
             AdsHook.hookFollowFeedListClass(clazz);
         } else if ("com.ss.android.ugc.aweme.friendstab.api.FriendsFeedResponse".equals(name)) {
             AdsHook.hookFriendsFeedResponseClass(clazz);
+        } else if ("com.ss.android.ugc.nearby.tab.NearbyTabProtocol".equals(name)) {
+            NearbyTabHook.onClassLoaded(clazz);
+        } else if (name != null && (name.contains("Nearby") || name.equals("X.03nG") || name.contains("MainTabStrip") || name.contains("HomeTabViewModel") || name.contains("TabAbilityAssem"))) {
+            NearbyTabHook.onClassLoaded(clazz);
+            if (!isChinaPackage()) {
+                FeedLandingHook.onClassLoaded(clazz);
+            }
         } else if (isChinaPackage()) {
             DouyinWatermarkHook.onClassLoaded(clazz);
         } else {
+            FeedLandingHook.onClassLoaded(clazz);
             HDUploadHook.onClassLoaded(clazz);
+            QualityAndTelemetryHook.onClassLoaded(clazz);
         }
     }
 
@@ -396,7 +528,44 @@ public class MainHook implements IXposedHookLoadPackage {
         AdsHook.hook(classLoader);
         if (!isChina) {
             HDUploadHook.hook(classLoader);
+            QualityAndTelemetryHook.hook(classLoader);
+            NearbyTabHook.hook(classLoader);
+            FeedLandingHook.hook(classLoader);
         }
+    }
+
+    public static void hookNearbyTabProtocol(Class<?> clazz) {
+        NearbyTabHook.hookNearbyTabProtocolClass(clazz);
+    }
+
+    public static void hookNearbyTab(ClassLoader classLoader) {
+        NearbyTabHook.hook(classLoader);
+    }
+
+    public static void loadConfigFromDeStorage(Context context) {
+        if (context == null) return;
+        try {
+            Context deContext = context.createDeviceProtectedStorageContext();
+            SharedPreferences dePrefs = deContext.getSharedPreferences(MainActivity.PREF_NAME, Context.MODE_PRIVATE);
+            sHideNearbyTab = dePrefs.getBoolean(MainActivity.KEY_HIDE_NEARBY_TAB, sHideNearbyTab);
+            NearbyTabHook.setEnabled(sHideNearbyTab);
+            sEnabled = dePrefs.getBoolean(MainActivity.KEY_ENABLED, sEnabled);
+            sForceRegion = dePrefs.getBoolean(MainActivity.KEY_FORCE_REGION, sForceRegion);
+            sStrictForceRegion = dePrefs.getBoolean(MainActivity.KEY_STRICT_FORCE_REGION, sStrictForceRegion);
+            sLockedRegionFilter = dePrefs.getBoolean(MainActivity.KEY_LOCKED_REGION_FILTER, sLockedRegionFilter);
+            sLanguageFilter = dePrefs.getBoolean(MainActivity.KEY_LANGUAGE_FILTER, sLanguageFilter);
+            sBlockCountries = dePrefs.getBoolean(MainActivity.KEY_BLOCK_COUNTRIES, sBlockCountries);
+            sDownloadStory = dePrefs.getBoolean(MainActivity.KEY_DOWNLOAD_STORY, sDownloadStory);
+            sHideAds = dePrefs.getBoolean(MainActivity.KEY_HIDE_ADS, sHideAds);
+            sNoWatermark = dePrefs.getBoolean(MainActivity.KEY_NO_WATERMARK, sNoWatermark);
+            sBypassDownloadRestriction = dePrefs.getBoolean(MainActivity.KEY_BYPASS_DOWNLOAD_RESTRICTION, sBypassDownloadRestriction);
+            sHDUpload = dePrefs.getBoolean(MainActivity.KEY_HD_UPLOAD, sHDUpload);
+            sUpload4K = dePrefs.getBoolean(MainActivity.KEY_UPLOAD_4K, sUpload4K);
+            sForceHighQuality = dePrefs.getBoolean(MainActivity.KEY_FORCE_HIGH_QUALITY, sForceHighQuality);
+            sTelemetryHUD = dePrefs.getBoolean(MainActivity.KEY_TELEMETRY_HUD, sTelemetryHUD);
+            sTelemetryPopup = dePrefs.getBoolean(MainActivity.KEY_TELEMETRY_POPUP, sTelemetryPopup);
+            sSpoofLocale = dePrefs.getBoolean(MainActivity.KEY_SPOOF_LOCALE, sSpoofLocale);
+        } catch (Throwable ignored) {}
     }
 
     public static void checkConfigRefreshAsync(Context context) {
@@ -410,8 +579,12 @@ public class MainHook implements IXposedHookLoadPackage {
     }
 
     public static synchronized void refreshConfig(Context context) {
+        refreshConfig(context, false);
+    }
+
+    public static synchronized void refreshConfig(Context context, boolean force) {
         long now = System.currentTimeMillis();
-        if (now - sLastConfigFetchTime < CONFIG_CACHE_MS) {
+        if (!force && now - sLastConfigFetchTime < CONFIG_CACHE_MS) {
             return;
         }
         sLastConfigFetchTime = now;
@@ -438,23 +611,44 @@ public class MainHook implements IXposedHookLoadPackage {
                     sNoWatermark = bundle.getBoolean(ConfigProvider.KEY_NO_WATERMARK, true);
                     sBypassDownloadRestriction = bundle.getBoolean(ConfigProvider.KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
                     sHDUpload = bundle.getBoolean(ConfigProvider.KEY_HD_UPLOAD, true);
+                    sUpload4K = bundle.getBoolean(ConfigProvider.KEY_UPLOAD_4K, false);
                     sHideAds = bundle.getBoolean(ConfigProvider.KEY_HIDE_ADS, true);
                     sForceRegion = bundle.getBoolean(ConfigProvider.KEY_FORCE_REGION, true);
                     sStrictForceRegion = bundle.getBoolean(ConfigProvider.KEY_STRICT_FORCE_REGION, false);
+                    sLockedRegionFilter = bundle.getBoolean(ConfigProvider.KEY_LOCKED_REGION_FILTER, false);
+                    sLanguageFilter = bundle.getBoolean(ConfigProvider.KEY_LANGUAGE_FILTER, false);
+                    sAllowedLanguagesRaw = bundle.getString(ConfigProvider.KEY_ALLOWED_LANGUAGES, "");
+                    sAllowedLanguages = parseIsoSet(sAllowedLanguagesRaw);
                     sDownloadStory = bundle.getBoolean(ConfigProvider.KEY_DOWNLOAD_STORY, true);
                     sBlockCountries = bundle.getBoolean(ConfigProvider.KEY_BLOCK_COUNTRIES, false);
                     sBlockedCountries = parseIsoSet(bundle.getString(ConfigProvider.KEY_BLOCKED_COUNTRY_LIST, ""));
+                    sForceHighQuality = bundle.getBoolean(ConfigProvider.KEY_FORCE_HIGH_QUALITY, true);
+                    sTelemetryHUD = bundle.getBoolean(ConfigProvider.KEY_TELEMETRY_HUD, true);
+                    sTelemetryPopup = bundle.getBoolean(ConfigProvider.KEY_TELEMETRY_POPUP, true);
+                    sHideNearbyTab = bundle.getBoolean(ConfigProvider.KEY_HIDE_NEARBY_TAB, false);
+                    NearbyTabHook.setEnabled(sHideNearbyTab);
 
                     log("Config loaded via ContentProvider IPC: enabled=" + sEnabled
                             + ", country=" + sCountryIso + ", op=" + sOperatorName + " (" + sOperatorMccMnc + ")"
                             + ", forceRegion=" + sForceRegion + ", strictForceRegion=" + sStrictForceRegion
+                            + ", lockedRegionFilter=" + sLockedRegionFilter + ", languageFilter=" + sLanguageFilter + " (" + sAllowedLanguages.size() + ")"
                             + ", blockCountries=" + sBlockCountries + " (" + sBlockedCountries.size() + ")"
-                            + ", hideAds=" + sHideAds + ", downloadStory=" + sDownloadStory);
+                            + ", hideAds=" + sHideAds + ", downloadStory=" + sDownloadStory
+                            + ", hideNearby=" + sHideNearbyTab);
                     return;
                 }
             } catch (Throwable t) {
                 Log.d(TAG, "ContentProvider IPC call failed, falling back to prefs: " + t.getMessage());
             }
+
+            try {
+                Context deContext = context.createDeviceProtectedStorageContext();
+                SharedPreferences dePrefs = deContext.getSharedPreferences(MainActivity.PREF_NAME, Context.MODE_PRIVATE);
+                if (dePrefs.contains(MainActivity.KEY_HIDE_NEARBY_TAB)) {
+                    sHideNearbyTab = dePrefs.getBoolean(MainActivity.KEY_HIDE_NEARBY_TAB, sHideNearbyTab);
+                    NearbyTabHook.setEnabled(sHideNearbyTab);
+                }
+            } catch (Throwable ignored) {}
         }
 
         loadConfigFromPrefs();
@@ -489,12 +683,22 @@ public class MainHook implements IXposedHookLoadPackage {
             sNoWatermark = prefs.getBoolean(MainActivity.KEY_NO_WATERMARK, true);
             sBypassDownloadRestriction = prefs.getBoolean(MainActivity.KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
             sHDUpload = prefs.getBoolean(MainActivity.KEY_HD_UPLOAD, true);
+            sUpload4K = prefs.getBoolean(MainActivity.KEY_UPLOAD_4K, false);
             sHideAds = prefs.getBoolean(MainActivity.KEY_HIDE_ADS, true);
             sForceRegion = prefs.getBoolean(MainActivity.KEY_FORCE_REGION, true);
             sStrictForceRegion = prefs.getBoolean(MainActivity.KEY_STRICT_FORCE_REGION, false);
+            sLockedRegionFilter = prefs.getBoolean(MainActivity.KEY_LOCKED_REGION_FILTER, false);
+            sLanguageFilter = prefs.getBoolean(MainActivity.KEY_LANGUAGE_FILTER, false);
+            sAllowedLanguagesRaw = prefs.getString(MainActivity.KEY_ALLOWED_LANGUAGES, "");
+            sAllowedLanguages = parseIsoSet(sAllowedLanguagesRaw);
             sDownloadStory = prefs.getBoolean(MainActivity.KEY_DOWNLOAD_STORY, true);
             sBlockCountries = prefs.getBoolean(MainActivity.KEY_BLOCK_COUNTRIES, false);
             sBlockedCountries = parseIsoSet(prefs.getString(MainActivity.KEY_BLOCKED_COUNTRY_LIST, ""));
+            sForceHighQuality = prefs.getBoolean(MainActivity.KEY_FORCE_HIGH_QUALITY, true);
+            sTelemetryHUD = prefs.getBoolean(MainActivity.KEY_TELEMETRY_HUD, true);
+            sTelemetryPopup = prefs.getBoolean(MainActivity.KEY_TELEMETRY_POPUP, true);
+            sHideNearbyTab = prefs.getBoolean(MainActivity.KEY_HIDE_NEARBY_TAB, false);
+            NearbyTabHook.setEnabled(sHideNearbyTab);
 
             if (isCustom) {
                 sCountryIso = prefs.getString(MainActivity.KEY_CUSTOM_ISO, preset.getCountryIso()).toLowerCase();
@@ -584,6 +788,12 @@ public class MainHook implements IXposedHookLoadPackage {
                 }
             });
         }
+    }
+
+    interface MethodReturnValue extends TelephonyAndSystemHook.MethodReturnValue {}
+
+    private static void hookMethodReturn(ClassLoader classLoader, String className, String methodName, MethodReturnValue callback) {
+        TelephonyAndSystemHook.hookMethodReturn(classLoader, className, methodName, callback);
     }
 
     public static void hookTTNetInitClass(Class<?> ttnetInitClass) {
@@ -779,9 +989,15 @@ public class MainHook implements IXposedHookLoadPackage {
 
                             case "f_global_language":
                             case "f_global_app_language":
-                            case "f_global_content_language":
                             case "f_global_keyboard_language":
                                 if (sSpoofLocale) {
+                                    param.setResult(sLocaleLang);
+                                }
+                                break;
+                            case "f_global_content_language":
+                                if (sLanguageFilter && !sAllowedLanguages.isEmpty()) {
+                                    param.setResult(String.join(",", sAllowedLanguages));
+                                } else if (sSpoofLocale) {
                                     param.setResult(sLocaleLang);
                                 }
                                 break;
@@ -1156,6 +1372,7 @@ public class MainHook implements IXposedHookLoadPackage {
             case "za": return "Africa/Johannesburg";
             case "tw": return "Asia/Taipei";
             case "hk": return "Asia/Hong_Kong";
+            case "kz": return "Asia/Almaty";
             case "cn": return "Asia/Shanghai";
             default: return null;
         }
@@ -1210,7 +1427,13 @@ public class MainHook implements IXposedHookLoadPackage {
                             } else if ("timezone_offset".equals(key) || "tz_offset".equals(key)) {
                                 String tzOff = getTimezoneOffsetForCountry(sCountryIso);
                                 if (tzOff != null) param.args[1] = tzOff;
-                            } else if (sSpoofLocale && ("language".equals(key) || "content_language".equals(key))) {
+                            } else if ("content_language".equals(key)) {
+                                if (sLanguageFilter && !sAllowedLanguages.isEmpty()) {
+                                    param.args[1] = String.join(",", sAllowedLanguages);
+                                } else if (sSpoofLocale) {
+                                    param.args[1] = sLocaleLang;
+                                }
+                            } else if (sSpoofLocale && "language".equals(key)) {
                                 param.args[1] = sLocaleLang;
                             }
                         }
@@ -1280,361 +1503,34 @@ public class MainHook implements IXposedHookLoadPackage {
             query = query.replaceAll("(?<=[?&]|^)timezone_offset=[^&]*", "timezone_offset=" + tzOff);
             query = query.replaceAll("(?<=[?&]|^)tz_offset=[^&]*", "tz_offset=" + tzOff);
         }
+        if (sLanguageFilter && !sAllowedLanguages.isEmpty()) {
+            query = query.replaceAll("(?<=[?&]|^)content_language=[^&]*", "content_language=" + String.join(",", sAllowedLanguages));
+        } else if (sSpoofLocale) {
+            query = query.replaceAll("(?<=[?&]|^)content_language=[^&]*", "content_language=" + sLocaleLang);
+        }
         if (sSpoofLocale) {
             query = query.replaceAll("(?<=[?&]|^)language=[^&]*", "language=" + sLocaleLang);
-            query = query.replaceAll("(?<=[?&]|^)content_language=[^&]*", "content_language=" + sLocaleLang);
             query = query.replaceAll("(?<=[?&]|^)app_language=[^&]*", "app_language=" + sLocaleLang);
         }
         return query;
     }
 
-    private void hookTelephonyManager(ClassLoader classLoader) {
-        final String className = "android.telephony.TelephonyManager";
-
-        hookMethodReturn(classLoader, className, "getSimCountryIso", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sCountryIso.toLowerCase() : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getSimCountryIso", new Class<?>[]{int.class}, new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sCountryIso.toLowerCase() : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getNetworkCountryIso", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sCountryIso.toLowerCase() : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getNetworkCountryIso", new Class<?>[]{int.class}, new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sCountryIso.toLowerCase() : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getSimOperator", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sOperatorMccMnc : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getSimOperator", new Class<?>[]{int.class}, new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sOperatorMccMnc : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getNetworkOperator", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sOperatorMccMnc : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getNetworkOperator", new Class<?>[]{int.class}, new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sOperatorMccMnc : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getSimOperatorName", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sOperatorName : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getSimOperatorName", new Class<?>[]{int.class}, new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sOperatorName : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getNetworkOperatorName", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sOperatorName : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getNetworkOperatorName", new Class<?>[]{int.class}, new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sOperatorName : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getSimState", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? 5 : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getSimState", new Class<?>[]{int.class}, new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? 5 : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getPhoneType", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? 1 : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "hasIccCard", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? true : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "hasIccCard", new Class<?>[]{int.class}, new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? true : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "isNetworkRoaming", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? false : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "isNetworkRoaming", new Class<?>[]{int.class}, new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? false : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getLine1Number", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? "" : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getLine1Number", new Class<?>[]{int.class}, new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? "" : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getSubscriberId", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? (sOperatorMccMnc + "123456789") : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getSubscriberId", new Class<?>[]{int.class}, new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? (sOperatorMccMnc + "123456789") : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getSimSerialNumber", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? ("8901260" + sOperatorMccMnc + "12345") : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getSimSerialNumber", new Class<?>[]{int.class}, new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? ("8901260" + sOperatorMccMnc + "12345") : null;
-            }
-        });
-    }
-
-    private void hookSubscriptionManager(ClassLoader classLoader) {
-        final String className = "android.telephony.SubscriptionManager";
-
-        hookMethodReturn(classLoader, className, "getActiveSubscriptionInfoCount", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? 1 : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getDefaultSubscriptionId", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? 1 : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getDefaultDataSubscriptionId", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? 1 : null;
-            }
-        });
-    }
-
-    private void hookSubscriptionInfo(ClassLoader classLoader) {
-        final String className = "android.telephony.SubscriptionInfo";
-
-        hookMethodReturn(classLoader, className, "getCountryIso", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sCountryIso.toLowerCase() : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getMcc", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                if (!sEnabled) return null;
-                try {
-                    return Integer.parseInt(sMcc);
-                } catch (Throwable ignored) {
-                    return 310;
-                }
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getMnc", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                if (!sEnabled) return null;
-                try {
-                    return Integer.parseInt(sMnc);
-                } catch (Throwable ignored) {
-                    return 260;
-                }
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getMccString", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sMcc : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getMncString", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sMnc : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getCarrierName", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sOperatorName : null;
-            }
-        });
-
-        hookMethodReturn(classLoader, className, "getDisplayName", new MethodReturnValue() {
-            @Override
-            public Object getValue() {
-                return sEnabled ? sOperatorName : null;
-            }
-        });
-    }
-
-    private void hookSystemProperties(ClassLoader classLoader) {
+    private static void hookContentLanguageService(ClassLoader classLoader) {
+        if (classLoader == null) return;
         try {
-            Class<?> sysPropClass = XposedHelpers.findClassIfExists("android.os.SystemProperties", classLoader);
-            if (sysPropClass == null) return;
-
-            XC_MethodHook propHook = new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) {
-                    if (!sEnabled || param.args == null || param.args.length == 0) return;
-                    String key = (String) param.args[0];
-                    if (key == null || !key.startsWith("gsm.")) return;
-
-                    if (key.startsWith("gsm.sim.operator.iso-country") || key.startsWith("gsm.operator.iso-country")) {
-                        param.setResult(sCountryIso.toLowerCase());
-                    } else if (key.startsWith("gsm.sim.operator.numeric") || key.startsWith("gsm.operator.numeric")) {
-                        param.setResult(sOperatorMccMnc);
-                    } else if (key.startsWith("gsm.sim.operator.alpha") || key.startsWith("gsm.operator.alpha")) {
-                        param.setResult(sOperatorName);
-                    } else if (key.startsWith("gsm.sim.state")) {
-                        param.setResult("LOADED");
-                    }
-                }
-            };
-
-            XposedHelpers.findAndHookMethod(sysPropClass, "get", String.class, propHook);
-            XposedHelpers.findAndHookMethod(sysPropClass, "get", String.class, String.class, propHook);
-        } catch (Throwable t) {
-            Log.d(TAG, "SystemProperties hook failed: " + t.getMessage());
-        }
-    }
-
-    private void hookLocale(ClassLoader classLoader) {
-        try {
-            XposedHelpers.findAndHookMethod(
-                    Locale.class,
-                    "getDefault",
-                    new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            if (sEnabled && sSpoofLocale) {
-                                param.setResult(sCachedSpoofedLocale != null ? sCachedSpoofedLocale : new Locale(sLocaleLang, sLocaleCountry));
-                            }
+            Class<?> cls = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.contentlanguage.ContentLanguageServiceImpl", classLoader);
+            if (cls != null) {
+                XposedHelpers.findAndHookMethod(cls, "getLanguage", new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (sLanguageFilter && !sAllowedLanguages.isEmpty()) {
+                            param.setResult(new ArrayList<>(sAllowedLanguages));
                         }
                     }
-            );
-        } catch (Throwable t) {
-            Log.d(TAG, "Locale hook failed: " + t.getMessage());
-        }
+                });
+                log("Hooked ContentLanguageServiceImpl.getLanguage()");
+            }
+        } catch (Throwable ignored) {}
     }
 
-    private interface MethodReturnValue {
-        Object getValue();
-    }
-
-    private static void hookMethodReturn(ClassLoader classLoader, String className, String methodName, final MethodReturnValue callback) {
-        hookMethodReturn(classLoader, className, methodName, new Class<?>[0], callback);
-    }
-
-    private static void hookMethodReturn(ClassLoader classLoader, String className, String methodName, Class<?>[] parameterTypes, final MethodReturnValue callback) {
-        try {
-            Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
-            if (clazz == null) return;
-
-            Object[] args = new Object[parameterTypes.length + 1];
-            System.arraycopy(parameterTypes, 0, args, 0, parameterTypes.length);
-            args[parameterTypes.length] = new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) {
-                    if (sEnabled) {
-                        Object val = callback.getValue();
-                        if (val != null) {
-                            param.setResult(val);
-                        }
-                    }
-                }
-            };
-
-            XposedHelpers.findAndHookMethod(clazz, methodName, args);
-        } catch (Throwable ignored) {
-        }
-    }
 }
-
