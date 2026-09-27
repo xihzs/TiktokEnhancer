@@ -30,7 +30,7 @@ public final class DouyinWatermarkHook {
 
     private static final String TAG = "TikTokEnhancer-DouyinWM";
 
-    private static final Set<Object> sCleanedVideos = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+    private static final WatermarkHook.BoundedIdentitySet sCleanedVideos = new WatermarkHook.BoundedIdentitySet(1024);
 
     private static volatile boolean sWatermarkServiceHooked = false;
     private static volatile boolean sMultiStateDownloadHooked = false;
