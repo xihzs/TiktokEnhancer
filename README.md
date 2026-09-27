@@ -1,74 +1,109 @@
-# Tiktok Enhancer
+# TikTok Enhancer
 
-A clean, modern Vector framework module for TikTok Global, TikTok Asia, and Douyin.
-
-Bypasses SIM card region restrictions, eliminates sponsored feed ads, unlocks unrestricted downloads, and downloads stories and videos without watermarks.
+A Vector framework module for TikTok and Douyin that bypasses regional geofencing, strips watermarks from video and story downloads, blocks feed advertisements, uncaps playback bitrate, and prevents 4K upload downscaling.
 
 ---
 
-## Prerequisites
+## Compatibility
 
-This module requires **[Vector](https://github.com/JingMatrix/Vector)** (the modern successor/rebrand of LSPosed) installed via Magisk, KernelSU, or APatch.
-
----
-
-## Supported Applications & Versions
-
-> **Note**: Tiktok Enhancer v1.0.3 only supports **46.9.3**.
-
-| Application | Package Name | Supported Version |
+| Target Application | Package Identifier | Verified Version |
 | :--- | :--- | :--- |
-| **TikTok Global** | `com.zhiliaoapp.musically` | **46.9.3** |
-| **TikTok Asia** | `com.ss.android.ugc.trill` | **46.9.3** |
-| **Douyin / TikTok China** | `com.ss.android.ugc.aweme` | Modern versions |
+| **TikTok Global** | `com.zhiliaoapp.musically` | v46.9.3 – v47.1.3 |
+| **TikTok Asia** | `com.ss.android.ugc.trill` | v46.9.3 – v47.1.3 |
+| **Douyin** | `com.ss.android.ugc.aweme` | v40.6.0+ |
 
-The in-app profile menu automatically detects installed packages and only displays apps present on your device.
-
----
-
-## Features
-
-- **Region & Carrier Changer**: Freely switch feeds across 60+ countries worldwide or enter custom ISO / carrier codes.
-- **Force Region Filtering**: Smart feed filtering to enforce content from your selected country.
-- **Block Countries**: Filter out videos and creators from selected blacklisted countries.
-- **Download 24h Stories**: Download story videos and photo mode posts directly from the native share sheet.
-- **Watermark-Free Downloads**: Direct stream redirection and transcode bypass for clean, full-quality video saves without outro cards.
-- **Ad & Commercial Blocker**: Eliminates commercial video ads, promoted posts, and marketing cards.
-- **No-Nav UI**: Clean single-page interface with a hamburger profile switcher and zero navigation bloat.
+### Framework Prerequisites
+- Android 8.0 – 15 (API 26 – 35)
+- Root environment: KernelSU, Magisk (Zygisk enabled), or APatch
+- Framework provider: **[Vector](https://github.com/JingMatrix/Vector)** (Zygisk)
 
 ---
 
-## Installation & Setup
+## Technical Capabilities
 
-1. **Install Vector**:
-   - Download and install the latest release of **[Vector](https://github.com/JingMatrix/Vector)**.
-2. **Install Tiktok Enhancer**:
-   - Download the latest APK from Releases (or build from source) and install it on your device:
-     ```bash
-     adb install -r app/build/outputs/apk/debug/app-debug.apk
-     ```
-3. **Enable in Vector Manager**:
-   - Open **Vector Manager** → **Modules** → Enable **Tiktok Enhancer**.
-   - Under Scope, check the box for your installed app (**TikTok**, **TikTok Asia**, and/or **Douyin**).
-4. **Configure Settings**:
-   - Open **Tiktok Enhancer** from your launcher or directly from Vector Manager.
-   - Tap the hamburger menu in the top app bar to switch active profiles.
-   - Choose your target region and enable your preferred features.
-   - Tap **Restart TikTok** (or **Restart Douyin**) to apply changes immediately.
+### Geolocation and Carrier Spoofing
+TikTok detects regional origin across several redundant client layers beyond simple IP lookup. This module overrides those telemetry vectors in-memory:
+- **Telephony Hooks**: Spoofs `TelephonyManager` methods (`getSimCountryIso`, `getNetworkCountryIso`, `getSimOperator`, `getNetworkOperator`, `getSimOperatorName`). Replaces cellular cell tower IDs (`CellLocation`, `CellInfo`) and MCC/MNC identifiers with presets matching the selected region.
+- **System Layer**: Intercepts `TimeZone.getDefault()` and network location providers to match the spoofed territory without system-wide modifications.
+- **Network Parameter Map**: Hooks TTNet Cronet client parameter generators (`carrier_region`, `sys_region`, `account_region`, `store_region`, `sim_region`, `mcc_mnc`), injecting the designated ISO country code into outgoing API query strings and headers.
+
+### Download Restriction and Watermark Removal
+- **Direct Stream Redirection**: Intercepts `Aweme.getVideo()` and internal getter methods (`getDownloadAddr`, `getDownloadNoWatermarkAddr`, `getUIAlikeDownloadAddr`). Replaces downscaled or stamped endpoints with clean, source-resolution TopObjectStorage (TOS) `playAddr` streams.
+- **Download Enforcement**: Overrides ACL share permissions (`awemeACLShareInfo.setTranscode(1)`, `awemeControl.setCanShare(true)`, `videoControl.allowDownload = true`), re-enabling save options on videos with creator-disabled downloads.
+- **24-Hour Stories & Photo Slides**: Hooks `UserStory.getStories()` and `Aweme.getPhotoModeImageInfo()`, appending a native download option directly inside the system share sheet.
+- **Bounded Identity Tracking**: Uses `BoundedIdentitySet` (ring-buffered `IdentityHashMap`) to track processed media objects strictly by pointer equality (`==`), avoiding recursive `equals()` execution on obfuscated models during continuous scrolling.
+
+### Feed Sanitization and Nearby Tab Removal
+- **Ad Suppression**: Filters incoming responses in `FeedItemList.getItems()`, `getAwemeList()`, and fragment panels (`RecommendFeedFragmentPanel`, `FollowFeedFragmentPanelMT`, `RepostFeedPanel`). Strips commercial promotion cards, sponsored video nodes, and anchor links before the list binds to the RecyclerView.
+- **Country and Language Filtering**: Drops videos originating from user-blacklisted territories or languages based on metadata extracted from author profiles and audio tags. Profiles manually visited by the user bypass this filter.
+- **Nearby Tab Elimination**: Drops the "Nearby" / "Places" tab using a four-layer hook strategy: removes the tab indicator from `TabLayout`, drops the tab from `TabListProvider`, cleans response nodes in payload schemas, and strips location parameters from feed requests.
+- **For You Page Cold Start**: Hooks main activity lifecycle callbacks to land directly on the "For You" feed when the app opens, preventing default landing on auxiliary commercial tabs.
+
+### Media Quality and Upload Uncapping
+- **Playback Bitrate Uncapper**: Intercepts `SimVideoUrlModel.getBitRate()` and `VideoUrlModel` resolution tiers, bypassing default mobile bandwidth clamping to deliver maximum bitrate streams.
+- **VESDK 4K Upload Preservation**: Overrides ByteBench hardware profiling and VESDK encode configurations (`VEVideoEncodeSettings`), preventing client-side downscaling of 3840x2160 source files during import and synthesis.
+- **Creator Country Indicator**: Attaches a national flag indicator badge adjacent to author profile avatars in the feed interface.
+- **Telemetry HUD**: Displays real-time ingestion metadata (resolution, frame rate, container bitrate, transcode codec, and origin CDN host).
 
 ---
 
-## Building from Source
+## Installation
 
-Prerequisites: JDK 17+ and Android SDK.
+1. Install the APK on your device:
+   ```bash
+   adb install -r app/build/outputs/apk/debug/app-debug.apk
+   ```
+2. Open **Vector Manager**, navigate to the **Modules** tab, and toggle **TikTok Enhancer**.
+3. Under module scope, check the target packages (`com.zhiliaoapp.musically`, `com.ss.android.ugc.trill`, or `com.ss.android.ugc.aweme`).
+4. Launch **TikTok Enhancer** from your application drawer.
+5. Select your target country preset or input custom carrier values, enable desired filters, and apply changes.
+6. Force-close and reopen TikTok to load the hooked environment.
 
+---
+
+## Build from Source
+
+### Prerequisites
+- JDK 17 or higher
+- Android SDK Build-Tools 34.0.0
+- Gradle 8.14+ (wrapper included)
+
+### Compilation Steps
 ```bash
 git clone https://github.com/xihzs/TiktokEnhancer.git
 cd TiktokEnhancer
 ./gradlew assembleDebug
 ```
 
-Compiled APK will be located at:
-```
+The output file will be generated at:
+```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
+
+---
+
+## Architecture
+
+The project is structured into functional hook controllers:
+
+```text
+app/src/main/java/com/ash/tiktokregion/
+├── MainHook.java                  # Vector module entry point & TTNet Cronet hooks
+├── TelephonyAndSystemHook.java    # SIM, TelephonyManager, CellLocation, and TimeZone spoofing
+├── WatermarkHook.java             # TOS clean stream substitution & story download injection
+├── DouyinWatermarkHook.java       # Douyin v40+ watermark removal & permission bypass
+├── AdsHook.java                   # FeedItemList filter, commercial ad suppression, blacklists
+├── NearbyTabHook.java             # Quad-layer Nearby tab elimination
+├── FeedLandingHook.java           # Cold-start For You landing enforcer
+├── QualityAndTelemetryHook.java   # VESDK playback quality uncapper & telemetry HUD
+├── HDUploadHook.java              # 4K master upload ByteBench resolution bypass
+├── MediaDownloader.java           # Background parallel download worker using DownloadManager
+├── ConfigProvider.java            # Encrypted SharedPreferences IPC bridge via ContentProvider
+└── MainActivity.java              # Material settings interface & profile management
+```
+
+---
+
+## License
+
+This project is distributed under the GNU General Public License v3.0. Refer to [LICENSE](LICENSE) for details.

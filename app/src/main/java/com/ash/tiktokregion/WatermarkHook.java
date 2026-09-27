@@ -28,11 +28,11 @@ import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.WeakHashMap;
 import java.util.regex.Pattern;
 
 import de.robv.android.xposed.XC_MethodHook;
@@ -42,18 +42,55 @@ import de.robv.android.xposed.XposedHelpers;
 public class WatermarkHook {
 
     private static final String TAG = "TikTokWatermark";
+
+    public static final class BoundedIdentitySet {
+        private final int capacity;
+        private final IdentityHashMap<Object, Boolean> map;
+        private final Object[] ring;
+        private int ringIndex = 0;
+
+        public BoundedIdentitySet(int capacity) {
+            this.capacity = capacity;
+            this.map = new IdentityHashMap<>(capacity);
+            this.ring = new Object[capacity];
+        }
+
+        public synchronized boolean contains(Object obj) {
+            if (obj == null) return false;
+            return map.containsKey(obj);
+        }
+
+        public synchronized boolean add(Object obj) {
+            if (obj == null) return false;
+            if (map.containsKey(obj)) return false;
+            if (ring[ringIndex] != null) {
+                map.remove(ring[ringIndex]);
+            }
+            ring[ringIndex] = obj;
+            ringIndex = (ringIndex + 1) % capacity;
+            map.put(obj, Boolean.TRUE);
+            return true;
+        }
+
+        public synchronized void clear() {
+            map.clear();
+            java.util.Arrays.fill(ring, null);
+            ringIndex = 0;
+        }
+    }
+
     public static volatile Object sCurrentAweme = null;
     static volatile Object sLastPlayedPlayAddr = null;
     static final List<Object> sCurrentStoryList = new ArrayList<>();
-    private static final java.util.Map<Object, Object> sVideoToAwemeMap = new java.util.WeakHashMap<>();
     private static final Set<String> sKnownStoryAids = Collections.synchronizedSet(new HashSet<>());
-    private static final Set<Object> sKnownStoryAwemes = Collections.newSetFromMap(new java.util.WeakHashMap<>());
+    private static final BoundedIdentitySet sKnownStoryAwemes = new BoundedIdentitySet(512);
     private static final ThreadLocal<Boolean> sIsUnlocking = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private static final ThreadLocal<Boolean> sIsStoryProcessing = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
-    private static final Set<Object> sUnlockedAwemes = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
-    private static final Set<Object> sCleanedAwemes = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
-    private static final Set<Object> sCleanedVideos = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
-    private static final Set<Object> sCleanedUrlModels = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+    private static final BoundedIdentitySet sUnlockedAwemes = new BoundedIdentitySet(1024);
+    private static final BoundedIdentitySet sCleanedAwemes = new BoundedIdentitySet(1024);
+    private static final BoundedIdentitySet sCleanedVideos = new BoundedIdentitySet(1024);
+    private static final BoundedIdentitySet sCleanedUrlModels = new BoundedIdentitySet(1024);
 
     private static volatile boolean sAwemeFlagsHooked = false;
     private static volatile boolean sVideoModelHooked = false;
@@ -307,11 +344,6 @@ public class WatermarkHook {
                                 boolean videoCleaned = (video == null || sCleanedVideos.contains(video));
                                 if (!awemeUnlocked || !videoCleaned) {
                                     unlockAwemeRestrictions(aweme, video);
-                                    if (video != null) {
-                                        synchronized (sVideoToAwemeMap) {
-                                            sVideoToAwemeMap.put(video, aweme);
-                                        }
-                                    }
                                 }
                             }
 
@@ -1098,22 +1130,25 @@ public class WatermarkHook {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                             if (!MainHook.isDownloadStoryEnabled()) return;
-                            Object result = param.getResult();
-                            if (result instanceof List) {
-                                List<?> list = (List<?>) result;
-                                synchronized (sCurrentStoryList) {
-                                    sCurrentStoryList.clear();
-                                    sCurrentStoryList.addAll(list);
-                                }
-                                for (Object item : list) {
-                                    if (item != null) {
-                                        unlockStoryAweme(item);
-                                        trackStoryAweme(item);
+                            if (Boolean.TRUE.equals(sIsStoryProcessing.get())) return;
+                            sIsStoryProcessing.set(Boolean.TRUE);
+                            try {
+                                Object result = param.getResult();
+                                if (result instanceof List) {
+                                    List<?> list = (List<?>) result;
+                                    synchronized (sCurrentStoryList) {
+                                        sCurrentStoryList.clear();
+                                        sCurrentStoryList.addAll(list);
+                                    }
+                                    for (Object item : list) {
+                                        if (item != null) {
+                                            unlockStoryAweme(item);
+                                            trackStoryAweme(item);
+                                        }
                                     }
                                 }
-                                if (!list.isEmpty() && list.get(0) != null) {
-                                    sCurrentAweme = list.get(0);
-                                }
+                            } finally {
+                                sIsStoryProcessing.set(Boolean.FALSE);
                             }
                         }
                     }
@@ -1122,34 +1157,6 @@ public class WatermarkHook {
         } catch (Throwable t) {
             Log.d(TAG, "UserStory.getStories hook failed: " + t.getMessage());
         }
-
-        try {
-            XposedHelpers.findAndHookMethod(
-                    "com.ss.android.ugc.aweme.feed.model.Aweme",
-                    classLoader,
-                    "getUserStory",
-                    new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                            if (!MainHook.isDownloadStoryEnabled()) return;
-                            Object userStory = param.getResult();
-                            if (userStory != null) {
-                                try {
-                                    List<?> stories = (List<?>) XposedHelpers.callMethod(userStory, "getStories");
-                                    if (stories != null && !stories.isEmpty()) {
-                                        for (Object item : stories) {
-                                            if (item != null) {
-                                                unlockStoryAweme(item);
-                                                trackStoryAweme(item);
-                                            }
-                                        }
-                                    }
-                                } catch (Throwable ignored) {}
-                            }
-                        }
-                    }
-            );
-        } catch (Throwable ignored) {}
     }
 
     private static void trackStoryAweme(Object aweme) {
@@ -1173,7 +1180,9 @@ public class WatermarkHook {
         } catch (Throwable ignored) {}
 
         synchronized (sCurrentStoryList) {
-            if (sCurrentStoryList.contains(aweme)) return true;
+            for (Object item : sCurrentStoryList) {
+                if (item == aweme) return true;
+            }
         }
 
         try {
@@ -1315,13 +1324,13 @@ public class WatermarkHook {
 
     public static void unlockAwemeRestrictions(Object aweme, Object video) {
         if (aweme == null) return;
-        boolean awemeUnlocked = sUnlockedAwemes.contains(aweme);
-        if (awemeUnlocked && (video == null || sCleanedVideos.contains(video))) {
-            return;
-        }
         if (Boolean.TRUE.equals(sIsUnlocking.get())) return;
         sIsUnlocking.set(Boolean.TRUE);
         try {
+            boolean awemeUnlocked = sUnlockedAwemes.contains(aweme);
+            if (awemeUnlocked && (video == null || sCleanedVideos.contains(video))) {
+                return;
+            }
             if (!awemeUnlocked) {
                 sUnlockedAwemes.add(aweme);
                 try {
