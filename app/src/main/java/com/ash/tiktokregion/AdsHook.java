@@ -36,6 +36,22 @@ public class AdsHook {
     private static volatile BlockedCountryMatcher sCachedMatcher = null;
     private static volatile Set<String> sLastBlockedSet = null;
 
+    private static volatile TargetCountryMatcher sCachedTargetMatcher = null;
+    private static volatile String sLastTargetIso = null;
+
+    private static TargetCountryMatcher getTargetMatcher(String targetIso) {
+        if (targetIso == null || targetIso.trim().isEmpty()) return null;
+        String clean = targetIso.trim().toLowerCase(Locale.ROOT);
+        TargetCountryMatcher matcher = sCachedTargetMatcher;
+        if (matcher != null && clean.equals(sLastTargetIso)) {
+            return matcher;
+        }
+        matcher = new TargetCountryMatcher(clean);
+        sLastTargetIso = clean;
+        sCachedTargetMatcher = matcher;
+        return matcher;
+    }
+
     public static void hook(ClassLoader classLoader) {
         if (classLoader == null) return;
         hookFeedItemList(classLoader);
@@ -516,8 +532,8 @@ public class AdsHook {
                     + ", nonAllowedLang=" + languageFilterCount + ")");
         }
 
+        // Floor 1: Standard / Smart Mode fallback - preserve non-blocked items to fill the feed
         if (!strictRegion && kept.isEmpty() && !sourceList.isEmpty()) {
-            // Priority 1: rescue items that pass ad, blocked country, locked region, and language filters
             for (Object item : sourceList) {
                 if (item != null
                         && !(hideAds && isAdAweme(item))
@@ -528,7 +544,6 @@ public class AdsHook {
                 }
             }
 
-            // Priority 2: rescue items that are strictly not ads and not from blocked countries
             if (kept.isEmpty()) {
                 for (Object item : sourceList) {
                     if (item != null
@@ -544,14 +559,55 @@ public class AdsHook {
             }
         }
 
-        // Emergency fallback: only when strictRegion is false, preserve non-ad and non-blocked items
-        if (!strictRegion && kept.isEmpty() && !sourceList.isEmpty()) {
+        // Floor 2: Strict Region Mode continuity bridge - when strict filtering leaves kept empty,
+        // preserve exactly 1 non-ad item so TikTok's feed state machine NEVER starves into "Something went wrong".
+        // This keeps the player active and allows swiping to trigger the next pagination batch.
+        if (strictRegion && kept.isEmpty() && !sourceList.isEmpty()) {
             for (Object item : sourceList) {
                 if (item != null
                         && !(hideAds && isAdAweme(item))
-                        && !(matcher != null && matcher.matchesAweme(item))) {
+                        && !(matcher != null && matcher.matchesAweme(item))
+                        && !(hasAllowedLanguages && shouldFilterForLanguage(item, allowedLanguages))) {
                     kept.add(item);
+                    break;
                 }
+            }
+
+            if (kept.isEmpty()) {
+                for (Object item : sourceList) {
+                    if (item != null
+                            && !(hideAds && isAdAweme(item))
+                            && !(matcher != null && matcher.matchesAweme(item))) {
+                        kept.add(item);
+                        break;
+                    }
+                }
+            }
+
+            if (kept.isEmpty()) {
+                for (Object item : sourceList) {
+                    if (item != null && !(hideAds && isAdAweme(item))) {
+                        kept.add(item);
+                        break;
+                    }
+                }
+            }
+
+            if (!kept.isEmpty()) {
+                log("Strict region continuity guard activated: preserved 1 video bridge to prevent feed error");
+            }
+        }
+
+        // Floor 3: Universal emergency continuity floor - ensure clean list is never empty if sourceList had items
+        if (kept.isEmpty() && !sourceList.isEmpty()) {
+            for (Object item : sourceList) {
+                if (item != null && !(hideAds && isAdAweme(item))) {
+                    kept.add(item);
+                    if (kept.size() >= 1) break;
+                }
+            }
+            if (!kept.isEmpty()) {
+                log("Universal emergency continuity floor activated: preserved " + kept.size() + " item(s)");
             }
         }
 
@@ -626,57 +682,82 @@ public class AdsHook {
 
     private static boolean shouldFilterForRegion(Object aweme, String targetRegion) {
         if (targetRegion == null || targetRegion.trim().isEmpty()) return false;
-        String target = targetRegion.trim();
+        TargetCountryMatcher targetMatcher = getTargetMatcher(targetRegion);
+        if (targetMatcher == null) return false;
 
-        // 1. Author locked account region takes priority
+        // 1. Author locked account region and country fields
         Object author = getSafeObject(aweme, "getAuthor", "author");
         if (author != null) {
             String aAccount = getSafeString(author, "getAccountRegion", "accountRegion");
-            if (aAccount != null && !aAccount.isEmpty()) {
-                return !aAccount.equalsIgnoreCase(target);
-            }
             String aIso = getSafeString(author, "getIsoCountryCode", "isoCountryCode");
-            if (aIso != null && !aIso.isEmpty()) {
-                return !aIso.equalsIgnoreCase(target);
-            }
             String aRegion = getSafeString(author, "getRegion", "region");
-            if (aRegion != null && !aRegion.isEmpty()) {
-                return !aRegion.equalsIgnoreCase(target);
-            }
             String aCountry = getSafeString(author, "getCountry", "country");
-            if (aCountry != null && !aCountry.isEmpty()) {
-                return !aCountry.equalsIgnoreCase(target);
-            }
             String aDeviceRegion = getSafeString(author, "getDeviceRegion", "deviceRegion");
-            if (aDeviceRegion != null && !aDeviceRegion.isEmpty()) {
-                return !aDeviceRegion.equalsIgnoreCase(target);
+            String aLemon8 = getSafeString(author, "getLemon8StoreRegion", "lemon8StoreRegion");
+            String aCity = getSafeString(author, "getCityName", "cityName");
+            String aBioLoc = getSafeString(author, "getBioLocation", "bioLocation");
+
+            // Priority: if any author location field positively matches target region, KEEP!
+            if (targetMatcher.matchesCode(aAccount)
+                    || targetMatcher.matchesCode(aIso)
+                    || targetMatcher.matchesCode(aRegion)
+                    || targetMatcher.matchesCode(aCountry)
+                    || targetMatcher.matchesCode(aDeviceRegion)
+                    || targetMatcher.matchesCode(aLemon8)
+                    || targetMatcher.matchesCode(aCity)
+                    || targetMatcher.matchesCode(aBioLoc)) {
+                return false;
+            }
+
+            // If author explicitly has region/country metadata and NONE matched target, FILTER OUT!
+            if ((aAccount != null && !aAccount.isEmpty())
+                    || (aIso != null && !aIso.isEmpty())
+                    || (aRegion != null && !aRegion.isEmpty())
+                    || (aCountry != null && !aCountry.isEmpty())
+                    || (aDeviceRegion != null && !aDeviceRegion.isEmpty())) {
+                return true;
             }
         }
 
         // 2. Check forwardItem (repost) author
         Object forwardItem = getSafeObject(aweme, "getForwardItem", "forwardItem");
-        if (forwardItem != null) {
+        if (forwardItem != null && forwardItem != aweme) {
             Object fAuthor = getSafeObject(forwardItem, "getAuthor", "author");
             if (fAuthor != null) {
                 String fAccount = getSafeString(fAuthor, "getAccountRegion", "accountRegion");
-                if (fAccount != null && !fAccount.isEmpty()) {
-                    return !fAccount.equalsIgnoreCase(target);
-                }
                 String fIso = getSafeString(fAuthor, "getIsoCountryCode", "isoCountryCode");
-                if (fIso != null && !fIso.isEmpty()) {
-                    return !fIso.equalsIgnoreCase(target);
-                }
+                String fRegion = getSafeString(fAuthor, "getRegion", "region");
                 String fCountry = getSafeString(fAuthor, "getCountry", "country");
-                if (fCountry != null && !fCountry.isEmpty()) {
-                    return !fCountry.equalsIgnoreCase(target);
+
+                if (targetMatcher.matchesCode(fAccount)
+                        || targetMatcher.matchesCode(fIso)
+                        || targetMatcher.matchesCode(fRegion)
+                        || targetMatcher.matchesCode(fCountry)) {
+                    return false;
+                }
+
+                if ((fAccount != null && !fAccount.isEmpty())
+                        || (fIso != null && !fIso.isEmpty())
+                        || (fRegion != null && !fRegion.isEmpty())
+                        || (fCountry != null && !fCountry.isEmpty())) {
+                    return true;
                 }
             }
         }
 
-        // 3. Fallback to Aweme region
+        // 3. Fallback to Aweme region, regionOfResidence, regionBlock
         String region = getSafeString(aweme, "getRegion", "region");
-        if (region != null && !region.isEmpty()) {
-            return !region.equalsIgnoreCase(target);
+        String resRegion = getSafeString(aweme, "getRegionOfResidence", "regionOfResidence");
+        String blockRegion = getSafeString(aweme, "getRegionBlock", "regionBlock");
+
+        if (targetMatcher.matchesCode(region)
+                || targetMatcher.matchesCode(resRegion)
+                || targetMatcher.matchesCode(blockRegion)) {
+            return false;
+        }
+        if ((region != null && !region.isEmpty())
+                || (resRegion != null && !resRegion.isEmpty())) {
+            return true;
         }
 
         // 4. Geofencing regions
@@ -686,12 +767,13 @@ public class AdsHook {
             if (!geos.isEmpty()) {
                 boolean match = false;
                 for (Object g : geos) {
-                    if (g instanceof String && target.equalsIgnoreCase(((String) g).trim())) {
+                    if (g instanceof String && targetMatcher.matchesCode(((String) g).trim())) {
                         match = true;
                         break;
                     }
                 }
-                if (!match) return true;
+                if (match) return false;
+                return true;
             }
         }
 
@@ -701,10 +783,46 @@ public class AdsHook {
             Object addrInfo = getSafeObject(poi, "getAddressInfo", "addressInfo");
             if (addrInfo != null) {
                 String regCode = getSafeString(addrInfo, "getRegionCode", "regionCode");
-                if (regCode != null && !regCode.isEmpty()) {
-                    return !regCode.equalsIgnoreCase(target);
+                String poiCountry = getSafeString(addrInfo, "getCountry", "country");
+                String poiCity = getSafeString(addrInfo, "getCityName", "cityName");
+
+                if (targetMatcher.matchesCode(regCode)
+                        || targetMatcher.matchesCode(poiCountry)
+                        || targetMatcher.matchesCode(poiCity)) {
+                    return false;
+                }
+                if ((regCode != null && !regCode.isEmpty())
+                        || (poiCountry != null && !poiCountry.isEmpty())) {
+                    return true;
                 }
             }
+            String poiReg = getSafeString(poi, "getRegion", "region");
+            String poiCtry = getSafeString(poi, "getCountry", "country");
+            if (targetMatcher.matchesCode(poiReg) || targetMatcher.matchesCode(poiCtry)) {
+                return false;
+            }
+            if ((poiReg != null && !poiReg.isEmpty()) || (poiCtry != null && !poiCtry.isEmpty())) {
+                return true;
+            }
+        }
+
+        // 6. Nearby Info
+        Object nearby = getSafeObject(aweme, "getNearbyInfo", "nearbyInfo");
+        if (nearby != null) {
+            String nearbyRegion = getSafeString(nearby, "getNearbyRegion", "nearbyRegion");
+            String eventRegion = getSafeString(nearby, "getEventRegion", "eventRegion");
+            if (targetMatcher.matchesCode(nearbyRegion) || targetMatcher.matchesCode(eventRegion)) {
+                return false;
+            }
+            if ((nearbyRegion != null && !nearbyRegion.isEmpty()) || (eventRegion != null && !eventRegion.isEmpty())) {
+                return true;
+            }
+        }
+
+        // 7. Video caption / hashtag matching
+        String desc = getSafeString(aweme, "getDesc", "desc");
+        if (desc != null && !desc.isEmpty() && targetMatcher.matchesText(desc)) {
+            return false;
         }
 
         return false;
@@ -712,18 +830,19 @@ public class AdsHook {
 
     private static boolean shouldFilterForLockedRegion(Object aweme, String targetRegion) {
         if (targetRegion == null || targetRegion.trim().isEmpty()) return false;
-        String target = targetRegion.trim();
+        TargetCountryMatcher targetMatcher = getTargetMatcher(targetRegion);
+        if (targetMatcher == null) return false;
 
         // 1. Author locked account region
         Object author = getSafeObject(aweme, "getAuthor", "author");
         if (author != null) {
             String accountRegion = getSafeString(author, "getAccountRegion", "accountRegion");
             if (accountRegion != null && !accountRegion.isEmpty()) {
-                return !accountRegion.equalsIgnoreCase(target);
+                return !targetMatcher.matchesCode(accountRegion);
             }
             String iso = getSafeString(author, "getIsoCountryCode", "isoCountryCode");
             if (iso != null && !iso.isEmpty()) {
-                return !iso.equalsIgnoreCase(target);
+                return !targetMatcher.matchesCode(iso);
             }
         }
 
@@ -734,7 +853,7 @@ public class AdsHook {
             if (fAuthor != null) {
                 String fAccount = getSafeString(fAuthor, "getAccountRegion", "accountRegion");
                 if (fAccount != null && !fAccount.isEmpty()) {
-                    return !fAccount.equalsIgnoreCase(target);
+                    return !targetMatcher.matchesCode(fAccount);
                 }
             }
         }
@@ -745,7 +864,7 @@ public class AdsHook {
             for (Object u : (List<?>) pickedUsers) {
                 if (u != null) {
                     String pAccount = getSafeString(u, "getAccountRegion", "accountRegion");
-                    if (pAccount != null && !pAccount.isEmpty() && !pAccount.equalsIgnoreCase(target)) {
+                    if (pAccount != null && !pAccount.isEmpty() && !targetMatcher.matchesCode(pAccount)) {
                         return true;
                     }
                 }
@@ -887,49 +1006,206 @@ public class AdsHook {
         return null;
     }
 
-    public static class BlockedCountryMatcher {
+    static final Map<String, String[]> KNOWN_ALIASES = new HashMap<>();
+
+    static {
+        KNOWN_ALIASES.put("ch", new String[]{
+                "switzerland", "swiss", "schweiz", "suisse", "svizzera", "svizra",
+                "che", "zurich", "zürich", "geneva", "genève", "genf", "basel",
+                "bern", "berne", "lausanne", "lucerne", "luzern", "lugano",
+                "st gallen", "st. gallen", "winterthur", "biel", "bienne",
+                "chf", "+41", "schweizer", "svizzero"
+        });
+        KNOWN_ALIASES.put("at", new String[]{"austria", "österreich", "wien", "vienna", "salzburg", "graz", "innsbruck", "linz"});
+        KNOWN_ALIASES.put("nl", new String[]{"netherlands", "nederland", "holland", "amsterdam", "rotterdam", "the hague", "utrecht"});
+        KNOWN_ALIASES.put("be", new String[]{"belgium", "belgië", "belgique", "brussels", "antwerp", "ghent"});
+        KNOWN_ALIASES.put("it", new String[]{"italy", "italia", "rome", "roma", "milan", "milano", "naples", "napoli", "turin", "torino"});
+        KNOWN_ALIASES.put("es", new String[]{"spain", "españa", "madrid", "barcelona", "valencia", "seville", "sevilla"});
+        KNOWN_ALIASES.put("pt", new String[]{"portugal", "lisbon", "lisboa", "porto"});
+        KNOWN_ALIASES.put("se", new String[]{"sweden", "sverige", "stockholm", "gothenburg", "malmö"});
+        KNOWN_ALIASES.put("no", new String[]{"norway", "norge", "oslo", "bergen"});
+        KNOWN_ALIASES.put("dk", new String[]{"denmark", "danmark", "copenhagen", "københavn"});
+        KNOWN_ALIASES.put("fi", new String[]{"finland", "suomi", "helsinki"});
+        KNOWN_ALIASES.put("pl", new String[]{"poland", "polska", "warsaw", "warszawa", "krakow", "kraków"});
+        KNOWN_ALIASES.put("cz", new String[]{"czech republic", "czechia", "česko", "prague", "praha"});
+        KNOWN_ALIASES.put("jp", new String[]{"japan", "nippon", "nihon", "日本", "tokyo", "osaka", "kyoto"});
+        KNOWN_ALIASES.put("kr", new String[]{"south korea", "korea", "한국", "대한민국", "seoul", "busan"});
+        KNOWN_ALIASES.put("tw", new String[]{"taiwan", "台灣", "台湾", "taipei"});
+        KNOWN_ALIASES.put("th", new String[]{"thailand", "ไทย", "bangkok"});
+        KNOWN_ALIASES.put("my", new String[]{"malaysia", "kuala lumpur", "selangor", "penang", "johor"});
+        KNOWN_ALIASES.put("sg", new String[]{"singapore", "singapura"});
+        KNOWN_ALIASES.put("au", new String[]{"australia", "sydney", "melbourne", "brisbane", "perth"});
+        KNOWN_ALIASES.put("nz", new String[]{"new zealand", "auckland", "wellington", "christchurch"});
+        KNOWN_ALIASES.put("ca", new String[]{"canada", "toronto", "montreal", "vancouver", "calgary", "ottawa"});
+        KNOWN_ALIASES.put("ru", new String[]{"russia", "russian federation", "россия", "москва", "moscow", "saint petersburg", "st. petersburg", "st petersburg", "санкт-петербург"});
+        KNOWN_ALIASES.put("pk", new String[]{"pakistan", "پاکستان", "karachi", "lahore", "islamabad", "rawalpindi", "faisalabad", "peshawar"});
+        KNOWN_ALIASES.put("in", new String[]{"india", "bharat", "hindustan", "भारत", "mumbai", "delhi", "bangalore", "bengaluru", "hyderabad", "kolkata"});
+        KNOWN_ALIASES.put("id", new String[]{
+                "indonesia", "indonesian", "jakarta", "surabaya", "bandung", "medan",
+                "bali", "semarang", "makassar", "palembang", "tangerang", "depok",
+                "bekasi", "bogor", "yogyakarta", "jogja", "malang", "solo", "surakarta",
+                "batam", "pekanbaru", "lampung", "padang", "denpasar", "samarinda",
+                "banjarmasin", "balikpapan", "pontianak", "manado", "mataram", "cirebon",
+                "aceh", "papua", "jawa", "sumatra", "kalimantan", "sulawesi",
+                "fypindonesia", "tiktokindonesia", "viralindonesia", "fypindo",
+                "wkwk", "wkwkwk", "ngakak", "banget", "gimana", "kalian", "nggak", "ngga",
+                "receh", "dagelan", "selebtwit"
+        });
+        KNOWN_ALIASES.put("ua", new String[]{"ukraine", "україна", "украина", "kyiv", "kiev", "kharkiv", "odesa"});
+        KNOWN_ALIASES.put("by", new String[]{"belarus", "беларусь", "minsk"});
+        KNOWN_ALIASES.put("kz", new String[]{"kazakhstan", "казахстан", "almaty", "astana"});
+        KNOWN_ALIASES.put("uz", new String[]{"uzbekistan", "ўзбекистон", "tashkent"});
+        KNOWN_ALIASES.put("cn", new String[]{"china", "中国", "beijing", "shanghai", "guangzhou", "shenzhen"});
+        KNOWN_ALIASES.put("ir", new String[]{"iran", "ایران", "tehran"});
+        KNOWN_ALIASES.put("bd", new String[]{"bangladesh", "বাংলাদেশ", "dhaka"});
+        KNOWN_ALIASES.put("ph", new String[]{"philippines", "pilipinas", "manila"});
+        KNOWN_ALIASES.put("vn", new String[]{"vietnam", "việt nam", "hanoi", "saigon", "ho chi minh"});
+        KNOWN_ALIASES.put("tr", new String[]{"turkey", "türkiye", "istanbul", "ankara"});
+        KNOWN_ALIASES.put("sa", new String[]{"saudi arabia", "riyadh", "jeddah"});
+        KNOWN_ALIASES.put("ae", new String[]{"united arab emirates", "emirates", "dubai", "abu dhabi"});
+        KNOWN_ALIASES.put("eg", new String[]{"egypt", "cairo", "alexandria"});
+        KNOWN_ALIASES.put("il", new String[]{"israel", "jerusalem", "tel aviv"});
+        KNOWN_ALIASES.put("br", new String[]{"brazil", "brasil", "sao paulo", "rio de janeiro"});
+        KNOWN_ALIASES.put("mx", new String[]{"mexico", "méxico"});
+        KNOWN_ALIASES.put("de", new String[]{"germany", "deutschland", "berlin", "munich"});
+        KNOWN_ALIASES.put("fr", new String[]{"france", "paris"});
+        KNOWN_ALIASES.put("gb", new String[]{"united kingdom", "great britain", "britain", "england", "scotland", "wales", "london"});
+        KNOWN_ALIASES.put("us", new String[]{"united states", "united states of america", "america", "usa"});
+    }
+
+    static boolean containsHashtag(String text, String tag) {
+        if (text == null || tag == null || tag.isEmpty()) return false;
+        String target = "#" + tag;
+        int idx = 0;
+        int len = target.length();
+        int textLen = text.length();
+        while ((idx = text.indexOf(target, idx)) != -1) {
+            boolean endBoundary = (idx + len == textLen) || !Character.isLetterOrDigit(text.charAt(idx + len));
+            if (endBoundary) return true;
+            idx += len;
+        }
+        return false;
+    }
+
+    static boolean containsWord(String text, String word) {
+        if (text == null || word == null || word.isEmpty()) return false;
+        int idx = 0;
+        int wordLen = word.length();
+        int textLen = text.length();
+        while ((idx = text.indexOf(word, idx)) != -1) {
+            boolean startBoundary = (idx == 0) || !Character.isLetterOrDigit(text.charAt(idx - 1));
+            boolean endBoundary = (idx + wordLen == textLen) || !Character.isLetterOrDigit(text.charAt(idx + wordLen));
+            if (startBoundary && endBoundary) {
+                return true;
+            }
+            idx += wordLen;
+        }
+        return false;
+    }
+
+    public static class TargetCountryMatcher {
+        private final String mIso;
         private final Set<String> mIsoCodes = new HashSet<>();
         private final Set<String> mCountryNames = new HashSet<>();
         private final List<String> mTextMatchTerms = new ArrayList<>();
 
-        private static final Map<String, String[]> KNOWN_ALIASES = new HashMap<>();
+        public TargetCountryMatcher(String targetIso) {
+            this.mIso = targetIso.trim().toLowerCase(Locale.ROOT);
+            mIsoCodes.add(mIso);
 
-        static {
-            KNOWN_ALIASES.put("ru", new String[]{"russia", "russian federation", "россия", "москва", "moscow", "saint petersburg", "st. petersburg", "st petersburg", "санкт-петербург"});
-            KNOWN_ALIASES.put("pk", new String[]{"pakistan", "پاکستان", "karachi", "lahore", "islamabad", "rawalpindi", "faisalabad", "peshawar"});
-            KNOWN_ALIASES.put("in", new String[]{"india", "bharat", "hindustan", "भारत", "mumbai", "delhi", "bangalore", "bengaluru", "hyderabad", "kolkata"});
-            KNOWN_ALIASES.put("id", new String[]{
-                    "indonesia", "indonesian", "jakarta", "surabaya", "bandung", "medan",
-                    "bali", "semarang", "makassar", "palembang", "tangerang", "depok",
-                    "bekasi", "bogor", "yogyakarta", "jogja", "malang", "solo", "surakarta",
-                    "batam", "pekanbaru", "lampung", "padang", "denpasar", "samarinda",
-                    "banjarmasin", "balikpapan", "pontianak", "manado", "mataram", "cirebon",
-                    "aceh", "papua", "jawa", "sumatra", "kalimantan", "sulawesi",
-                    "fypindonesia", "tiktokindonesia", "viralindonesia", "fypindo",
-                    "wkwk", "wkwkwk", "ngakak", "banget", "gimana", "kalian", "nggak", "ngga",
-                    "receh", "dagelan", "selebtwit"
-            });
-            KNOWN_ALIASES.put("ua", new String[]{"ukraine", "україна", "украина", "kyiv", "kiev", "kharkiv", "odesa"});
-            KNOWN_ALIASES.put("by", new String[]{"belarus", "беларусь", "minsk"});
-            KNOWN_ALIASES.put("kz", new String[]{"kazakhstan", "казахстан", "almaty", "astana"});
-            KNOWN_ALIASES.put("uz", new String[]{"uzbekistan", "ўзбекистон", "tashkent"});
-            KNOWN_ALIASES.put("cn", new String[]{"china", "中国", "beijing", "shanghai", "guangzhou", "shenzhen"});
-            KNOWN_ALIASES.put("ir", new String[]{"iran", "ایران", "tehran"});
-            KNOWN_ALIASES.put("bd", new String[]{"bangladesh", "বাংলাদেশ", "dhaka"});
-            KNOWN_ALIASES.put("ph", new String[]{"philippines", "pilipinas", "manila"});
-            KNOWN_ALIASES.put("vn", new String[]{"vietnam", "việt nam", "hanoi", "saigon", "ho chi minh"});
-            KNOWN_ALIASES.put("tr", new String[]{"turkey", "türkiye", "istanbul", "ankara"});
-            KNOWN_ALIASES.put("sa", new String[]{"saudi arabia", "riyadh", "jeddah"});
-            KNOWN_ALIASES.put("ae", new String[]{"united arab emirates", "emirates", "dubai", "abu dhabi"});
-            KNOWN_ALIASES.put("eg", new String[]{"egypt", "cairo", "alexandria"});
-            KNOWN_ALIASES.put("il", new String[]{"israel", "jerusalem", "tel aviv"});
-            KNOWN_ALIASES.put("br", new String[]{"brazil", "brasil", "sao paulo", "rio de janeiro"});
-            KNOWN_ALIASES.put("mx", new String[]{"mexico", "méxico"});
-            KNOWN_ALIASES.put("de", new String[]{"germany", "deutschland", "berlin", "munich"});
-            KNOWN_ALIASES.put("fr", new String[]{"france", "paris"});
-            KNOWN_ALIASES.put("gb", new String[]{"united kingdom", "great britain", "britain", "england", "scotland", "wales", "london"});
-            KNOWN_ALIASES.put("us", new String[]{"united states", "united states of america", "america", "usa"});
+            try {
+                Locale loc = new Locale("", mIso.toUpperCase(Locale.ROOT));
+                try {
+                    String iso3 = loc.getISO3Country();
+                    if (iso3 != null && !iso3.trim().isEmpty()) {
+                        mIsoCodes.add(iso3.trim().toLowerCase(Locale.ROOT));
+                    }
+                } catch (Throwable ignored) {}
+
+                String engName = loc.getDisplayCountry(Locale.ENGLISH);
+                if (engName != null && !engName.trim().isEmpty() && !engName.equalsIgnoreCase(mIso)) {
+                    mCountryNames.add(engName.trim().toLowerCase(Locale.ROOT));
+                }
+
+                String nativeName = loc.getDisplayCountry(loc);
+                if (nativeName != null && !nativeName.trim().isEmpty() && !nativeName.equalsIgnoreCase(mIso)) {
+                    mCountryNames.add(nativeName.trim().toLowerCase(Locale.ROOT));
+                }
+            } catch (Throwable ignored) {}
+
+            CountryPreset preset = CountryPreset.findByIso(mIso);
+            if (preset != null && preset.getCountryName() != null) {
+                mCountryNames.add(preset.getCountryName().trim().toLowerCase(Locale.ROOT));
+            }
+
+            String[] aliases = KNOWN_ALIASES.get(mIso);
+            if (aliases != null) {
+                for (String alias : aliases) {
+                    mCountryNames.add(alias.trim().toLowerCase(Locale.ROOT));
+                }
+            }
+
+            for (String name : mCountryNames) {
+                if (name != null && name.length() >= 3 && !mTextMatchTerms.contains(name)) {
+                    mTextMatchTerms.add(name);
+                }
+            }
+            Collections.sort(mTextMatchTerms, (a, b) -> Integer.compare(b.length(), a.length()));
         }
+
+        public String getIso() {
+            return mIso;
+        }
+
+        public boolean matchesCode(String code) {
+            if (code == null) return false;
+            String clean = code.trim().toLowerCase(Locale.ROOT);
+            if (clean.isEmpty()) return false;
+
+            if (mIsoCodes.contains(clean) || mCountryNames.contains(clean)) {
+                return true;
+            }
+
+            if (clean.contains("-") || clean.contains("_") || clean.contains(".") || clean.contains(",") || clean.contains("/")) {
+                String[] tokens = clean.split("[-_.,/]");
+                for (String token : tokens) {
+                    String t = token.trim();
+                    if (!t.isEmpty() && (mIsoCodes.contains(t) || mCountryNames.contains(t))) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        public boolean matchesText(String text) {
+            if (text == null) return false;
+            String clean = text.trim().toLowerCase(Locale.ROOT);
+            if (clean.isEmpty()) return false;
+
+            if (mIsoCodes.contains(clean) || mCountryNames.contains(clean)) {
+                return true;
+            }
+
+            for (String term : mTextMatchTerms) {
+                if (containsWord(clean, term)) {
+                    return true;
+                }
+            }
+
+            for (String iso : mIsoCodes) {
+                if (iso.length() == 2 && containsHashtag(clean, iso)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    public static class BlockedCountryMatcher {
+        private final Set<String> mIsoCodes = new HashSet<>();
+        private final Set<String> mCountryNames = new HashSet<>();
+        private final List<String> mTextMatchTerms = new ArrayList<>();
 
         public BlockedCountryMatcher(Set<String> blockedIsoSet) {
             if (blockedIsoSet == null) return;
@@ -1057,36 +1333,6 @@ public class AdsHook {
                 }
             }
 
-            return false;
-        }
-
-        private static boolean containsHashtag(String text, String tag) {
-            if (text == null || tag == null || tag.isEmpty()) return false;
-            String target = "#" + tag;
-            int idx = 0;
-            int len = target.length();
-            int textLen = text.length();
-            while ((idx = text.indexOf(target, idx)) != -1) {
-                boolean endBoundary = (idx + len == textLen) || !Character.isLetterOrDigit(text.charAt(idx + len));
-                if (endBoundary) return true;
-                idx += len;
-            }
-            return false;
-        }
-
-        private static boolean containsWord(String text, String word) {
-            if (text == null || word == null || word.isEmpty()) return false;
-            int idx = 0;
-            int wordLen = word.length();
-            int textLen = text.length();
-            while ((idx = text.indexOf(word, idx)) != -1) {
-                boolean startBoundary = (idx == 0) || !Character.isLetterOrDigit(text.charAt(idx - 1));
-                boolean endBoundary = (idx + wordLen == textLen) || !Character.isLetterOrDigit(text.charAt(idx + wordLen));
-                if (startBoundary && endBoundary) {
-                    return true;
-                }
-                idx += wordLen;
-            }
             return false;
         }
 
