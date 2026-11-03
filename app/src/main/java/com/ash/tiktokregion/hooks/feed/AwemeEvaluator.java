@@ -32,16 +32,16 @@ public final class AwemeEvaluator {
     private AwemeEvaluator() {}
 
     public static int evaluate(Object aweme, boolean isFyp, boolean isColdStart) {
-        if (aweme == null || !isFyp) {
+        if (aweme == null) {
             return DECISION_KEEP;
         }
 
-        // 1. Check Ad / Commercial (hard discard)
+        // 1. Check Ad / Commercial (hard discard everywhere)
         if (ModuleConfig.hideAds && isAdAweme(aweme)) {
             return DECISION_DISCARD_AD;
         }
 
-        // 2. Check Blocked Countries & Blocked Songs (hard blacklist, evaluated before story bypass)
+        // 2. Check Blocked Countries & Blocked Songs (hard blacklist everywhere)
         boolean hasBlockedCountries = ModuleConfig.blockCountries
                 && ModuleConfig.blockedCountries != null
                 && !ModuleConfig.blockedCountries.isEmpty();
@@ -60,19 +60,21 @@ public final class AwemeEvaluator {
             return DECISION_KEEP;
         }
 
-        // 4. Check Force Region (Strict vs Smart)
-        boolean strict = ModuleConfig.strictForceRegion && isFyp;
-        boolean smart = !isColdStart && !ModuleConfig.strictForceRegion && ModuleConfig.forceRegion && isFyp;
-        if (strict || smart) {
-            if (shouldFilterForRegion(aweme, ModuleConfig.countryIso, strict)) {
-                return DECISION_DISCARD_WRONG_REGION;
+        // 4. Check Force Region (Strict vs Smart) - ONLY applies to FYP recommendation feed!
+        if (isFyp) {
+            boolean strict = ModuleConfig.strictForceRegion;
+            boolean smart = !isColdStart && !ModuleConfig.strictForceRegion && ModuleConfig.forceRegion;
+            if (strict || smart) {
+                if (shouldFilterForRegion(aweme, ModuleConfig.countryIso, strict)) {
+                    return DECISION_DISCARD_WRONG_REGION;
+                }
             }
-        }
 
-        // 5. Check Non-HD Filtering
-        if (!isColdStart && ModuleConfig.filterNonHd && isFyp) {
-            if (isNonHdVideo(aweme)) {
-                return DECISION_DISCARD_NON_HD;
+            // 5. Check Non-HD Filtering - ONLY applies to FYP recommendation feed!
+            if (!isColdStart && ModuleConfig.filterNonHd) {
+                if (isNonHdVideo(aweme)) {
+                    return DECISION_DISCARD_NON_HD;
+                }
             }
         }
 
@@ -308,7 +310,7 @@ public final class AwemeEvaluator {
             }
         } catch (Throwable ignored) {}
 
-        // 4. Aweme extra JSON metadata (getter & direct field)
+        // 4. Aweme extra & logExtra & searchExtra JSON metadata (upload/shoot/user region)
         try {
             Object extra = XposedHelpers.callMethod(aweme, "getExtra");
             if (extra instanceof String && matcher.matchesMetadataJson((String) extra)) {
@@ -318,6 +320,24 @@ public final class AwemeEvaluator {
         try {
             Object extraField = XposedHelpers.getObjectField(aweme, "extra");
             if (extraField instanceof String && matcher.matchesMetadataJson((String) extraField)) {
+                return true;
+            }
+        } catch (Throwable ignored) {}
+        try {
+            Object logExtra = XposedHelpers.callMethod(aweme, "getLogExtra");
+            if (logExtra instanceof String && matcher.matchesMetadataJson((String) logExtra)) {
+                return true;
+            }
+        } catch (Throwable ignored) {}
+        try {
+            Object logExtraField = XposedHelpers.getObjectField(aweme, "logExtra");
+            if (logExtraField instanceof String && matcher.matchesMetadataJson((String) logExtraField)) {
+                return true;
+            }
+        } catch (Throwable ignored) {}
+        try {
+            Object searchExtra = XposedHelpers.callMethod(aweme, "getSearchExtra");
+            if (searchExtra instanceof String && matcher.matchesMetadataJson((String) searchExtra)) {
                 return true;
             }
         } catch (Throwable ignored) {}
@@ -347,11 +367,28 @@ public final class AwemeEvaluator {
             }
         } catch (Throwable ignored) {}
 
-        // 7. POI (Point of Interest) address & description
+        // 6b. Origin author (for reposts, duets, stitches, or remixes)
+        try {
+            Object originAuthor = XposedHelpers.callMethod(aweme, "getOriginAuthor");
+            if (originAuthor == null) {
+                originAuthor = XposedHelpers.getObjectField(aweme, "originAuthor");
+            }
+            if (originAuthor != null && checkUserCountry(originAuthor, matcher)) {
+                return true;
+            }
+        } catch (Throwable ignored) {}
+
+        // 7. POI (Point of Interest) address & description (upload/recorded location)
         try {
             Object poi = XposedHelpers.callMethod(aweme, "getPoiDataStruct");
             if (poi == null) {
                 poi = XposedHelpers.callMethod(aweme, "getSearchPoiDataStruct");
+            }
+            if (poi == null) {
+                poi = XposedHelpers.callMethod(aweme, "getPoiProductDataStruct");
+            }
+            if (poi == null) {
+                poi = XposedHelpers.callMethod(aweme, "getRawPoiDataStruct");
             }
             if (poi == null) {
                 poi = XposedHelpers.getObjectField(aweme, "_poiDataStruct");
@@ -373,6 +410,17 @@ public final class AwemeEvaluator {
                 }
                 Object desc = XposedHelpers.getObjectField(poi, "locationDesc");
                 if (desc instanceof String && matcher.containsCountryName((String) desc)) return true;
+            }
+        } catch (Throwable ignored) {}
+
+        // 7b. Local service info (region/country where service is offered)
+        try {
+            Object lsi = XposedHelpers.callMethod(aweme, "getLocalServiceInfo");
+            if (lsi != null) {
+                Object r = XposedHelpers.callMethod(lsi, "getRegion");
+                if (r instanceof String && matcher.matchesCountryOrIso((String) r)) return true;
+                Object c = XposedHelpers.callMethod(lsi, "getCountry");
+                if (c instanceof String && matcher.matchesCountryOrIso((String) c)) return true;
             }
         } catch (Throwable ignored) {}
 
@@ -598,6 +646,27 @@ public final class AwemeEvaluator {
             Object lr = XposedHelpers.callMethod(author, "getLemon8StoreRegion");
             if (lr instanceof String && matcher.matchesCountryOrIso((String) lr)) return true;
 
+            Object sr = XposedHelpers.callMethod(author, "getStoreRegion");
+            if (sr instanceof String && matcher.matchesCountryOrIso((String) sr)) return true;
+
+            Object curR = XposedHelpers.callMethod(author, "getCurrentRegion");
+            if (curR instanceof String && matcher.matchesCountryOrIso((String) curR)) return true;
+
+            Object manR = XposedHelpers.callMethod(author, "getManualRegion");
+            if (manR instanceof String && matcher.matchesCountryOrIso((String) manR)) return true;
+
+            Object ipR = XposedHelpers.callMethod(author, "getIpRegion");
+            if (ipR instanceof String && matcher.matchesCountryOrIso((String) ipR)) return true;
+
+            Object ipL = XposedHelpers.callMethod(author, "getIpLabel");
+            if (ipL instanceof String && (matcher.matchesCountryOrIso((String) ipL) || matcher.containsCountryName((String) ipL))) return true;
+
+            Object cIso = XposedHelpers.callMethod(author, "getCountryIso");
+            if (cIso instanceof String && matcher.matchesCountryOrIso((String) cIso)) return true;
+
+            Object cName = XposedHelpers.callMethod(author, "getCountryName");
+            if (cName instanceof String && (matcher.matchesCountryOrIso((String) cName) || matcher.containsCountryName((String) cName))) return true;
+
             // 2. Direct field checks for region
             try {
                 Object rf = XposedHelpers.getObjectField(author, "region");
@@ -614,6 +683,30 @@ public final class AwemeEvaluator {
             try {
                 Object arf = XposedHelpers.getObjectField(author, "accountRegion");
                 if (arf instanceof String && matcher.matchesCountryOrIso((String) arf)) return true;
+            } catch (Throwable ignored) {}
+            try {
+                Object srf = XposedHelpers.getObjectField(author, "storeRegion");
+                if (srf instanceof String && matcher.matchesCountryOrIso((String) srf)) return true;
+            } catch (Throwable ignored) {}
+            try {
+                Object iprf = XposedHelpers.getObjectField(author, "ipRegion");
+                if (iprf instanceof String && matcher.matchesCountryOrIso((String) iprf)) return true;
+            } catch (Throwable ignored) {}
+            try {
+                Object iplf = XposedHelpers.getObjectField(author, "ipLabel");
+                if (iplf instanceof String && (matcher.matchesCountryOrIso((String) iplf) || matcher.containsCountryName((String) iplf))) return true;
+            } catch (Throwable ignored) {}
+            try {
+                Object cisof = XposedHelpers.getObjectField(author, "countryIso");
+                if (cisof instanceof String && matcher.matchesCountryOrIso((String) cisof)) return true;
+            } catch (Throwable ignored) {}
+            try {
+                Object rRes = XposedHelpers.getObjectField(author, "regionOfResidence");
+                if (rRes instanceof String && matcher.matchesCountryOrIso((String) rRes)) return true;
+            } catch (Throwable ignored) {}
+            try {
+                Object gpsR = XposedHelpers.getObjectField(author, "gpsResolveRegion");
+                if (gpsR instanceof String && matcher.matchesCountryOrIso((String) gpsR)) return true;
             } catch (Throwable ignored) {}
 
             // 3. Register from
@@ -1389,22 +1482,41 @@ public final class AwemeEvaluator {
             if (json == null || json.isEmpty()) return false;
             String lower = json.toLowerCase(Locale.ROOT);
             for (String iso : isoCodes) {
-                if (lower.contains("\"region\":\"" + iso + "\"")
-                        || lower.contains("\"country\":\"" + iso + "\"")
-                        || lower.contains("\"country_code\":\"" + iso + "\"")
-                        || lower.contains("\"source_region\":\"" + iso + "\"")
-                        || lower.contains("\"owner_region\":\"" + iso + "\"")
-                        || lower.contains("\"music_region\":\"" + iso + "\"")
-                        || lower.contains("\"artist_region\":\"" + iso + "\"")
-                        || lower.contains("\"user_region\":\"" + iso + "\"")
-                        || lower.contains("\"author_region\":\"" + iso + "\"")
-                        || lower.contains("\"distribute_region\":\"" + iso + "\"")
-                        || lower.contains("\"song_country\":\"" + iso + "\"")
-                        || lower.contains("\"language\":\"" + iso + "\"")) {
+                if (matchesJsonKey(lower, "region", iso)
+                        || matchesJsonKey(lower, "country", iso)
+                        || matchesJsonKey(lower, "country_code", iso)
+                        || matchesJsonKey(lower, "ip_region", iso)
+                        || matchesJsonKey(lower, "upload_region", iso)
+                        || matchesJsonKey(lower, "shoot_region", iso)
+                        || matchesJsonKey(lower, "create_region", iso)
+                        || matchesJsonKey(lower, "store_region", iso)
+                        || matchesJsonKey(lower, "store_country", iso)
+                        || matchesJsonKey(lower, "account_region", iso)
+                        || matchesJsonKey(lower, "content_region", iso)
+                        || matchesJsonKey(lower, "region_code", iso)
+                        || matchesJsonKey(lower, "iso_country_code", iso)
+                        || matchesJsonKey(lower, "page_poi_region_code", iso)
+                        || matchesJsonKey(lower, "region_of_residence", iso)
+                        || matchesJsonKey(lower, "gps_resolve_region", iso)
+                        || matchesJsonKey(lower, "user_region", iso)
+                        || matchesJsonKey(lower, "author_region", iso)
+                        || matchesJsonKey(lower, "source_region", iso)
+                        || matchesJsonKey(lower, "owner_region", iso)
+                        || matchesJsonKey(lower, "music_region", iso)
+                        || matchesJsonKey(lower, "artist_region", iso)
+                        || matchesJsonKey(lower, "distribute_region", iso)
+                        || matchesJsonKey(lower, "song_country", iso)
+                        || matchesJsonKey(lower, "language", iso)) {
                     return true;
                 }
             }
             return false;
+        }
+
+        private static boolean matchesJsonKey(String json, String key, String val) {
+            String q1 = "\"" + key + "\":\"" + val + "\"";
+            String q2 = "\"" + key + "\": \"" + val + "\"";
+            return json.contains(q1) || json.contains(q2);
         }
     }
 }

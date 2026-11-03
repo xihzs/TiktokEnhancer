@@ -48,8 +48,13 @@ public class FeedFilterHook implements BaseHook {
                             return;
                         }
 
-                        // Profile feed exclusion: never filter profile grid lists to preserve 1:1 index alignment!
-                        if (isProfileFeed(feedItemList, list)) {
+                        boolean isProf = isProfileFeed(feedItemList, list);
+                        boolean hasBlocked = ModuleConfig.blockCountries
+                                && ModuleConfig.blockedCountries != null
+                                && !ModuleConfig.blockedCountries.isEmpty();
+
+                        // Profile feed exclusion: only bypass if NO country blocking is configured
+                        if (isProf && !hasBlocked) {
                             return;
                         }
 
@@ -57,12 +62,15 @@ public class FeedFilterHook implements BaseHook {
                         XposedHelpers.setAdditionalInstanceField(clean, "tiktok_enhancer_clean", Boolean.TRUE);
                         XposedHelpers.setAdditionalInstanceField(list, "tiktok_enhancer_clean", Boolean.TRUE);
 
-                        // If clean is empty, DO NOT replace with empty list! Prevents "Something went wrong".
-                        if (!clean.isEmpty() && clean.size() != list.size()) {
-                            try { XposedHelpers.setBooleanField(feedItemList, "hasAd", false); } catch (Throwable ignored) {}
-                            try { XposedHelpers.setObjectField(feedItemList, "preloadAds", null); } catch (Throwable ignored) {}
-                            try { XposedHelpers.setObjectField(feedItemList, "items", clean); } catch (Throwable ignored) {}
-                            param.setResult(clean);
+                        // If clean is empty, DO NOT replace with empty list on FYP (prevents "Something went wrong").
+                        // But on profile feeds, an empty list is normal ("No videos yet").
+                        if (clean.size() != list.size()) {
+                            if (!clean.isEmpty() || isProf) {
+                                try { XposedHelpers.setBooleanField(feedItemList, "hasAd", false); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(feedItemList, "preloadAds", null); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(feedItemList, "items", clean); } catch (Throwable ignored) {}
+                                param.setResult(clean);
+                            }
                         }
                     }
                 }
@@ -82,14 +90,21 @@ public class FeedFilterHook implements BaseHook {
                             if (Boolean.TRUE.equals(XposedHelpers.getAdditionalInstanceField(incoming, "tiktok_enhancer_clean"))) {
                                 return;
                             }
-                            if (isProfileFeed(param.thisObject, incoming)) {
+                            boolean isProf = isProfileFeed(param.thisObject, incoming);
+                            boolean hasBlocked = ModuleConfig.blockCountries
+                                    && ModuleConfig.blockedCountries != null
+                                    && !ModuleConfig.blockedCountries.isEmpty();
+
+                            if (isProf && !hasBlocked) {
                                 return;
                             }
                             List<Object> clean = filterList(incoming, param.thisObject);
                             XposedHelpers.setAdditionalInstanceField(clean, "tiktok_enhancer_clean", Boolean.TRUE);
                             XposedHelpers.setAdditionalInstanceField(incoming, "tiktok_enhancer_clean", Boolean.TRUE);
-                            if (!clean.isEmpty() && clean.size() != incoming.size()) {
-                                param.args[0] = clean;
+                            if (clean.size() != incoming.size()) {
+                                if (!clean.isEmpty() || isProf) {
+                                    param.args[0] = clean;
+                                }
                             }
                         }
                     }
@@ -179,10 +194,16 @@ public class FeedFilterHook implements BaseHook {
             return new ArrayList<>();
         }
 
-        if (isProfileOrDetailContext(context) || isSingleAuthorProfileFeed(sourceList)) {
-            @SuppressWarnings("unchecked")
-            List<Object> raw = (List<Object>) sourceList;
-            return raw;
+        boolean isProfile = isProfileOrDetailContext(context) || isSingleAuthorProfileFeed(sourceList);
+        if (isProfile) {
+            boolean hasBlocked = ModuleConfig.blockCountries
+                    && ModuleConfig.blockedCountries != null
+                    && !ModuleConfig.blockedCountries.isEmpty();
+            if (!hasBlocked) {
+                @SuppressWarnings("unchecked")
+                List<Object> raw = (List<Object>) sourceList;
+                return raw;
+            }
         }
 
         boolean isFyp = isRecommendFeed(context);
