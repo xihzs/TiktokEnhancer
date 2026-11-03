@@ -230,6 +230,37 @@ public class TelephonyHook implements BaseHook {
                     if (id != -1) param.setResult(id);
                 }
             });
+
+            XC_MethodHook subInfoListHook = new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    Object result = param.getResult();
+                    if (result instanceof java.util.List) {
+                        java.util.List<?> list = (java.util.List<?>) result;
+                        String country = ModuleConfig.countryIso;
+                        String mccStr = ModuleConfig.mcc;
+                        String mncStr = ModuleConfig.mnc;
+                        String opName = ModuleConfig.operatorName;
+                        if (country != null && !country.isEmpty()) {
+                            for (Object info : list) {
+                                if (info == null) continue;
+                                try { XposedHelpers.setObjectField(info, "mCountryIso", country); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(info, "mMcc", mccStr); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(info, "mMnc", mncStr); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(info, "mCarrierName", opName); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(info, "mDisplayName", opName); } catch (Throwable ignored) {}
+                            }
+                        }
+                    }
+                }
+            };
+
+            try {
+                XposedHelpers.findAndHookMethod(SubscriptionManager.class, "getActiveSubscriptionInfoList", subInfoListHook);
+            } catch (Throwable ignored) {}
+            try {
+                XposedHelpers.findAndHookMethod(SubscriptionManager.class, "getCompleteActiveSubscriptionInfoList", subInfoListHook);
+            } catch (Throwable ignored) {}
         } catch (Throwable ignored) {}
     }
 
@@ -255,6 +286,16 @@ public class TelephonyHook implements BaseHook {
                 }
             });
 
+            try {
+                XposedHelpers.findAndHookMethod(SubscriptionInfo.class, "getMccString", new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        String mccStr = ModuleConfig.getTelephonyString("mcc", null);
+                        if (mccStr != null) param.setResult(mccStr);
+                    }
+                });
+            } catch (Throwable ignored) {}
+
             XposedHelpers.findAndHookMethod(SubscriptionInfo.class, "getMnc", new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
@@ -266,6 +307,16 @@ public class TelephonyHook implements BaseHook {
                     }
                 }
             });
+
+            try {
+                XposedHelpers.findAndHookMethod(SubscriptionInfo.class, "getMncString", new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        String mncStr = ModuleConfig.getTelephonyString("mnc", null);
+                        if (mncStr != null) param.setResult(mncStr);
+                    }
+                });
+            } catch (Throwable ignored) {}
 
             XC_MethodHook nameHook = new XC_MethodHook() {
                 @Override

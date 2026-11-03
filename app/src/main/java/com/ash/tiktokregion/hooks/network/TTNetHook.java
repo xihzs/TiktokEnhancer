@@ -26,6 +26,45 @@ public class TTNetHook implements BaseHook {
     public void hook(ClassLoader classLoader) {
         hookStandardCronetAdapters(classLoader);
         findAndHookObfuscatedProviders(classLoader);
+        hookProtobufFeedRequest(classLoader);
+    }
+
+    private void hookProtobufFeedRequest(ClassLoader classLoader) {
+        try {
+            Class<?> builderClass = XposedHelpers.findClassIfExists("X.06DA", classLoader);
+            if (builderClass != null) {
+                XposedHelpers.findAndHookMethod(builderClass, "build", new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                        Object req = param.getResult();
+                        if (req != null && ModuleConfig.enabled && ModuleConfig.forceRegion) {
+                            String target = ModuleConfig.countryIso;
+                            String mcc = ModuleConfig.mcc;
+                            String mccMnc = ModuleConfig.operatorMccMnc;
+                            if (target != null && !target.isEmpty()) {
+                                try { XposedHelpers.setObjectField(req, "carrier_region", target); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(req, "sys_region", target); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(req, "region", target); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(req, "current_region", target); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(req, "residence", target); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(req, "account_region", target); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(req, "mcc", mcc); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(req, "mcc_mnc", mccMnc); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(req, "city_name", null); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(req, "province_name", null); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(req, "city_id", null); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(req, "province_id", null); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(req, "province_local_id", null); } catch (Throwable ignored) {}
+                                try { XposedHelpers.setObjectField(req, "debug_regions", null); } catch (Throwable ignored) {}
+                            }
+                        }
+                    }
+                });
+                XposedBridge.log(TAG + ": Hooked Wire/Protobuf FeedRequest Builder (06DA.build)");
+            }
+        } catch (Throwable t) {
+            Log.d(TAG, "Hook Wire FeedRequest Builder failed: " + t.getMessage());
+        }
     }
 
     private void hookStandardCronetAdapters(ClassLoader classLoader) {

@@ -11,6 +11,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 /**
@@ -119,12 +120,134 @@ public final class AwemeEvaluator {
             if (isTruthy(promoMusic)) return true;
         } catch (Throwable ignored) {}
 
+        if (isPromotedMusic(aweme)) return true;
+
         try {
             Object isLiveAd = XposedHelpers.callMethod(aweme, "isLiveAd");
             if (isTruthy(isLiveAd)) return true;
         } catch (Throwable ignored) {}
 
         return false;
+    }
+
+    public static boolean isPromotedMusic(Object aweme) {
+        if (aweme == null) return false;
+
+        // 1. Aweme promotional flags
+        try {
+            Object promoMusic = XposedHelpers.callMethod(aweme, "isWithPromotionalMusic");
+            if (isTruthy(promoMusic)) return true;
+        } catch (Throwable ignored) {}
+        try {
+            Object promoMusicField = XposedHelpers.getObjectField(aweme, "withPromotionalMusic");
+            if (isTruthy(promoMusicField)) return true;
+        } catch (Throwable ignored) {}
+
+        try {
+            Object promoId = XposedHelpers.callMethod(aweme, "getMusicPromoId");
+            if (promoId instanceof String && !((String) promoId).trim().isEmpty()) return true;
+        } catch (Throwable ignored) {}
+        try {
+            Object promoIdField = XposedHelpers.getObjectField(aweme, "musicPromoId");
+            if (promoIdField instanceof String && !((String) promoIdField).trim().isEmpty()) return true;
+        } catch (Throwable ignored) {}
+
+        try {
+            Object tagInfo = XposedHelpers.callMethod(aweme, "getMusicPromoTagInfo");
+            if (tagInfo != null) {
+                Object text = XposedHelpers.getObjectField(tagInfo, "text");
+                if (text instanceof String && !((String) text).trim().isEmpty()) return true;
+            }
+        } catch (Throwable ignored) {}
+        try {
+            Object tagInfoField = XposedHelpers.getObjectField(aweme, "musicPromoTagInfo");
+            if (tagInfoField != null) {
+                Object text = XposedHelpers.getObjectField(tagInfoField, "text");
+                if (text instanceof String && !((String) text).trim().isEmpty()) return true;
+            }
+        } catch (Throwable ignored) {}
+
+        // 2. Music promotional metadata
+        Object music = null;
+        try {
+            music = XposedHelpers.callMethod(aweme, "getMusic");
+        } catch (Throwable ignored) {}
+        if (music == null) {
+            try {
+                music = XposedHelpers.callMethod(aweme, "getAddedSoundMusicInfo");
+            } catch (Throwable ignored) {}
+        }
+        if (music == null) {
+            try {
+                music = XposedHelpers.getObjectField(aweme, "music");
+            } catch (Throwable ignored) {}
+        }
+
+        if (music != null) {
+            try {
+                Object pId = XposedHelpers.callMethod(music, "getPromoId");
+                if (pId instanceof String && !((String) pId).trim().isEmpty()) return true;
+            } catch (Throwable ignored) {}
+            try {
+                Object pId = XposedHelpers.getObjectField(music, "promoId");
+                if (pId instanceof String && !((String) pId).trim().isEmpty()) return true;
+            } catch (Throwable ignored) {}
+
+            try {
+                Object pTag = XposedHelpers.callMethod(music, "getPromotionTag");
+                if (pTag instanceof String && !((String) pTag).trim().isEmpty()) return true;
+            } catch (Throwable ignored) {}
+            try {
+                Object pTag = XposedHelpers.getObjectField(music, "promotionTag");
+                if (pTag instanceof String && !((String) pTag).trim().isEmpty()) return true;
+            } catch (Throwable ignored) {}
+
+            try {
+                Object tags = XposedHelpers.getObjectField(music, "musicTags");
+                if (tags instanceof List) {
+                    for (Object tagObj : (List<?>) tags) {
+                        if (tagObj == null) continue;
+                        String s = tagObj.toString().toLowerCase(Locale.ROOT);
+                        if (s.contains("promot") || s.contains("sponsor")) return true;
+                    }
+                }
+            } catch (Throwable ignored) {}
+
+            try {
+                Object extra = XposedHelpers.callMethod(music, "getExtra");
+                if (extra instanceof String) {
+                    String ex = (String) extra;
+                    if (ex.contains("\"is_promoted\":true") || ex.contains("\"promo_tag\"") || ex.contains("\"promotion\"")) {
+                        return true;
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        // 3. Anchor promotional indicators
+        try {
+            Object anchors = XposedHelpers.callMethod(aweme, "getAnchors");
+            if (anchors == null) anchors = XposedHelpers.getObjectField(aweme, "anchors");
+            if (anchors instanceof List) {
+                for (Object anchor : (List<?>) anchors) {
+                    if (anchor == null) continue;
+                    Object kw = XposedHelpers.getObjectField(anchor, "keyword");
+                    if (kw instanceof String && isPromoKeyword((String) kw)) return true;
+                    Object desc = XposedHelpers.getObjectField(anchor, "description");
+                    if (desc instanceof String && isPromoKeyword((String) desc)) return true;
+                    Object extra = XposedHelpers.getObjectField(anchor, "extra");
+                    if (extra instanceof String && isPromoKeyword((String) extra)) return true;
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        return false;
+    }
+
+    private static boolean isPromoKeyword(String str) {
+        if (str == null || str.isEmpty()) return false;
+        String s = str.toLowerCase(Locale.ROOT);
+        return s.contains("promoted music") || s.contains("music promotion") || s.contains("sponsored music") || s.contains("promo_music");
     }
 
     private static boolean isTruthy(Object val) {
