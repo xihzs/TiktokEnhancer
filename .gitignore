@@ -41,6 +41,5 @@ google-services.json
 # OS specific
 .DS_Store
 Thumbs.db
-
-# Scratch and temp tools
-scratch/
+target
+decompiled

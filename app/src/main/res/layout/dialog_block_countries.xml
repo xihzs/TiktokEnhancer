@@ -5,18 +5,9 @@
     android:layout_height="match_parent"
     android:background="@drawable/bg_dialog_modal"
     android:orientation="vertical"
-    android:paddingHorizontal="18dp"
-    android:paddingTop="10dp"
-    android:paddingBottom="20dp">
+    android:padding="20dp">
 
-    <!-- iOS Modal Drag Grabber -->
-    <View
-        android:layout_width="36dp"
-        android:layout_height="5dp"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginBottom="12dp"
-        android:background="@drawable/bg_drag_handle" />
-
+    <!-- Dialog Header -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -46,34 +37,36 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
+        <!-- Close 'X' Button -->
         <ImageView
             android:id="@+id/btn_close_dialog"
-            android:layout_width="30dp"
-            android:layout_height="30dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
             android:background="@drawable/bg_icon_btn"
             android:clickable="true"
             android:focusable="true"
-            android:padding="6dp"
+            android:padding="7dp"
             android:src="@drawable/ic_close"
             app:tint="@color/text_secondary" />
     </LinearLayout>
 
+    <!-- Search Input -->
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/til_search"
-        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="14dp"
         android:hint="@string/search_blocked_country"
         app:boxBackgroundColor="@color/surface_input"
-        app:boxCornerRadiusBottomEnd="10dp"
-        app:boxCornerRadiusBottomStart="10dp"
-        app:boxCornerRadiusTopEnd="10dp"
-        app:boxCornerRadiusTopStart="10dp"
-        app:boxStrokeColor="@color/border_glass"
+        app:boxCornerRadiusBottomEnd="14dp"
+        app:boxCornerRadiusBottomStart="14dp"
+        app:boxCornerRadiusTopEnd="14dp"
+        app:boxCornerRadiusTopStart="14dp"
+        app:boxStrokeColor="@color/border_focused"
         app:hintTextColor="@color/text_secondary"
         app:startIconDrawable="@drawable/ic_search"
-        app:startIconTint="@color/text_secondary">
+        app:startIconTint="@color/text_secondary"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/et_search_blocked"
@@ -85,6 +78,7 @@
             android:textSize="13.5sp" />
     </com.google.android.material.textfield.TextInputLayout>
 
+    <!-- Custom ISO input row -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -93,18 +87,18 @@
         android:orientation="horizontal">
 
         <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:hint="@string/hint_custom_iso"
             app:boxBackgroundColor="@color/surface_input"
-            app:boxCornerRadiusBottomEnd="10dp"
-            app:boxCornerRadiusBottomStart="10dp"
-            app:boxCornerRadiusTopEnd="10dp"
-            app:boxCornerRadiusTopStart="10dp"
-            app:boxStrokeColor="@color/border_glass"
-            app:hintTextColor="@color/text_secondary">
+            app:boxCornerRadiusBottomEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxStrokeColor="@color/border_focused"
+            app:hintTextColor="@color/text_secondary"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_custom_blocked_iso"
@@ -119,18 +113,19 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_add_custom_iso"
             android:layout_width="wrap_content"
-            android:layout_height="46dp"
+            android:layout_height="48dp"
             android:layout_marginStart="8dp"
             android:backgroundTint="@color/surface_card_secondary"
             android:text="@string/btn_add_custom_iso"
             android:textColor="@color/text_primary"
             android:textSize="13sp"
             android:textStyle="bold"
-            app:cornerRadius="10dp"
+            app:cornerRadius="12dp"
             app:strokeColor="@color/border_subtle"
             app:strokeWidth="1dp" />
     </LinearLayout>
 
+    <!-- Counter & Clear All Bar -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -145,7 +140,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="0 countries blocked"
-            android:textColor="@color/ios_red"
+            android:textColor="@color/status_blocked_dot"
             android:textSize="12.5sp"
             android:textStyle="bold" />
 
@@ -164,6 +159,7 @@
             android:visibility="gone" />
     </LinearLayout>
 
+    <!-- 2-Column Grid RecyclerView -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_blocked_presets"
         android:layout_width="match_parent"
@@ -173,6 +169,7 @@
         android:clipToPadding="false"
         android:overScrollMode="never" />
 
+    <!-- Empty State -->
     <TextView
         android:id="@+id/tv_empty_blocked_state"
         android:layout_width="match_parent"
@@ -183,6 +180,7 @@
         android:textSize="14sp"
         android:visibility="gone" />
 
+    <!-- Bottom Done Button -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_done_blocked"
         android:layout_width="match_parent"
@@ -191,8 +189,8 @@
         android:backgroundTint="@color/ios_blue"
         android:text="@string/btn_done"
         android:textColor="#FFFFFF"
-        android:textSize="13.5sp"
+        android:textSize="14sp"
         android:textStyle="bold"
-        app:cornerRadius="10dp" />
+        app:cornerRadius="12dp" />
 
 </LinearLayout>

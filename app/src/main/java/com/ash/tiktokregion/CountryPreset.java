@@ -53,6 +53,9 @@ public class CountryPreset {
     static {
         List<CountryPreset> list = new ArrayList<>();
 
+        // ═════════════════════════════════════════════════════════════════════
+        // North America
+        // ═════════════════════════════════════════════════════════════════════
         list.add(new CountryPreset("US_TMOBILE", "🇺🇸", "United States", "us", "310", "260", "310260", "T-Mobile", "en", "US"));
         list.add(new CountryPreset("US_VERIZON", "🇺🇸", "United States", "us", "311", "480", "311480", "Verizon", "en", "US"));
         list.add(new CountryPreset("US_ATT", "🇺🇸", "United States", "us", "310", "410", "310410", "AT&T", "en", "US"));
@@ -61,6 +64,9 @@ public class CountryPreset {
         list.add(new CountryPreset("CA_TELUS", "🇨🇦", "Canada", "ca", "302", "220", "302220", "Telus", "en", "CA"));
         list.add(new CountryPreset("MX_TELCEL", "🇲🇽", "Mexico", "mx", "334", "020", "334020", "Telcel", "es", "MX"));
 
+        // ═════════════════════════════════════════════════════════════════════
+        // Southeast Asia
+        // ═════════════════════════════════════════════════════════════════════
         list.add(new CountryPreset("MY_MAXIS", "🇲🇾", "Malaysia", "my", "502", "12", "50212", "Maxis", "ms", "MY"));
         list.add(new CountryPreset("MY_CELCOM", "🇲🇾", "Malaysia", "my", "502", "19", "50219", "Celcom", "ms", "MY"));
         list.add(new CountryPreset("MY_DIGI", "🇲🇾", "Malaysia", "my", "502", "16", "50216", "Digi", "ms", "MY"));
@@ -77,6 +83,9 @@ public class CountryPreset {
         list.add(new CountryPreset("VN_VIETTEL", "🇻🇳", "Vietnam", "vn", "452", "04", "45204", "Viettel", "vi", "VN"));
         list.add(new CountryPreset("VN_VINAPHONE", "🇻🇳", "Vietnam", "vn", "452", "02", "45202", "Vinaphone", "vi", "VN"));
 
+        // ═════════════════════════════════════════════════════════════════════
+        // East Asia
+        // ═════════════════════════════════════════════════════════════════════
         list.add(new CountryPreset("JP_DOCOMO", "🇯🇵", "Japan", "jp", "440", "10", "44010", "NTT DOCOMO", "ja", "JP"));
         list.add(new CountryPreset("JP_SOFTBANK", "🇯🇵", "Japan", "jp", "440", "20", "44020", "SoftBank", "ja", "JP"));
         list.add(new CountryPreset("JP_KDDI", "🇯🇵", "Japan", "jp", "440", "50", "44050", "au (KDDI)", "ja", "JP"));
@@ -86,9 +95,15 @@ public class CountryPreset {
         list.add(new CountryPreset("TW_CHUNGHWA", "🇹🇼", "Taiwan", "tw", "466", "92", "46692", "Chunghwa", "zh", "TW"));
         list.add(new CountryPreset("TW_TAIWANMO", "🇹🇼", "Taiwan", "tw", "466", "97", "46697", "Taiwan Mobile", "zh", "TW"));
 
+        // ═════════════════════════════════════════════════════════════════════
+        // South Asia
+        // ═════════════════════════════════════════════════════════════════════
         list.add(new CountryPreset("PK_JAZZ", "🇵🇰", "Pakistan", "pk", "410", "01", "41001", "Jazz", "ur", "PK"));
         list.add(new CountryPreset("BD_GRAMEEN", "🇧🇩", "Bangladesh", "bd", "470", "01", "47001", "Grameenphone", "bn", "BD"));
 
+        // ═════════════════════════════════════════════════════════════════════
+        // Western & Northern Europe
+        // ═════════════════════════════════════════════════════════════════════
         list.add(new CountryPreset("GB_EE", "🇬🇧", "United Kingdom", "gb", "234", "30", "23430", "EE", "en", "GB"));
         list.add(new CountryPreset("GB_VODAFONE", "🇬🇧", "United Kingdom", "gb", "234", "15", "23415", "Vodafone", "en", "GB"));
         list.add(new CountryPreset("GB_O2", "🇬🇧", "United Kingdom", "gb", "234", "10", "23410", "O2", "en", "GB"));
@@ -107,6 +122,9 @@ public class CountryPreset {
         list.add(new CountryPreset("DK_TDC", "🇩🇰", "Denmark", "dk", "238", "01", "23801", "TDC", "da", "DK"));
         list.add(new CountryPreset("FI_ELISA", "🇫🇮", "Finland", "fi", "244", "05", "24405", "Elisa", "fi", "FI"));
 
+        // ═════════════════════════════════════════════════════════════════════
+        // Southern & Eastern Europe
+        // ═════════════════════════════════════════════════════════════════════
         list.add(new CountryPreset("IT_TIM", "🇮🇹", "Italy", "it", "222", "01", "22201", "TIM", "it", "IT"));
         list.add(new CountryPreset("IT_VODAFONE", "🇮🇹", "Italy", "it", "222", "10", "22210", "Vodafone", "it", "IT"));
         list.add(new CountryPreset("ES_MOVISTAR", "🇪🇸", "Spain", "es", "214", "07", "21407", "Movistar", "es", "ES"));
@@ -119,10 +137,18 @@ public class CountryPreset {
         list.add(new CountryPreset("RO_ORANGE", "🇷🇴", "Romania", "ro", "226", "10", "22610", "Orange", "ro", "RO"));
         list.add(new CountryPreset("HU_TELEKOM", "🇭🇺", "Hungary", "hu", "216", "30", "21630", "Telekom", "hu", "HU"));
         list.add(new CountryPreset("UA_KYIVSTAR", "🇺🇦", "Ukraine", "ua", "255", "03", "25503", "Kyivstar", "uk", "UA"));
-        list.add(new CountryPreset("KZ_BEELINE", "🇰🇿", "Kazakhstan", "kz", "401", "01", "40101", "Beeline", "kk", "KZ"));
-        list.add(new CountryPreset("KZ_KCELL", "🇰🇿", "Kazakhstan", "kz", "401", "02", "40102", "Kcell", "kk", "KZ"));
-        list.add(new CountryPreset("KZ_TELE2", "🇰🇿", "Kazakhstan", "kz", "401", "77", "40177", "Tele2", "kk", "KZ"));
 
+        // ═════════════════════════════════════════════════════════════════════
+        // Central Asia
+        // ═════════════════════════════════════════════════════════════════════
+        list.add(new CountryPreset("KZ_KCELL", "🇰🇿", "Kazakhstan", "kz", "401", "02", "40102", "Kcell", "kk", "KZ"));
+        list.add(new CountryPreset("KZ_BEELINE", "🇰🇿", "Kazakhstan", "kz", "401", "01", "40101", "Beeline", "kk", "KZ"));
+        list.add(new CountryPreset("KZ_TELE2", "🇰🇿", "Kazakhstan", "kz", "401", "77", "40177", "Tele2", "kk", "KZ"));
+        list.add(new CountryPreset("KZ_ALTEL", "🇰🇿", "Kazakhstan", "kz", "401", "07", "40107", "Altel", "kk", "KZ"));
+
+        // ═════════════════════════════════════════════════════════════════════
+        // Middle East & North Africa
+        // ═════════════════════════════════════════════════════════════════════
         list.add(new CountryPreset("AE_ETISALAT", "🇦🇪", "United Arab Emirates", "ae", "424", "02", "42402", "Etisalat", "ar", "AE"));
         list.add(new CountryPreset("AE_DU", "🇦🇪", "United Arab Emirates", "ae", "424", "03", "42403", "du", "ar", "AE"));
         list.add(new CountryPreset("SA_STC", "🇸🇦", "Saudi Arabia", "sa", "420", "01", "42001", "STC", "ar", "SA"));
@@ -136,6 +162,9 @@ public class CountryPreset {
         list.add(new CountryPreset("EG_ORANGE", "🇪🇬", "Egypt", "eg", "602", "01", "60201", "Orange", "ar", "EG"));
         list.add(new CountryPreset("MA_MAROC", "🇲🇦", "Morocco", "ma", "604", "01", "60401", "Maroc Telecom", "ar", "MA"));
 
+        // ═════════════════════════════════════════════════════════════════════
+        // Latin America
+        // ═════════════════════════════════════════════════════════════════════
         list.add(new CountryPreset("BR_VIVO", "🇧🇷", "Brazil", "br", "724", "06", "72406", "Vivo", "pt", "BR"));
         list.add(new CountryPreset("BR_CLARO", "🇧🇷", "Brazil", "br", "724", "05", "72405", "Claro", "pt", "BR"));
         list.add(new CountryPreset("AR_CLARO", "🇦🇷", "Argentina", "ar", "722", "310", "722310", "Claro", "es", "AR"));
@@ -143,6 +172,9 @@ public class CountryPreset {
         list.add(new CountryPreset("CL_ENTEL", "🇨🇱", "Chile", "cl", "730", "01", "73001", "Entel", "es", "CL"));
         list.add(new CountryPreset("PE_CLARO", "🇵🇪", "Peru", "pe", "716", "10", "71610", "Claro", "es", "PE"));
 
+        // ═════════════════════════════════════════════════════════════════════
+        // Oceania & Sub-Saharan Africa
+        // ═════════════════════════════════════════════════════════════════════
         list.add(new CountryPreset("AU_TELSTRA", "🇦🇺", "Australia", "au", "505", "01", "50501", "Telstra", "en", "AU"));
         list.add(new CountryPreset("AU_OPTUS", "🇦🇺", "Australia", "au", "505", "02", "50502", "Optus", "en", "AU"));
         list.add(new CountryPreset("NZ_SPARK", "🇳🇿", "New Zealand", "nz", "530", "05", "53005", "Spark", "en", "NZ"));
@@ -155,7 +187,7 @@ public class CountryPreset {
     }
 
     public static CountryPreset getDefault() {
-        return PRESETS.get(0);
+        return PRESETS.get(0); // US T-Mobile default
     }
 
     public static CountryPreset getById(String id) {
@@ -184,6 +216,7 @@ public class CountryPreset {
         if (query == null || query.trim().isEmpty()) {
             return PRESETS;
         }
+
         String q = query.trim().toLowerCase(Locale.ROOT);
         List<CountryPreset> filtered = new ArrayList<>();
         for (CountryPreset p : PRESETS) {
@@ -196,6 +229,10 @@ public class CountryPreset {
         }
         return filtered;
     }
+
+    // ═════════════════════════════════════════════════════════════════════
+    // Unique Country Items & Helpers for Country Blacklisting
+    // ═════════════════════════════════════════════════════════════════════
 
     public static class CountryItem implements Comparable<CountryItem> {
         private final String iso;
@@ -232,25 +269,27 @@ public class CountryPreset {
     }
 
     public static String isoToFlagEmoji(String countryIso) {
-        if (countryIso == null || countryIso.trim().length() != 2) return "🌐";
+        if (countryIso == null || countryIso.trim().length() != 2) return "";
         String code = countryIso.trim().toUpperCase(Locale.ROOT);
         int firstChar = Character.codePointAt(code, 0) - 0x41 + 0x1F1E6;
         int secondChar = Character.codePointAt(code, 1) - 0x41 + 0x1F1E6;
-        if (!Character.isBmpCodePoint(firstChar) || !Character.isBmpCodePoint(secondChar)) {
-            return new String(Character.toChars(firstChar)) + new String(Character.toChars(secondChar));
+        if (code.charAt(0) < 'A' || code.charAt(0) > 'Z' || code.charAt(1) < 'A' || code.charAt(1) > 'Z') {
+            return "";
         }
-        return "🌐";
+        return new String(Character.toChars(firstChar)) + new String(Character.toChars(secondChar));
     }
 
     public static CountryItem createCountryItem(String iso) {
         if (iso == null || iso.trim().length() != 2) return null;
         String cleanIso = iso.trim().toLowerCase(Locale.ROOT);
 
+        // Check if exists in presets first
         CountryPreset preset = findByIso(cleanIso);
         if (preset != null) {
             return new CountryItem(cleanIso, preset.getCountryName(), preset.getFlag());
         }
 
+        // Fallback to Java Locale display country
         String name = new Locale("", cleanIso.toUpperCase(Locale.ROOT)).getDisplayCountry(Locale.ENGLISH);
         if (name.isEmpty()) {
             name = cleanIso.toUpperCase(Locale.ROOT);
@@ -262,6 +301,7 @@ public class CountryPreset {
     public static List<CountryItem> getUniqueCountries() {
         java.util.Map<String, CountryItem> uniqueMap = new java.util.LinkedHashMap<>();
 
+        // Add presets
         for (CountryPreset p : PRESETS) {
             String iso = p.getCountryIso().toLowerCase(Locale.ROOT);
             if (!uniqueMap.containsKey(iso)) {
@@ -269,9 +309,8 @@ public class CountryPreset {
             }
         }
 
+        // Add other common global countries if not already in presets
         String[][] additional = {
-                {"in", "India", "🇮🇳"},
-                {"hk", "Hong Kong", "🇭🇰"},
                 {"ru", "Russia", "🇷🇺"},
                 {"cn", "China", "🇨🇳"},
                 {"ir", "Iran", "🇮🇷"},
@@ -295,6 +334,7 @@ public class CountryPreset {
         if (query == null || query.trim().isEmpty()) {
             return list;
         }
+
         String q = query.trim().toLowerCase(Locale.ROOT);
         List<CountryItem> filtered = new ArrayList<>();
         for (CountryItem item : list) {
@@ -306,4 +346,3 @@ public class CountryPreset {
         return filtered;
     }
 }
-

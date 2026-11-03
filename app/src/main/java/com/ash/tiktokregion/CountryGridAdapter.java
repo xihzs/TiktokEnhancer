@@ -96,4 +96,3 @@ public class CountryGridAdapter extends RecyclerView.Adapter<CountryGridAdapter.
         }
     }
 }
-

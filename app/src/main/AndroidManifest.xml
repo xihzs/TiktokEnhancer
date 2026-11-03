@@ -2,10 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Allow querying TikTok packages across all Android versions (API 30+) -->
     <queries>
         <package android:name="com.zhiliaoapp.musically" />
         <package android:name="com.ss.android.ugc.trill" />
-        <package android:name="com.ss.android.ugc.aweme" />
         <package android:name="com.zhiliaoapp.musically.go" />
         <package android:name="com.tiktok.business" />
         <intent>
@@ -22,6 +22,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.TikTokRegion">
 
+        <!-- LSPosed / Xposed Module Configuration -->
         <meta-data
             android:name="xposedmodule"
             android:value="true" />
@@ -68,4 +69,3 @@
     </application>
 
 </manifest>
-

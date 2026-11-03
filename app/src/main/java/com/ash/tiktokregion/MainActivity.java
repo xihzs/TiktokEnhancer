@@ -20,7 +20,6 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -30,14 +29,12 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.textfield.TextInputEditText;
 
 import java.io.DataOutputStream;
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -56,97 +53,40 @@ public class MainActivity extends AppCompatActivity {
     public static final String KEY_HIDE_ICON = "hide_app_icon";
     public static final String KEY_NO_WATERMARK = "no_watermark";
     public static final String KEY_BYPASS_DOWNLOAD_RESTRICTION = "bypass_download_restriction";
-    public static final String KEY_HD_UPLOAD = "hd_upload";
-    public static final String KEY_UPLOAD_4K = "upload_4k";
-    public static final String KEY_FORCE_HIGH_QUALITY = "force_high_quality";
-    public static final String KEY_TELEMETRY_HUD = "telemetry_hud";
-    public static final String KEY_TELEMETRY_POPUP = "telemetry_popup";
     public static final String KEY_HIDE_ADS = "hide_ads";
     public static final String KEY_FORCE_REGION = "force_region";
     public static final String KEY_STRICT_FORCE_REGION = "strict_force_region";
-    public static final String KEY_LOCKED_REGION_FILTER = "locked_region_filter";
     public static final String KEY_BLOCK_COUNTRIES = "block_countries";
+    public static final String KEY_BLOCK_COUNTRY_SONGS = "block_country_songs";
     public static final String KEY_BLOCKED_COUNTRY_LIST = "blocked_country_list";
-    public static final String KEY_LANGUAGE_FILTER = "language_filter";
-    public static final String KEY_ALLOWED_LANGUAGES = "allowed_languages";
     public static final String KEY_DOWNLOAD_STORY = "download_story";
-    public static final String KEY_HIDE_NEARBY_TAB = "hide_nearby_tab";
-
-    public static final String KEY_ACTIVE_PROFILE = "active_profile";
-    public static final String PROFILE_GLOBAL = "global";
-    public static final String PROFILE_ASIA = "asia";
-    public static final String PROFILE_CHINA = "china";
-
-    public static final String PACKAGE_GLOBAL = "com.zhiliaoapp.musically";
-    public static final String PACKAGE_ASIA = "com.ss.android.ugc.trill";
-    public static final String PACKAGE_CHINA = "com.ss.android.ugc.aweme";
+    public static final String KEY_FORCE_HIGHEST_QUALITY = "force_highest_quality";
+    public static final String KEY_FILTER_NON_HD = "filter_non_hd";
+    public static final String KEY_ANTI_DELETE_MSG = "anti_delete_msg";
+    public static final String KEY_FORCE_MASTER_UPLOAD = "force_master_upload";
+    public static final String KEY_ANONYMOUS_VIEW = "anonymous_view";
+    public static final String KEY_DISABLE_POPUPS = "disable_popups";
 
     private SharedPreferences mPrefs;
-    private String mCurrentProfile = PROFILE_GLOBAL;
-    private View mTabGlobal;
-    private View mTabAsia;
-    private View mTabChina;
-    private TextView mTvTabGlobal;
-    private TextView mTvTabAsia;
-    private TextView mTvTabChina;
-    private View mBtnHamburger;
-    private View mLayoutHeaderProfile;
-    private TextView mTvActiveProfileTitle;
-    private TextView mTvActiveProfileBadge;
-    private TextView mTvActiveProfilePackage;
-    private TextView mTvNoWatermarkTitle;
-    private TextView mTvNoWatermarkDesc;
-    private View mLayoutChinaInfo;
-    private View mLayoutRegionSection;
-
-    private View mRowForceRegion;
-    private View mDividerForceRegion;
-    private View mRowStrictForceRegion;
-    private View mDividerStrictForceRegion;
-    private View mRowLockedRegion;
-    private View mDividerLockedRegion;
-    private View mRowBlockCountries;
-    private View mDividerBlockCountries;
-    private View mRowLanguageFilter;
-    private View mDividerLanguageFilter;
-    private View mRowEnableSpoof;
-    private View mDividerEnableSpoof;
-    private View mRowSpoofLocale;
-
     private MaterialSwitch mSwitchSpoof;
     private MaterialSwitch mSwitchLocale;
     private MaterialSwitch mSwitchHideIcon;
     private MaterialSwitch mSwitchForceRegion;
     private MaterialSwitch mSwitchStrictForceRegion;
-    private MaterialSwitch mSwitchLockedRegion;
     private MaterialSwitch mSwitchBlockCountries;
+    private MaterialSwitch mSwitchBlockCountrySongs;
     private View mBtnManageBlockedCountries;
     private TextView mTvBlockedCountriesSummary;
-    private MaterialSwitch mSwitchLanguageFilter;
-    private View mBtnManageLanguages;
-    private TextView mTvLanguagesSummary;
     private MaterialSwitch mSwitchDownloadStory;
-    private View mDividerDownloadStory;
     private MaterialSwitch mSwitchHideAds;
     private MaterialSwitch mSwitchNoWatermark;
     private MaterialSwitch mSwitchBypassDownload;
-    private MaterialSwitch mSwitchHDUpload;
-    private View mRowHDUpload;
-    private MaterialSwitch mSwitchUpload4K;
-    private View mRowUpload4K;
-    private View mDividerUpload4K;
-
-    private View mLayoutVersionWarning;
-    private TextView mTvVersionWarningTitle;
-    private TextView mTvVersionWarningDesc;
-    private TextView mTvVersionWarningBadge;
-
-    private MaterialSwitch mSwitchForceHighQuality;
-    private MaterialSwitch mSwitchTelemetryHUD;
-    private MaterialSwitch mSwitchTelemetryPopup;
-    private MaterialSwitch mSwitchHideNearbyTab;
-    private View mRowHideNearbyTab;
-    private View mDividerHideNearbyTab;
+    private MaterialSwitch mSwitchForceHighestQuality;
+    private MaterialSwitch mSwitchFilterNonHd;
+    private MaterialSwitch mSwitchAntiDeleteMsg;
+    private MaterialSwitch mSwitchMasterUpload;
+    private MaterialSwitch mSwitchAnonymousView;
+    private MaterialSwitch mSwitchDisablePopups;
     private MaterialSwitch mSwitchCustomOverride;
     private LinearLayout mLayoutCustomInputs;
     private TextInputEditText mEtCustomIso;
@@ -154,13 +94,13 @@ public class MainActivity extends AppCompatActivity {
     private TextInputEditText mEtCustomName;
     private TextView mTvCurrentCountry;
     private TextView mTvCurrentCarrierInfo;
-    private Button mBtnForceStop;
-    private Button mBtnLaunch;
+    private TextView mTvTiktokPackage;
+    private TextView mTvTiktokVersion;
+    private TextView mTvTiktokSupportStatus;
 
     private static final String[] TIKTOK_PACKAGES = {
-            PACKAGE_GLOBAL,
-            PACKAGE_ASIA,
-            PACKAGE_CHINA,
+            "com.zhiliaoapp.musically",
+            "com.ss.android.ugc.trill",
             "com.zhiliaoapp.musically.go",
             "com.tiktok.business"
     };
@@ -175,32 +115,6 @@ public class MainActivity extends AppCompatActivity {
         View dotStatus = findViewById(R.id.dot_status);
         TextView tvStatus = findViewById(R.id.tv_status);
 
-        mBtnHamburger = findViewById(R.id.btn_hamburger_menu);
-        mLayoutHeaderProfile = findViewById(R.id.layout_header_profile);
-        mTvActiveProfileTitle = findViewById(R.id.tv_active_profile_title);
-        mTvActiveProfileBadge = findViewById(R.id.tv_active_profile_badge);
-        mTvActiveProfilePackage = findViewById(R.id.tv_active_profile_package);
-
-        mTvNoWatermarkTitle = findViewById(R.id.tv_no_watermark_title);
-        mTvNoWatermarkDesc = findViewById(R.id.tv_no_watermark_desc);
-
-        mLayoutChinaInfo = findViewById(R.id.layout_china_info);
-        mLayoutRegionSection = findViewById(R.id.layout_region_section);
-
-        mRowForceRegion = findViewById(R.id.row_force_region);
-        mDividerForceRegion = findViewById(R.id.divider_force_region);
-        mRowStrictForceRegion = findViewById(R.id.row_strict_force_region);
-        mDividerStrictForceRegion = findViewById(R.id.divider_strict_force_region);
-        mRowLockedRegion = findViewById(R.id.row_locked_region);
-        mDividerLockedRegion = findViewById(R.id.divider_locked_region);
-        mRowBlockCountries = findViewById(R.id.row_block_countries);
-        mDividerBlockCountries = findViewById(R.id.divider_block_countries);
-        mRowLanguageFilter = findViewById(R.id.row_language_filter);
-        mDividerLanguageFilter = findViewById(R.id.divider_language_filter);
-        mRowEnableSpoof = findViewById(R.id.row_enable_spoof);
-        mDividerEnableSpoof = findViewById(R.id.divider_enable_spoof);
-        mRowSpoofLocale = findViewById(R.id.row_spoof_locale);
-
         mTvCurrentCountry = findViewById(R.id.tv_current_country);
         mTvCurrentCarrierInfo = findViewById(R.id.tv_current_carrier_info);
         View btnSelectPreset = findViewById(R.id.btn_select_preset);
@@ -214,163 +128,119 @@ public class MainActivity extends AppCompatActivity {
 
         mSwitchForceRegion = findViewById(R.id.switch_force_region);
         mSwitchStrictForceRegion = findViewById(R.id.switch_strict_force_region);
-        mSwitchLockedRegion = findViewById(R.id.switch_locked_region);
         mSwitchBlockCountries = findViewById(R.id.switch_block_countries);
+        mSwitchBlockCountrySongs = findViewById(R.id.switch_block_country_songs);
         mBtnManageBlockedCountries = findViewById(R.id.btn_manage_blocked_countries);
         mTvBlockedCountriesSummary = findViewById(R.id.tv_blocked_countries_summary);
-        mSwitchLanguageFilter = findViewById(R.id.switch_language_filter);
-        mBtnManageLanguages = findViewById(R.id.btn_manage_languages);
-        mTvLanguagesSummary = findViewById(R.id.tv_languages_summary);
         mSwitchDownloadStory = findViewById(R.id.switch_download_story);
-        mDividerDownloadStory = findViewById(R.id.divider_download_story);
         mSwitchHideAds = findViewById(R.id.switch_hide_ads);
+        mSwitchDisablePopups = findViewById(R.id.switch_disable_popups);
         mSwitchNoWatermark = findViewById(R.id.switch_no_watermark);
         mSwitchBypassDownload = findViewById(R.id.switch_bypass_download);
-        mSwitchHDUpload = findViewById(R.id.switch_hd_upload);
-        mRowHDUpload = findViewById(R.id.row_hd_upload);
-        mSwitchUpload4K = findViewById(R.id.switch_upload_4k);
-        mRowUpload4K = findViewById(R.id.row_upload_4k);
-        mDividerUpload4K = findViewById(R.id.divider_upload_4k);
-
-        mLayoutVersionWarning = findViewById(R.id.layout_version_warning);
-        mTvVersionWarningTitle = findViewById(R.id.tv_version_warning_title);
-        mTvVersionWarningDesc = findViewById(R.id.tv_version_warning_desc);
-        mTvVersionWarningBadge = findViewById(R.id.tv_version_warning_badge);
-
-        mSwitchForceHighQuality = findViewById(R.id.switch_force_high_quality);
-        mSwitchTelemetryHUD = findViewById(R.id.switch_telemetry_hud);
-        mSwitchTelemetryPopup = findViewById(R.id.switch_telemetry_popup);
-        mRowHideNearbyTab = findViewById(R.id.row_hide_nearby_tab);
-        mDividerHideNearbyTab = findViewById(R.id.divider_hide_nearby_tab);
-        mSwitchHideNearbyTab = findViewById(R.id.switch_hide_nearby_tab);
+        mSwitchForceHighestQuality = findViewById(R.id.switch_force_highest_quality);
+        mSwitchFilterNonHd = findViewById(R.id.switch_filter_non_hd);
+        mSwitchAntiDeleteMsg = findViewById(R.id.switch_anti_delete_msg);
+        mSwitchMasterUpload = findViewById(R.id.switch_force_master_upload);
+        mSwitchAnonymousView = findViewById(R.id.switch_anonymous_view);
         mSwitchSpoof = findViewById(R.id.switch_enable_spoof);
         mSwitchLocale = findViewById(R.id.switch_spoof_locale);
         mSwitchHideIcon = findViewById(R.id.switch_hide_icon);
 
-        mBtnForceStop = findViewById(R.id.btn_force_stop_tiktok);
-        mBtnLaunch = findViewById(R.id.btn_launch_tiktok);
+        Button btnForceStopTikTok = findViewById(R.id.btn_force_stop_tiktok);
+        Button btnLaunchTikTok = findViewById(R.id.btn_launch_tiktok);
 
-        mTabGlobal = findViewById(R.id.tab_profile_global);
-        mTabAsia = findViewById(R.id.tab_profile_asia);
-        mTabChina = findViewById(R.id.tab_profile_china);
-        mTvTabGlobal = findViewById(R.id.tv_tab_global);
-        mTvTabAsia = findViewById(R.id.tv_tab_asia);
-        mTvTabChina = findViewById(R.id.tv_tab_china);
-
-        if (mTabGlobal != null) {
-            mTabGlobal.setOnClickListener(v -> setProfile(PROFILE_GLOBAL));
-        }
-        if (mTabAsia != null) {
-            mTabAsia.setOnClickListener(v -> setProfile(PROFILE_ASIA));
-        }
-        if (mTabChina != null) {
-            mTabChina.setOnClickListener(v -> setProfile(PROFILE_CHINA));
-        }
-
-        View layoutSegmentProfiles = findViewById(R.id.layout_segment_profiles);
-        boolean globalInstalled = isAppInstalled(PACKAGE_GLOBAL);
-        boolean asiaInstalled = isAppInstalled(PACKAGE_ASIA);
-        boolean chinaInstalled = isAppInstalled(PACKAGE_CHINA);
-        int installedCount = (globalInstalled ? 1 : 0) + (asiaInstalled ? 1 : 0) + (chinaInstalled ? 1 : 0);
-
-        if (layoutSegmentProfiles != null) {
-            if (installedCount > 1) {
-                layoutSegmentProfiles.setVisibility(View.VISIBLE);
-                if (mTabGlobal != null) mTabGlobal.setVisibility(globalInstalled ? View.VISIBLE : View.GONE);
-                if (mTabAsia != null) mTabAsia.setVisibility(asiaInstalled ? View.VISIBLE : View.GONE);
-                if (mTabChina != null) mTabChina.setVisibility(chinaInstalled ? View.VISIBLE : View.GONE);
-            } else {
-                // When 1 or fewer apps are installed, do not show the profile switcher menu
-                layoutSegmentProfiles.setVisibility(View.GONE);
-            }
-        }
-
-        if (mBtnHamburger != null) {
-            mBtnHamburger.setOnClickListener(v -> showProfilePickerBottomSheet());
-        }
-        if (mLayoutHeaderProfile != null) {
-            mLayoutHeaderProfile.setOnClickListener(v -> showProfilePickerBottomSheet());
-        }
-
-        String savedProfile = mPrefs.getString(KEY_ACTIVE_PROFILE, PROFILE_GLOBAL);
-        if (!isAppInstalled(getTargetPackageForProfile(savedProfile))) {
-            if (isAppInstalled(PACKAGE_GLOBAL)) {
-                savedProfile = PROFILE_GLOBAL;
-            } else if (isAppInstalled(PACKAGE_ASIA)) {
-                savedProfile = PROFILE_ASIA;
-            } else if (isAppInstalled(PACKAGE_CHINA)) {
-                savedProfile = PROFILE_CHINA;
-            }
-        }
-        setProfile(savedProfile);
-
+        // 1. Status Indicator
         boolean active = isModuleActive();
         if (active) {
             dotStatus.setBackgroundResource(R.drawable.bg_dot_active);
             tvStatus.setText(R.string.status_active);
-            tvStatus.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
+            tvStatus.setTextColor(ContextCompat.getColor(this, R.color.ios_green));
         } else {
             dotStatus.setBackgroundResource(R.drawable.bg_dot_inactive);
             tvStatus.setText(R.string.status_inactive);
             tvStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary));
         }
 
+        // 1.1 Native Engine & Architecture Telemetry
+        TextView tvEngineVersion = findViewById(R.id.tv_engine_version);
+        TextView tvLibUsed = findViewById(R.id.tv_lib_used);
+        TextView tvTargetLib = findViewById(R.id.tv_target_lib);
+        mTvTiktokPackage = findViewById(R.id.tv_tiktok_package);
+        mTvTiktokVersion = findViewById(R.id.tv_tiktok_version);
+        mTvTiktokSupportStatus = findViewById(R.id.tv_tiktok_support_status);
+        TextView tvEngineArch = findViewById(R.id.tv_engine_arch);
+
+        if (tvEngineVersion != null) {
+            tvEngineVersion.setText("DexKit v2.3.0 Engine (Native C++)");
+            tvEngineVersion.setTextColor(ContextCompat.getColor(this, R.color.ios_green));
+        }
+        if (tvLibUsed != null) {
+            tvLibUsed.setText("libdexkit.so (LuckyPray)");
+        }
+        if (tvTargetLib != null) {
+            tvTargetLib.setText("libsscronet.so (TTNet)");
+        }
+        updateTikTokInfo();
+        if (tvEngineArch != null) {
+            tvEngineArch.setText("DexKit 2.3.0 • C++ Native Dex Map • LSPosed");
+        }
+
+        // 2. Load Region & Options State
         boolean enabled = mPrefs.getBoolean(KEY_ENABLED, true);
         boolean spoofLocale = mPrefs.getBoolean(KEY_SPOOF_LOCALE, false);
         boolean isCustom = mPrefs.getBoolean(KEY_IS_CUSTOM, false);
         boolean isIconHidden = isLauncherIconHidden();
         boolean forceRegion = mPrefs.getBoolean(KEY_FORCE_REGION, true);
         boolean strictForceRegion = mPrefs.getBoolean(KEY_STRICT_FORCE_REGION, false);
-        boolean lockedRegionFilter = mPrefs.getBoolean(KEY_LOCKED_REGION_FILTER, false);
         boolean blockCountries = mPrefs.getBoolean(KEY_BLOCK_COUNTRIES, false);
-        boolean languageFilter = mPrefs.getBoolean(KEY_LANGUAGE_FILTER, false);
+        boolean blockCountrySongs = mPrefs.getBoolean(KEY_BLOCK_COUNTRY_SONGS, true);
         boolean downloadStory = mPrefs.getBoolean(KEY_DOWNLOAD_STORY, true);
         boolean hideAds = mPrefs.getBoolean(KEY_HIDE_ADS, true);
         boolean noWatermark = mPrefs.getBoolean(KEY_NO_WATERMARK, true);
         boolean bypassDownload = mPrefs.getBoolean(KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
-        boolean hdUpload = mPrefs.getBoolean(KEY_HD_UPLOAD, true);
-        boolean upload4K = mPrefs.getBoolean(KEY_UPLOAD_4K, false);
-
-        boolean forceHighQuality = mPrefs.getBoolean(KEY_FORCE_HIGH_QUALITY, true);
-        boolean telemetryHUD = mPrefs.getBoolean(KEY_TELEMETRY_HUD, true);
-        boolean telemetryPopup = mPrefs.getBoolean(KEY_TELEMETRY_POPUP, true);
-        boolean hideNearbyTab = mPrefs.getBoolean(KEY_HIDE_NEARBY_TAB, false);
+        boolean forceHighestQuality = mPrefs.getBoolean(KEY_FORCE_HIGHEST_QUALITY, true);
+        boolean filterNonHd = mPrefs.getBoolean(KEY_FILTER_NON_HD, true);
+        boolean antiDeleteMsg = mPrefs.getBoolean(KEY_ANTI_DELETE_MSG, true);
+        boolean forceMasterUpload = mPrefs.getBoolean(KEY_FORCE_MASTER_UPLOAD, true);
+        boolean anonymousView = mPrefs.getBoolean(KEY_ANONYMOUS_VIEW, true);
+        boolean disablePopups = mPrefs.getBoolean(KEY_DISABLE_POPUPS, true);
 
         mSwitchSpoof.setChecked(enabled);
         mSwitchLocale.setChecked(spoofLocale);
         mSwitchHideIcon.setChecked(isIconHidden);
         mSwitchForceRegion.setChecked(forceRegion);
         mSwitchStrictForceRegion.setChecked(strictForceRegion);
-        if (mSwitchLockedRegion != null) mSwitchLockedRegion.setChecked(lockedRegionFilter);
         mSwitchBlockCountries.setChecked(blockCountries);
-        if (mSwitchLanguageFilter != null) mSwitchLanguageFilter.setChecked(languageFilter);
+        if (mSwitchBlockCountrySongs != null) mSwitchBlockCountrySongs.setChecked(blockCountrySongs);
         mSwitchDownloadStory.setChecked(downloadStory);
         mSwitchHideAds.setChecked(hideAds);
         mSwitchNoWatermark.setChecked(noWatermark);
         mSwitchBypassDownload.setChecked(bypassDownload);
-        if (mSwitchHDUpload != null) mSwitchHDUpload.setChecked(hdUpload);
-        if (mSwitchUpload4K != null) mSwitchUpload4K.setChecked(upload4K);
-
-        if (mSwitchForceHighQuality != null) mSwitchForceHighQuality.setChecked(forceHighQuality);
-        if (mSwitchTelemetryHUD != null) mSwitchTelemetryHUD.setChecked(telemetryHUD);
-        if (mSwitchTelemetryPopup != null) mSwitchTelemetryPopup.setChecked(telemetryPopup);
-        if (mSwitchHideNearbyTab != null) mSwitchHideNearbyTab.setChecked(hideNearbyTab);
+        if (mSwitchForceHighestQuality != null) mSwitchForceHighestQuality.setChecked(forceHighestQuality);
+        if (mSwitchFilterNonHd != null) mSwitchFilterNonHd.setChecked(filterNonHd);
+        if (mSwitchAntiDeleteMsg != null) mSwitchAntiDeleteMsg.setChecked(antiDeleteMsg);
+        if (mSwitchMasterUpload != null) mSwitchMasterUpload.setChecked(forceMasterUpload);
+        if (mSwitchAnonymousView != null) mSwitchAnonymousView.setChecked(anonymousView);
+        if (mSwitchDisablePopups != null) mSwitchDisablePopups.setChecked(disablePopups);
         mSwitchCustomOverride.setChecked(isCustom);
         mLayoutCustomInputs.setVisibility(isCustom ? View.VISIBLE : View.GONE);
 
         updateRegionDisplay();
         updateBlockedCountriesSummary();
-        updateLanguagesSummary();
 
+        // 3. Preset Selector Dialog (Searchable 60+ countries)
         btnSelectPreset.setOnClickListener(v -> showSearchablePresetDialog());
 
+        // 4. Custom Override Toggle
         mSwitchCustomOverride.setOnCheckedChangeListener((buttonView, isChecked) -> {
             mLayoutCustomInputs.setVisibility(isChecked ? View.VISIBLE : View.GONE);
             mPrefs.edit().putBoolean(KEY_IS_CUSTOM, isChecked).apply();
             saveToDeviceProtectedStorage(KEY_IS_CUSTOM, isChecked);
             updateRegionDisplay();
+            notifySettingsChanged();
         });
 
+        // 5. Custom Save Button
         btnSaveCustom.setOnClickListener(v -> {
             String iso = mEtCustomIso.getText() != null ? mEtCustomIso.getText().toString().trim().toLowerCase() : "";
             String op = mEtCustomOperator.getText() != null ? mEtCustomOperator.getText().toString().trim() : "";
@@ -395,9 +265,10 @@ public class MainActivity extends AppCompatActivity {
             makePrefsWorldReadable();
 
             updateRegionDisplay();
-            Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            notifySettingsChanged();
         });
 
+        // 6. Switches Listeners
         mSwitchForceRegion.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (isChecked && mSwitchStrictForceRegion != null && mSwitchStrictForceRegion.isChecked()) {
                 mSwitchStrictForceRegion.setChecked(false);
@@ -405,7 +276,7 @@ public class MainActivity extends AppCompatActivity {
             mPrefs.edit().putBoolean(KEY_FORCE_REGION, isChecked).apply();
             saveToDeviceProtectedStorage(KEY_FORCE_REGION, isChecked);
             makePrefsWorldReadable();
-            Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            notifySettingsChanged();
         });
 
         mSwitchStrictForceRegion.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -415,139 +286,108 @@ public class MainActivity extends AppCompatActivity {
             mPrefs.edit().putBoolean(KEY_STRICT_FORCE_REGION, isChecked).apply();
             saveToDeviceProtectedStorage(KEY_STRICT_FORCE_REGION, isChecked);
             makePrefsWorldReadable();
-            Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            notifySettingsChanged();
         });
-
-        if (mSwitchLockedRegion != null) {
-            mSwitchLockedRegion.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                mPrefs.edit().putBoolean(KEY_LOCKED_REGION_FILTER, isChecked).apply();
-                saveToDeviceProtectedStorage(KEY_LOCKED_REGION_FILTER, isChecked);
-                makePrefsWorldReadable();
-                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
-            });
-        }
 
         mSwitchBlockCountries.setOnCheckedChangeListener((buttonView, isChecked) -> {
             mPrefs.edit().putBoolean(KEY_BLOCK_COUNTRIES, isChecked).apply();
             saveToDeviceProtectedStorage(KEY_BLOCK_COUNTRIES, isChecked);
             makePrefsWorldReadable();
-            Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            notifySettingsChanged();
         });
 
-        if (mBtnManageBlockedCountries != null) {
-            mBtnManageBlockedCountries.setOnClickListener(v -> showBlockedCountriesDialog());
-        }
-
-        if (mSwitchLanguageFilter != null) {
-            mSwitchLanguageFilter.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                mPrefs.edit().putBoolean(KEY_LANGUAGE_FILTER, isChecked).apply();
-                saveToDeviceProtectedStorage(KEY_LANGUAGE_FILTER, isChecked);
+        if (mSwitchBlockCountrySongs != null) {
+            mSwitchBlockCountrySongs.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                mPrefs.edit().putBoolean(KEY_BLOCK_COUNTRY_SONGS, isChecked).apply();
+                saveToDeviceProtectedStorage(KEY_BLOCK_COUNTRY_SONGS, isChecked);
                 makePrefsWorldReadable();
-                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+                notifySettingsChanged();
             });
         }
 
-        if (mBtnManageLanguages != null) {
-            mBtnManageLanguages.setOnClickListener(v -> showLanguageSelectionDialog());
+        if (mBtnManageBlockedCountries != null) {
+            mBtnManageBlockedCountries.setOnClickListener(v -> showBlockedCountriesDialog());
         }
 
         mSwitchDownloadStory.setOnCheckedChangeListener((buttonView, isChecked) -> {
             mPrefs.edit().putBoolean(KEY_DOWNLOAD_STORY, isChecked).apply();
             saveToDeviceProtectedStorage(KEY_DOWNLOAD_STORY, isChecked);
             makePrefsWorldReadable();
-            Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            notifySettingsChanged();
         });
 
         mSwitchHideAds.setOnCheckedChangeListener((buttonView, isChecked) -> {
             mPrefs.edit().putBoolean(KEY_HIDE_ADS, isChecked).apply();
             saveToDeviceProtectedStorage(KEY_HIDE_ADS, isChecked);
             makePrefsWorldReadable();
-            Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            notifySettingsChanged();
         });
+
+        if (mSwitchDisablePopups != null) {
+            mSwitchDisablePopups.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                mPrefs.edit().putBoolean(KEY_DISABLE_POPUPS, isChecked).apply();
+                saveToDeviceProtectedStorage(KEY_DISABLE_POPUPS, isChecked);
+                makePrefsWorldReadable();
+                notifySettingsChanged();
+            });
+        }
 
         mSwitchNoWatermark.setOnCheckedChangeListener((buttonView, isChecked) -> {
             mPrefs.edit().putBoolean(KEY_NO_WATERMARK, isChecked).apply();
             saveToDeviceProtectedStorage(KEY_NO_WATERMARK, isChecked);
             makePrefsWorldReadable();
-            Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            notifySettingsChanged();
         });
 
         mSwitchBypassDownload.setOnCheckedChangeListener((buttonView, isChecked) -> {
             mPrefs.edit().putBoolean(KEY_BYPASS_DOWNLOAD_RESTRICTION, isChecked).apply();
             saveToDeviceProtectedStorage(KEY_BYPASS_DOWNLOAD_RESTRICTION, isChecked);
             makePrefsWorldReadable();
-            Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            notifySettingsChanged();
         });
 
-        if (mRowHDUpload != null && mSwitchHDUpload != null) {
-            mRowHDUpload.setOnClickListener(v -> mSwitchHDUpload.toggle());
-        }
-
-        if (mSwitchHDUpload != null) {
-            mSwitchHDUpload.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                if (!isChecked && mSwitchUpload4K != null && mSwitchUpload4K.isChecked()) {
-                    mSwitchUpload4K.setChecked(false);
-                }
-                mPrefs.edit().putBoolean(KEY_HD_UPLOAD, isChecked).commit();
-                saveToDeviceProtectedStorage(KEY_HD_UPLOAD, isChecked);
+        if (mSwitchForceHighestQuality != null) {
+            mSwitchForceHighestQuality.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                mPrefs.edit().putBoolean(KEY_FORCE_HIGHEST_QUALITY, isChecked).apply();
+                saveToDeviceProtectedStorage(KEY_FORCE_HIGHEST_QUALITY, isChecked);
                 makePrefsWorldReadable();
-                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+                notifySettingsChanged();
             });
         }
 
-        if (mRowUpload4K != null && mSwitchUpload4K != null) {
-            mRowUpload4K.setOnClickListener(v -> mSwitchUpload4K.toggle());
-        }
-
-        if (mSwitchUpload4K != null) {
-            mSwitchUpload4K.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                if (isChecked && mSwitchHDUpload != null && !mSwitchHDUpload.isChecked()) {
-                    mSwitchHDUpload.setChecked(true);
-                }
-                mPrefs.edit().putBoolean(KEY_UPLOAD_4K, isChecked).commit();
-                saveToDeviceProtectedStorage(KEY_UPLOAD_4K, isChecked);
+        if (mSwitchFilterNonHd != null) {
+            mSwitchFilterNonHd.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                mPrefs.edit().putBoolean(KEY_FILTER_NON_HD, isChecked).apply();
+                saveToDeviceProtectedStorage(KEY_FILTER_NON_HD, isChecked);
                 makePrefsWorldReadable();
-                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+                notifySettingsChanged();
             });
         }
 
-        if (mSwitchForceHighQuality != null) {
-            mSwitchForceHighQuality.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                mPrefs.edit().putBoolean(KEY_FORCE_HIGH_QUALITY, isChecked).apply();
-                saveToDeviceProtectedStorage(KEY_FORCE_HIGH_QUALITY, isChecked);
+        if (mSwitchAntiDeleteMsg != null) {
+            mSwitchAntiDeleteMsg.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                mPrefs.edit().putBoolean(KEY_ANTI_DELETE_MSG, isChecked).apply();
+                saveToDeviceProtectedStorage(KEY_ANTI_DELETE_MSG, isChecked);
                 makePrefsWorldReadable();
-                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+                notifySettingsChanged();
             });
         }
 
-        if (mSwitchTelemetryHUD != null) {
-            mSwitchTelemetryHUD.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                mPrefs.edit().putBoolean(KEY_TELEMETRY_HUD, isChecked).apply();
-                saveToDeviceProtectedStorage(KEY_TELEMETRY_HUD, isChecked);
+        if (mSwitchMasterUpload != null) {
+            mSwitchMasterUpload.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                mPrefs.edit().putBoolean(KEY_FORCE_MASTER_UPLOAD, isChecked).apply();
+                saveToDeviceProtectedStorage(KEY_FORCE_MASTER_UPLOAD, isChecked);
                 makePrefsWorldReadable();
-                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+                notifySettingsChanged();
             });
         }
 
-        if (mSwitchTelemetryPopup != null) {
-            mSwitchTelemetryPopup.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                mPrefs.edit().putBoolean(KEY_TELEMETRY_POPUP, isChecked).apply();
-                saveToDeviceProtectedStorage(KEY_TELEMETRY_POPUP, isChecked);
+        if (mSwitchAnonymousView != null) {
+            mSwitchAnonymousView.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                mPrefs.edit().putBoolean(KEY_ANONYMOUS_VIEW, isChecked).apply();
+                saveToDeviceProtectedStorage(KEY_ANONYMOUS_VIEW, isChecked);
                 makePrefsWorldReadable();
-                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
-            });
-        }
-
-        if (mRowHideNearbyTab != null && mSwitchHideNearbyTab != null) {
-            mRowHideNearbyTab.setOnClickListener(v -> mSwitchHideNearbyTab.toggle());
-        }
-
-        if (mSwitchHideNearbyTab != null) {
-            mSwitchHideNearbyTab.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                mPrefs.edit().putBoolean(KEY_HIDE_NEARBY_TAB, isChecked).commit();
-                saveToDeviceProtectedStorage(KEY_HIDE_NEARBY_TAB, isChecked);
-                makePrefsWorldReadable();
-                Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+                notifySettingsChanged();
             });
         }
 
@@ -555,14 +395,14 @@ public class MainActivity extends AppCompatActivity {
             mPrefs.edit().putBoolean(KEY_ENABLED, isChecked).apply();
             saveToDeviceProtectedStorage(KEY_ENABLED, isChecked);
             makePrefsWorldReadable();
-            Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            notifySettingsChanged();
         });
 
         mSwitchLocale.setOnCheckedChangeListener((buttonView, isChecked) -> {
             mPrefs.edit().putBoolean(KEY_SPOOF_LOCALE, isChecked).apply();
             saveToDeviceProtectedStorage(KEY_SPOOF_LOCALE, isChecked);
             makePrefsWorldReadable();
-            Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+            notifySettingsChanged();
         });
 
         mSwitchHideIcon.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -575,17 +415,16 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        mBtnForceStop.setOnClickListener(v -> forceStopCurrentProfileTarget());
-        mBtnLaunch.setOnClickListener(v -> launchCurrentProfileTarget());
+        // 7. Action Buttons
+        btnForceStopTikTok.setOnClickListener(v -> {
+            sendForceStopBroadcast();
+            tryForceStopTikTokWithRoot();
+            Toast.makeText(this, "TikTok closed", Toast.LENGTH_SHORT).show();
+        });
+
+        btnLaunchTikTok.setOnClickListener(v -> launchTikTok());
 
         makePrefsWorldReadable();
-        checkTikTokVersionCompatibility();
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        checkTikTokVersionCompatibility();
     }
 
     private void updateRegionDisplay() {
@@ -595,8 +434,9 @@ public class MainActivity extends AppCompatActivity {
             String op = mPrefs.getString(KEY_CUSTOM_OPERATOR, "310260");
             String name = mPrefs.getString(KEY_CUSTOM_NAME, "Custom Carrier");
 
-            mTvCurrentCountry.setText("🌐  Custom (" + iso + ")");
-            mTvCurrentCarrierInfo.setText(name + " · MCC+MNC " + op + " · " + iso);
+            String flag = CountryPreset.isoToFlagEmoji(iso);
+            mTvCurrentCountry.setText((flag.isEmpty() ? "" : flag + " ") + "Custom (" + iso.toUpperCase() + ")");
+            mTvCurrentCarrierInfo.setText(name + " · MCC+MNC " + op + " · ISO " + iso);
 
             mEtCustomIso.setText(iso.toLowerCase());
             mEtCustomOperator.setText(op);
@@ -605,17 +445,83 @@ public class MainActivity extends AppCompatActivity {
             String presetId = mPrefs.getString(KEY_PRESET_ID, CountryPreset.getDefault().getId());
             CountryPreset preset = CountryPreset.getById(presetId);
 
-            mTvCurrentCountry.setText(preset.getFlag() + "  " + preset.getCountryName());
-            mTvCurrentCarrierInfo.setText(preset.getOperatorName() + " · MCC+MNC " + preset.getOperatorMccMnc() + " · " + preset.getCountryIso().toUpperCase());
+            String flag = preset != null ? preset.getFlag() : "";
+            mTvCurrentCountry.setText((flag.isEmpty() ? "" : flag + " ") + (preset != null ? preset.getCountryName() : ""));
+            mTvCurrentCarrierInfo.setText((preset != null ? preset.getOperatorName() : "") + " · MCC+MNC " + (preset != null ? preset.getOperatorMccMnc() : "") + " · ISO " + (preset != null ? preset.getCountryIso().toUpperCase() : ""));
         }
     }
 
     private void showSearchablePresetDialog() {
-        CarrierPresetDialog.show(this, selected -> {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_select_preset, null);
+        EditText etSearch = dialogView.findViewById(R.id.et_search_country);
+        RecyclerView rvPresets = dialogView.findViewById(R.id.rv_presets);
+        TextView tvEmptyState = dialogView.findViewById(R.id.tv_empty_state);
+        View btnClose = dialogView.findViewById(R.id.btn_close_dialog);
+
+        rvPresets.setLayoutManager(new GridLayoutManager(this, 2));
+
+        String currentPresetId = mPrefs.getString(KEY_PRESET_ID, CountryPreset.getDefault().getId());
+        if (mPrefs.getBoolean(KEY_IS_CUSTOM, false)) {
+            currentPresetId = null;
+        }
+
+        Dialog dialog = new Dialog(this, R.style.DialogDarkTheme);
+        dialog.setContentView(dialogView);
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            dialog.getWindow().setDimAmount(0.65f);
+
+            DisplayMetrics metrics = getResources().getDisplayMetrics();
+            int width = (int) (metrics.widthPixels * 0.90);
+            int height = (int) (metrics.heightPixels * 0.78);
+            dialog.getWindow().setLayout(width, height);
+        }
+
+        if (btnClose != null) {
+            btnClose.setOnClickListener(v -> dialog.dismiss());
+        }
+
+        CountryGridAdapter adapter = new CountryGridAdapter(this, CountryPreset.PRESETS, currentPresetId, selected -> {
+            mPrefs.edit()
+                    .putString(KEY_PRESET_ID, selected.getId())
+                    .putBoolean(KEY_IS_CUSTOM, false)
+                    .apply();
+
+            saveToDeviceProtectedStorage(KEY_PRESET_ID, selected.getId());
+            saveToDeviceProtectedStorage(KEY_IS_CUSTOM, false);
+            makePrefsWorldReadable();
+
             mSwitchCustomOverride.setChecked(false);
             mLayoutCustomInputs.setVisibility(View.GONE);
+
             updateRegionDisplay();
+            notifySettingsChanged();
+            Toast.makeText(this, "Region set to " + selected.getCountryName(), Toast.LENGTH_SHORT).show();
+            dialog.dismiss();
         });
+        rvPresets.setAdapter(adapter);
+
+        etSearch.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                String query = s != null ? s.toString() : "";
+                List<CountryPreset> filtered = CountryPreset.filter(query);
+                adapter.updateList(filtered);
+                boolean isEmpty = filtered.isEmpty();
+                tvEmptyState.setVisibility(isEmpty ? View.VISIBLE : View.GONE);
+                rvPresets.setVisibility(isEmpty ? View.GONE : View.VISIBLE);
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {}
+        });
+
+        dialog.show();
     }
 
     private void updateBlockedCountriesSummary() {
@@ -638,46 +544,144 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showBlockedCountriesDialog() {
-        BlockedCountriesDialog.show(this, this::updateBlockedCountriesSummary);
-    }
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_block_countries, null);
+        EditText etSearch = dialogView.findViewById(R.id.et_search_blocked);
+        EditText etCustomIso = dialogView.findViewById(R.id.et_custom_blocked_iso);
+        View btnAddCustomIso = dialogView.findViewById(R.id.btn_add_custom_iso);
+        TextView tvBlockedCounter = dialogView.findViewById(R.id.tv_blocked_counter);
+        TextView btnClearAll = dialogView.findViewById(R.id.btn_clear_all_blocked);
+        RecyclerView rvBlockedPresets = dialogView.findViewById(R.id.rv_blocked_presets);
+        TextView tvEmptyState = dialogView.findViewById(R.id.tv_empty_blocked_state);
+        View btnClose = dialogView.findViewById(R.id.btn_close_dialog);
+        View btnDone = dialogView.findViewById(R.id.btn_done_blocked);
 
-    private void updateLanguagesSummary() {
-        if (mTvLanguagesSummary == null) return;
-        String list = mPrefs.getString(KEY_ALLOWED_LANGUAGES, "");
-        int count = 0;
-        if (list != null && !list.trim().isEmpty()) {
-            String[] parts = list.split(",");
-            for (String p : parts) {
-                if (!p.trim().isEmpty()) {
-                    count++;
+        rvBlockedPresets.setLayoutManager(new GridLayoutManager(this, 2));
+
+        String savedList = mPrefs.getString(KEY_BLOCKED_COUNTRY_LIST, "");
+        Set<String> initialBlocked = new HashSet<>();
+        if (savedList != null && !savedList.trim().isEmpty()) {
+            for (String iso : savedList.split(",")) {
+                String clean = iso.trim().toLowerCase(Locale.ROOT);
+                if (!clean.isEmpty()) {
+                    initialBlocked.add(clean);
                 }
             }
         }
-        if (count == 0) {
-            mTvLanguagesSummary.setText(R.string.no_languages_selected);
-        } else {
-            mTvLanguagesSummary.setText(getString(R.string.language_filter_count_format, count));
+
+        List<CountryPreset.CountryItem> allCountries = CountryPreset.getUniqueCountries();
+        Set<String> knownIsos = new HashSet<>();
+        for (CountryPreset.CountryItem c : allCountries) {
+            knownIsos.add(c.getIso().toLowerCase(Locale.ROOT));
         }
-    }
-
-    public String getCurrentRegionIso() {
-        if (mPrefs.getBoolean(KEY_IS_CUSTOM, false)) {
-            return mPrefs.getString(KEY_CUSTOM_ISO, "us").toLowerCase(Locale.ROOT);
-        } else {
-            String presetId = mPrefs.getString(KEY_PRESET_ID, CountryPreset.getDefault().getId());
-            CountryPreset preset = CountryPreset.getById(presetId);
-            return preset.getCountryIso().toLowerCase(Locale.ROOT);
+        for (String iso : initialBlocked) {
+            if (!knownIsos.contains(iso)) {
+                CountryPreset.CountryItem customItem = CountryPreset.createCountryItem(iso);
+                if (customItem != null) {
+                    allCountries.add(0, customItem);
+                    knownIsos.add(iso);
+                }
+            }
         }
-    }
 
-    private Set<String> getLanguagesForCountry(String countryIso) {
-        return LanguageFilterDialog.getLanguagesForCountry(countryIso);
-    }
+        Dialog dialog = new Dialog(this, R.style.DialogDarkTheme);
+        dialog.setContentView(dialogView);
 
-    private void showLanguageSelectionDialog() {
-        LanguageFilterDialog.show(this, this::updateLanguagesSummary);
-    }
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            dialog.getWindow().setDimAmount(0.65f);
 
+            DisplayMetrics metrics = getResources().getDisplayMetrics();
+            int width = (int) (metrics.widthPixels * 0.90);
+            int height = (int) (metrics.heightPixels * 0.85);
+            dialog.getWindow().setLayout(width, height);
+        }
+
+        BlockedCountryGridAdapter[] adapterHolder = new BlockedCountryGridAdapter[1];
+
+        Runnable updateCounterUI = () -> {
+            int count = adapterHolder[0] != null ? adapterHolder[0].getBlockedCount() : initialBlocked.size();
+            tvBlockedCounter.setText(getString(R.string.blocked_count_format, count));
+            btnClearAll.setVisibility(count > 0 ? View.VISIBLE : View.GONE);
+        };
+
+        BlockedCountryGridAdapter adapter = new BlockedCountryGridAdapter(this, allCountries, initialBlocked,
+                (item, isBlocked, totalBlockedCount) -> {
+                    tvBlockedCounter.setText(getString(R.string.blocked_count_format, totalBlockedCount));
+                    btnClearAll.setVisibility(totalBlockedCount > 0 ? View.VISIBLE : View.GONE);
+                });
+        adapterHolder[0] = adapter;
+        rvBlockedPresets.setAdapter(adapter);
+        updateCounterUI.run();
+
+        btnClearAll.setOnClickListener(v -> adapter.clearAll());
+
+        btnAddCustomIso.setOnClickListener(v -> {
+            String iso = etCustomIso.getText() != null ? etCustomIso.getText().toString().trim().toLowerCase(Locale.ROOT) : "";
+            if (iso.length() != 2) {
+                Toast.makeText(this, "Enter a 2-letter ISO code", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            CountryPreset.CountryItem customItem = CountryPreset.createCountryItem(iso);
+            if (customItem == null) {
+                Toast.makeText(this, "Invalid country code", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            adapter.addAndSelectCountry(customItem);
+            etCustomIso.setText("");
+            Toast.makeText(this, "Added " + iso.toUpperCase(Locale.ROOT), Toast.LENGTH_SHORT).show();
+        });
+
+        etSearch.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                String query = s != null ? s.toString() : "";
+                List<CountryPreset.CountryItem> filtered = CountryPreset.filterCountries(allCountries, query);
+                adapter.updateList(filtered);
+                boolean isEmpty = filtered.isEmpty();
+                tvEmptyState.setVisibility(isEmpty ? View.VISIBLE : View.GONE);
+                rvBlockedPresets.setVisibility(isEmpty ? View.GONE : View.VISIBLE);
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {}
+        });
+
+        Runnable saveAndDismiss = () -> {
+            Set<String> blockedSet = adapter.getBlockedIsoSet();
+            StringBuilder sb = new StringBuilder();
+            for (String iso : blockedSet) {
+                if (sb.length() > 0) sb.append(",");
+                sb.append(iso);
+            }
+            String joined = sb.toString();
+
+            mPrefs.edit().putString(KEY_BLOCKED_COUNTRY_LIST, joined).apply();
+            saveToDeviceProtectedStorage(KEY_BLOCKED_COUNTRY_LIST, joined);
+            makePrefsWorldReadable();
+
+            if (!blockedSet.isEmpty() && mSwitchBlockCountries != null && !mSwitchBlockCountries.isChecked()) {
+                mSwitchBlockCountries.setChecked(true);
+            }
+
+            updateBlockedCountriesSummary();
+            notifySettingsChanged();
+            dialog.dismiss();
+        };
+
+        if (btnClose != null) {
+            btnClose.setOnClickListener(v -> saveAndDismiss.run());
+        }
+        if (btnDone != null) {
+            btnDone.setOnClickListener(v -> saveAndDismiss.run());
+        }
+        dialog.setOnCancelListener(d -> saveAndDismiss.run());
+
+        dialog.show();
+    }
 
     private void setLauncherIconHidden(boolean hide) {
         try {
@@ -705,37 +709,25 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public SharedPreferences getPrefs() {
-        return mPrefs;
-    }
-
-    public MaterialSwitch getSwitchBlockCountries() {
-        return mSwitchBlockCountries;
-    }
-
-    public MaterialSwitch getSwitchLanguageFilter() {
-        return mSwitchLanguageFilter;
-    }
-
-    void saveToDeviceProtectedStorage(String key, boolean value) {
+    private void saveToDeviceProtectedStorage(String key, boolean value) {
         try {
             Context deContext = createDeviceProtectedStorageContext();
             SharedPreferences dePrefs = deContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-            dePrefs.edit().putBoolean(key, value).commit();
+            dePrefs.edit().putBoolean(key, value).apply();
         } catch (Throwable ignored) {
         }
     }
 
-    void saveToDeviceProtectedStorage(String key, String value) {
+    private void saveToDeviceProtectedStorage(String key, String value) {
         try {
             Context deContext = createDeviceProtectedStorageContext();
             SharedPreferences dePrefs = deContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-            dePrefs.edit().putString(key, value).commit();
+            dePrefs.edit().putString(key, value).apply();
         } catch (Throwable ignored) {
         }
     }
 
-    void makePrefsWorldReadable() {
+    private void makePrefsWorldReadable() {
         try {
             File prefsDir = new File(getApplicationInfo().dataDir, "shared_prefs");
             if (prefsDir.exists()) {
@@ -750,269 +742,24 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Hooked dynamically by MainHook in LSPosed/Xposed framework to return true when active.
+     * Also checks if TikTok has pinged ConfigProvider recently.
+     */
     public boolean isModuleActive() {
         long lastPing = mPrefs.getLong(ConfigProvider.PREF_LAST_PING, 0);
         return (System.currentTimeMillis() - lastPing < 7 * 24 * 60 * 60 * 1000L);
     }
 
-    public void setProfile(String profile) {
-        mCurrentProfile = profile;
-        mPrefs.edit().putString(KEY_ACTIVE_PROFILE, profile).apply();
-        saveToDeviceProtectedStorage(KEY_ACTIVE_PROFILE, profile);
-        makePrefsWorldReadable();
-
-        boolean isGlobal = PROFILE_GLOBAL.equals(profile);
-        boolean isAsia = PROFILE_ASIA.equals(profile);
-        boolean isChina = PROFILE_CHINA.equals(profile);
-
-        // Sync Cupertino segmented control UI
-        if (mTabGlobal != null && mTabAsia != null && mTabChina != null) {
-            mTabGlobal.setBackgroundResource(isGlobal ? R.drawable.bg_profile_tab_selected : R.drawable.bg_profile_tab_unselected);
-            if (mTvTabGlobal != null) {
-                mTvTabGlobal.setTextColor(ContextCompat.getColor(this, isGlobal ? R.color.profile_tab_text_active : R.color.profile_tab_text_inactive));
-            }
-
-            mTabAsia.setBackgroundResource(isAsia ? R.drawable.bg_profile_tab_selected : R.drawable.bg_profile_tab_unselected);
-            if (mTvTabAsia != null) {
-                mTvTabAsia.setTextColor(ContextCompat.getColor(this, isAsia ? R.color.profile_tab_text_active : R.color.profile_tab_text_inactive));
-            }
-
-            mTabChina.setBackgroundResource(isChina ? R.drawable.bg_profile_tab_selected : R.drawable.bg_profile_tab_unselected);
-            if (mTvTabChina != null) {
-                mTvTabChina.setTextColor(ContextCompat.getColor(this, isChina ? R.color.china_amber : R.color.profile_tab_text_inactive));
-            }
-        }
-
-        if (mTvActiveProfileTitle != null && mTvActiveProfileBadge != null && mTvActiveProfilePackage != null) {
-            if (isChina) {
-                mTvActiveProfileTitle.setText("Douyin");
-                mTvActiveProfileBadge.setText("CHINA");
-                mTvActiveProfileBadge.setTextColor(ContextCompat.getColor(this, R.color.china_amber));
-                mTvActiveProfilePackage.setText(PACKAGE_CHINA + " · Tap to switch");
-            } else if (isAsia) {
-                mTvActiveProfileTitle.setText("TikTok Asia");
-                mTvActiveProfileBadge.setText("ASIA");
-                mTvActiveProfileBadge.setTextColor(ContextCompat.getColor(this, R.color.text_secondary));
-                mTvActiveProfilePackage.setText(PACKAGE_ASIA + " · Tap to switch");
-            } else {
-                mTvActiveProfileTitle.setText("TikTok Global");
-                mTvActiveProfileBadge.setText("GLOBAL");
-                mTvActiveProfileBadge.setTextColor(ContextCompat.getColor(this, R.color.text_secondary));
-                mTvActiveProfilePackage.setText(PACKAGE_GLOBAL + " · Tap to switch");
-            }
-        }
-
-        if (isChina) {
-
-            if (mTvNoWatermarkTitle != null) mTvNoWatermarkTitle.setText(R.string.feature_no_watermark_douyin);
-            if (mTvNoWatermarkDesc != null) mTvNoWatermarkDesc.setText(R.string.feature_no_watermark_douyin_desc);
-
-            mLayoutChinaInfo.setVisibility(View.VISIBLE);
-            mLayoutRegionSection.setVisibility(View.GONE);
-
-            mRowForceRegion.setVisibility(View.GONE);
-            mDividerForceRegion.setVisibility(View.GONE);
-            mRowStrictForceRegion.setVisibility(View.GONE);
-            mDividerStrictForceRegion.setVisibility(View.GONE);
-            if (mRowLockedRegion != null) mRowLockedRegion.setVisibility(View.GONE);
-            if (mDividerLockedRegion != null) mDividerLockedRegion.setVisibility(View.GONE);
-            mRowBlockCountries.setVisibility(View.GONE);
-            mBtnManageBlockedCountries.setVisibility(View.GONE);
-            mDividerBlockCountries.setVisibility(View.GONE);
-            if (mRowLanguageFilter != null) mRowLanguageFilter.setVisibility(View.GONE);
-            if (mBtnManageLanguages != null) mBtnManageLanguages.setVisibility(View.GONE);
-            if (mDividerLanguageFilter != null) mDividerLanguageFilter.setVisibility(View.GONE);
-
-            mRowEnableSpoof.setVisibility(View.GONE);
-            mDividerEnableSpoof.setVisibility(View.GONE);
-            mRowSpoofLocale.setVisibility(View.GONE);
-
-            if (mRowHDUpload != null) mRowHDUpload.setVisibility(View.GONE);
-            if (mRowUpload4K != null) mRowUpload4K.setVisibility(View.GONE);
-            if (mDividerUpload4K != null) mDividerUpload4K.setVisibility(View.GONE);
-
-            if (mDividerDownloadStory != null) mDividerDownloadStory.setVisibility(View.GONE);
-            if (mRowHideNearbyTab != null) mRowHideNearbyTab.setVisibility(View.GONE);
-            if (mDividerHideNearbyTab != null) mDividerHideNearbyTab.setVisibility(View.GONE);
-
-            mBtnForceStop.setText(R.string.btn_force_stop_tiktok);
-            mBtnLaunch.setText(R.string.btn_open_tiktok);
-        } else {
-
-            if (mTvNoWatermarkTitle != null) mTvNoWatermarkTitle.setText(R.string.feature_no_watermark);
-            if (mTvNoWatermarkDesc != null) mTvNoWatermarkDesc.setText(R.string.feature_no_watermark_desc);
-
-            mLayoutChinaInfo.setVisibility(View.GONE);
-            mLayoutRegionSection.setVisibility(View.VISIBLE);
-
-            mRowForceRegion.setVisibility(View.VISIBLE);
-            mDividerForceRegion.setVisibility(View.VISIBLE);
-            mRowStrictForceRegion.setVisibility(View.VISIBLE);
-            mDividerStrictForceRegion.setVisibility(View.VISIBLE);
-            if (mRowLockedRegion != null) mRowLockedRegion.setVisibility(View.VISIBLE);
-            if (mDividerLockedRegion != null) mDividerLockedRegion.setVisibility(View.VISIBLE);
-            mRowBlockCountries.setVisibility(View.VISIBLE);
-            mBtnManageBlockedCountries.setVisibility(View.VISIBLE);
-            mDividerBlockCountries.setVisibility(View.VISIBLE);
-            if (mRowLanguageFilter != null) mRowLanguageFilter.setVisibility(View.VISIBLE);
-            if (mBtnManageLanguages != null) mBtnManageLanguages.setVisibility(View.VISIBLE);
-            if (mDividerLanguageFilter != null) mDividerLanguageFilter.setVisibility(View.VISIBLE);
-
-            mRowEnableSpoof.setVisibility(View.VISIBLE);
-            mDividerEnableSpoof.setVisibility(View.VISIBLE);
-            mRowSpoofLocale.setVisibility(View.VISIBLE);
-
-            if (mRowHDUpload != null) mRowHDUpload.setVisibility(View.VISIBLE);
-            if (mRowUpload4K != null) mRowUpload4K.setVisibility(View.VISIBLE);
-            if (mDividerUpload4K != null) mDividerUpload4K.setVisibility(View.VISIBLE);
-
-            if (mDividerDownloadStory != null) mDividerDownloadStory.setVisibility(View.VISIBLE);
-            if (mRowHideNearbyTab != null) mRowHideNearbyTab.setVisibility(View.VISIBLE);
-            if (mDividerHideNearbyTab != null) mDividerHideNearbyTab.setVisibility(View.VISIBLE);
-
-            mBtnForceStop.setText(R.string.btn_force_stop_tiktok);
-            mBtnLaunch.setText(R.string.btn_open_tiktok);
-        }
-
-        checkTikTokVersionCompatibility();
-    }
-
-    private boolean isAppInstalled(String pkg) {
-        if (pkg == null) return false;
-        try {
-            getPackageManager().getPackageInfo(pkg, 0);
-            return true;
-        } catch (PackageManager.NameNotFoundException ignored) {
-            return false;
-        }
-    }
-
-    private void showProfilePickerBottomSheet() {
-        BottomSheetDialog dialog = new BottomSheetDialog(this);
-        View sheetView = LayoutInflater.from(this).inflate(R.layout.dialog_profile_picker, null);
-        dialog.setContentView(sheetView);
-
-        View bottomSheetInternal = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
-        if (bottomSheetInternal != null) {
-            bottomSheetInternal.setBackgroundResource(android.R.color.transparent);
-        }
-
-        View btnClose = sheetView.findViewById(R.id.btn_close_profile_sheet);
-        if (btnClose != null) {
-            btnClose.setOnClickListener(v -> dialog.dismiss());
-        }
-
-        View cardGlobal = sheetView.findViewById(R.id.card_profile_global);
-        View cardAsia = sheetView.findViewById(R.id.card_profile_asia);
-        View cardChina = sheetView.findViewById(R.id.card_profile_china);
-
-        ImageView checkGlobal = sheetView.findViewById(R.id.check_profile_global);
-        ImageView checkAsia = sheetView.findViewById(R.id.check_profile_asia);
-        ImageView checkChina = sheetView.findViewById(R.id.check_profile_china);
-
-        TextView tvNotice = sheetView.findViewById(R.id.tv_no_installed_notice);
-
-        boolean globalInstalled = isAppInstalled(PACKAGE_GLOBAL);
-        boolean asiaInstalled = isAppInstalled(PACKAGE_ASIA);
-        boolean chinaInstalled = isAppInstalled(PACKAGE_CHINA);
-
-        boolean anyInstalled = globalInstalled || asiaInstalled || chinaInstalled;
-
-        if (anyInstalled) {
-            if (cardGlobal != null) cardGlobal.setVisibility(globalInstalled ? View.VISIBLE : View.GONE);
-            if (cardAsia != null) cardAsia.setVisibility(asiaInstalled ? View.VISIBLE : View.GONE);
-            if (cardChina != null) cardChina.setVisibility(chinaInstalled ? View.VISIBLE : View.GONE);
-            if (tvNotice != null) tvNotice.setVisibility(View.GONE);
-        } else {
-            if (cardGlobal != null) cardGlobal.setVisibility(View.VISIBLE);
-            if (cardAsia != null) cardAsia.setVisibility(View.VISIBLE);
-            if (cardChina != null) cardChina.setVisibility(View.VISIBLE);
-            if (tvNotice != null) tvNotice.setVisibility(View.VISIBLE);
-        }
-
-        if (checkGlobal != null) {
-            checkGlobal.setVisibility(PROFILE_GLOBAL.equals(mCurrentProfile) ? View.VISIBLE : View.GONE);
-        }
-        if (checkAsia != null) {
-            checkAsia.setVisibility(PROFILE_ASIA.equals(mCurrentProfile) ? View.VISIBLE : View.GONE);
-        }
-        if (checkChina != null) {
-            checkChina.setVisibility(PROFILE_CHINA.equals(mCurrentProfile) ? View.VISIBLE : View.GONE);
-        }
-
-        if (cardGlobal != null) {
-            cardGlobal.setOnClickListener(v -> {
-                setProfile(PROFILE_GLOBAL);
-                dialog.dismiss();
-            });
-        }
-        if (cardAsia != null) {
-            cardAsia.setOnClickListener(v -> {
-                setProfile(PROFILE_ASIA);
-                dialog.dismiss();
-            });
-        }
-        if (cardChina != null) {
-            cardChina.setOnClickListener(v -> {
-                setProfile(PROFILE_CHINA);
-                dialog.dismiss();
-            });
-        }
-
-        View btnGithub = sheetView.findViewById(R.id.btn_open_github);
-        if (btnGithub != null) {
-            btnGithub.setOnClickListener(v -> {
-                try {
-                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/xihzs/TiktokEnhancer"));
-                    startActivity(intent);
-                } catch (Throwable ignored) {}
-                dialog.dismiss();
-            });
-        }
-
-        dialog.show();
-    }
-
-    private String getTargetPackageForProfile(String profile) {
-        if (PROFILE_CHINA.equals(profile)) {
-            return PACKAGE_CHINA;
-        } else if (PROFILE_ASIA.equals(profile)) {
-            return PACKAGE_ASIA;
-        } else {
-            return PACKAGE_GLOBAL;
-        }
-    }
-
-    private String getTargetAppNameForProfile(String profile) {
-        if (PROFILE_CHINA.equals(profile)) {
-            return getString(R.string.target_app_china);
-        } else if (PROFILE_ASIA.equals(profile)) {
-            return getString(R.string.target_app_asia);
-        } else {
-            return getString(R.string.target_app_global);
-        }
-    }
-
-    private void forceStopCurrentProfileTarget() {
-        String targetPkg = getTargetPackageForProfile(mCurrentProfile);
-        String appName = getTargetAppNameForProfile(mCurrentProfile);
-
-        boolean success = tryForceStopPackageWithRoot(targetPkg);
-        if (success) {
-            Toast.makeText(this, appName + " stopped via root", Toast.LENGTH_SHORT).show();
-        } else {
-            openAppDetailsSettingsForPackage(targetPkg);
-            Toast.makeText(this, "Root not available. Tap 'Force Stop' in App Info", Toast.LENGTH_LONG).show();
-        }
-    }
-
-    private boolean tryForceStopPackageWithRoot(String pkg) {
+    private boolean tryForceStopTikTokWithRoot() {
         Process process = null;
         DataOutputStream os = null;
         try {
             process = Runtime.getRuntime().exec("su");
             os = new DataOutputStream(process.getOutputStream());
-            os.writeBytes("am force-stop " + pkg + "\n");
+            for (String pkg : TIKTOK_PACKAGES) {
+                os.writeBytes("am force-stop " + pkg + "\n");
+            }
             os.writeBytes("exit\n");
             os.flush();
             int exitCode = process.waitFor();
@@ -1023,139 +770,186 @@ public class MainActivity extends AppCompatActivity {
             try {
                 if (os != null) os.close();
                 if (process != null) process.destroy();
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
     }
 
-    private void openAppDetailsSettingsForPackage(String pkg) {
-        try {
-            getPackageManager().getPackageInfo(pkg, 0);
-            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-            intent.setData(Uri.parse("package:" + pkg));
-            startActivity(intent);
-            return;
-        } catch (PackageManager.NameNotFoundException ignored) {}
-
-        for (String p : TIKTOK_PACKAGES) {
+    private void openAppDetailsSettings() {
+        for (String pkg : TIKTOK_PACKAGES) {
             try {
-                getPackageManager().getPackageInfo(p, 0);
+                getPackageManager().getPackageInfo(pkg, 0);
                 Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                intent.setData(Uri.parse("package:" + p));
+                intent.setData(Uri.parse("package:" + pkg));
                 startActivity(intent);
                 return;
-            } catch (PackageManager.NameNotFoundException ignored) {}
+            } catch (PackageManager.NameNotFoundException ignored) {
+            }
         }
-
         try {
             Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-            intent.setData(Uri.parse("package:" + pkg));
+            intent.setData(Uri.parse("package:com.zhiliaoapp.musically"));
             startActivity(intent);
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {
+        }
     }
 
-    private void launchCurrentProfileTarget() {
-        String targetPkg = getTargetPackageForProfile(mCurrentProfile);
-        String appName = getTargetAppNameForProfile(mCurrentProfile);
+    private void launchTikTok() {
         PackageManager pm = getPackageManager();
 
-        try {
-            Intent intent = pm.getLaunchIntentForPackage(targetPkg);
-            if (intent != null) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
-                return;
-            }
-        } catch (Throwable ignored) {}
+        // 1. Try getLaunchIntentForPackage
+        for (String pkg : TIKTOK_PACKAGES) {
+            try {
+                Intent intent = pm.getLaunchIntentForPackage(pkg);
+                if (intent != null) {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                    return;
+                }
+            } catch (Throwable ignored) {}
+        }
 
-        try {
-            Intent mainIntent = new Intent(Intent.ACTION_MAIN);
-            mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
-            mainIntent.setPackage(targetPkg);
-            List<ResolveInfo> matches = pm.queryIntentActivities(mainIntent, 0);
-            if (!matches.isEmpty()) {
-                ResolveInfo info = matches.get(0);
-                ComponentName component = new ComponentName(info.activityInfo.packageName, info.activityInfo.name);
-                Intent intent = new Intent(Intent.ACTION_MAIN);
-                intent.addCategory(Intent.CATEGORY_LAUNCHER);
-                intent.setComponent(component);
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
-                return;
-            }
-        } catch (Throwable ignored) {}
+        // 2. Try generic ACTION_MAIN launcher intent per package
+        for (String pkg : TIKTOK_PACKAGES) {
+            try {
+                Intent mainIntent = new Intent(Intent.ACTION_MAIN);
+                mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+                mainIntent.setPackage(pkg);
+                List<ResolveInfo> matches = pm.queryIntentActivities(mainIntent, 0);
+                if (!matches.isEmpty()) {
+                    ResolveInfo info = matches.get(0);
+                    ComponentName component = new ComponentName(info.activityInfo.packageName, info.activityInfo.name);
+                    Intent intent = new Intent(Intent.ACTION_MAIN);
+                    intent.addCategory(Intent.CATEGORY_LAUNCHER);
+                    intent.setComponent(component);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                    return;
+                }
+            } catch (Throwable ignored) {}
+        }
 
+        // 3. Fallback: try root command to launch
         try {
-            Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "monkey -p " + targetPkg + " -c android.intent.category.LAUNCHER 1"});
+            Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "monkey -p com.zhiliaoapp.musically -c android.intent.category.LAUNCHER 1"});
             if (p.waitFor() == 0) return;
         } catch (Throwable ignored) {}
 
-        Toast.makeText(this, appName + " is not installed on device", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "TikTok app not found on device", Toast.LENGTH_SHORT).show();
     }
 
-    public static int compareVersions(String v1, String v2) {
-        if (v1 == null || v2 == null) return 0;
-        String clean1 = v1.replaceAll("[^0-9.]", "");
-        String clean2 = v2.replaceAll("[^0-9.]", "");
-        String[] parts1 = clean1.split("\\.");
-        String[] parts2 = clean2.split("\\.");
-        int length = Math.max(parts1.length, parts2.length);
-        for (int i = 0; i < length; i++) {
-            long num1 = (i < parts1.length && !parts1[i].isEmpty()) ? Long.parseLong(parts1[i]) : 0;
-            long num2 = (i < parts2.length && !parts2[i].isEmpty()) ? Long.parseLong(parts2[i]) : 0;
-            if (num1 != num2) {
-                return Long.compare(num1, num2);
-            }
+    public static final String ACTION_SETTINGS_CHANGED = "com.ash.tiktokregion.ACTION_SETTINGS_CHANGED";
+    public static final String ACTION_FORCE_STOP = "com.ash.tiktokregion.ACTION_FORCE_STOP";
+    public static final String EXTRA_AUTO_KILL = "auto_kill";
+
+    private void sendForceStopBroadcast() {
+        for (String pkg : TIKTOK_PACKAGES) {
+            try {
+                Intent intent = new Intent(ACTION_FORCE_STOP);
+                intent.setPackage(pkg);
+                intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND | Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
+                sendBroadcast(intent);
+            } catch (Throwable ignored) {}
         }
-        return 0;
-    }
-
-    private void checkTikTokVersionCompatibility() {
-        if (mLayoutVersionWarning == null) return;
-
-        if (PROFILE_CHINA.equals(mCurrentProfile)) {
-            mLayoutVersionWarning.setVisibility(View.GONE);
-            return;
-        }
-
-        String targetPkg = getTargetPackageForProfile(mCurrentProfile);
         try {
-            String versionName = getPackageManager().getPackageInfo(targetPkg, 0).versionName;
-            if (versionName == null || versionName.isEmpty()) {
-                mLayoutVersionWarning.setVisibility(View.GONE);
-                return;
-            }
+            Intent genericIntent = new Intent(ACTION_FORCE_STOP);
+            genericIntent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+            sendBroadcast(genericIntent);
+        } catch (Throwable ignored) {}
+    }
 
-            int cmp = compareVersions(versionName, "47.1.3");
-            if (cmp < 0) {
-                mLayoutVersionWarning.setVisibility(View.VISIBLE);
-                if (mTvVersionWarningTitle != null) {
-                    mTvVersionWarningTitle.setText(R.string.version_outdated_title);
+    private void notifySettingsChanged() {
+        // 1. Notify ContentResolver observers (triggers ContentObserver self-kill in TikTok)
+        try {
+            getContentResolver().notifyChange(ConfigProvider.CONTENT_URI, null);
+        } catch (Throwable ignored) {}
+
+        // 2. Broadcast signal directly to TikTok packages with auto-kill enabled (zero root required)
+        for (String pkg : TIKTOK_PACKAGES) {
+            try {
+                Intent intent = new Intent(ACTION_SETTINGS_CHANGED);
+                intent.setPackage(pkg);
+                intent.putExtra(EXTRA_AUTO_KILL, true);
+                intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND | Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
+                sendBroadcast(intent);
+            } catch (Throwable ignored) {}
+        }
+        try {
+            Intent genericIntent = new Intent(ACTION_SETTINGS_CHANGED);
+            genericIntent.putExtra(EXTRA_AUTO_KILL, true);
+            genericIntent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+            sendBroadcast(genericIntent);
+        } catch (Throwable ignored) {}
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        updateTikTokInfo();
+    }
+
+    private void updateTikTokInfo() {
+        PackageManager pm = getPackageManager();
+        String detectedPkg = null;
+        String versionName = null;
+        long versionCode = 0;
+
+        for (String pkg : TIKTOK_PACKAGES) {
+            try {
+                android.content.pm.PackageInfo pi = pm.getPackageInfo(pkg, 0);
+                detectedPkg = pkg;
+                versionName = pi.versionName;
+                if (android.os.Build.VERSION.SDK_INT >= 28) {
+                    versionCode = pi.getLongVersionCode();
+                } else {
+                    versionCode = pi.versionCode;
                 }
-                if (mTvVersionWarningBadge != null) {
-                    mTvVersionWarningBadge.setText("OUTDATED");
-                    mTvVersionWarningBadge.setTextColor(ContextCompat.getColor(this, R.color.version_warning_accent));
+                break;
+            } catch (PackageManager.NameNotFoundException ignored) {}
+        }
+
+        if (detectedPkg != null && versionName != null) {
+            if (mTvTiktokPackage != null) {
+                String friendly = detectedPkg;
+                if (detectedPkg.equals("com.zhiliaoapp.musically")) {
+                    friendly = "TikTok Global";
+                } else if (detectedPkg.equals("com.ss.android.ugc.trill")) {
+                    friendly = "TikTok Asia";
+                } else if (detectedPkg.equals("com.zhiliaoapp.musically.go")) {
+                    friendly = "TikTok Lite";
                 }
-                if (mTvVersionWarningDesc != null) {
-                    mTvVersionWarningDesc.setText(getString(R.string.version_outdated_msg, versionName));
-                }
-            } else if (cmp > 0) {
-                mLayoutVersionWarning.setVisibility(View.VISIBLE);
-                if (mTvVersionWarningTitle != null) {
-                    mTvVersionWarningTitle.setText(R.string.version_unsupported_title);
-                }
-                if (mTvVersionWarningBadge != null) {
-                    mTvVersionWarningBadge.setText("UNSUPPORTED");
-                    mTvVersionWarningBadge.setTextColor(ContextCompat.getColor(this, R.color.version_warning_accent));
-                }
-                if (mTvVersionWarningDesc != null) {
-                    mTvVersionWarningDesc.setText(getString(R.string.version_unsupported_msg, versionName));
-                }
-            } else {
-                mLayoutVersionWarning.setVisibility(View.GONE);
+                mTvTiktokPackage.setText(friendly + " (" + detectedPkg + ")");
+                mTvTiktokPackage.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
             }
-        } catch (PackageManager.NameNotFoundException e) {
-            mLayoutVersionWarning.setVisibility(View.GONE);
+            if (mTvTiktokVersion != null) {
+                mTvTiktokVersion.setText("v" + versionName + " (" + versionCode + ")");
+                mTvTiktokVersion.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
+            }
+            if (mTvTiktokSupportStatus != null) {
+                if (versionName.equals("47.6.3") || versionName.startsWith("47.6.3")) {
+                    mTvTiktokSupportStatus.setText("Supported (v47.6.3 Optimized)");
+                    mTvTiktokSupportStatus.setTextColor(ContextCompat.getColor(this, R.color.ios_green));
+                } else if (versionName.startsWith("47.") || versionName.startsWith("46.")) {
+                    mTvTiktokSupportStatus.setText("Supported (v" + versionName + ")");
+                    mTvTiktokSupportStatus.setTextColor(ContextCompat.getColor(this, R.color.ios_green));
+                } else {
+                    mTvTiktokSupportStatus.setText("Untested (v" + versionName + ")");
+                    mTvTiktokSupportStatus.setTextColor(Color.parseColor("#FF9500"));
+                }
+            }
+        } else {
+            if (mTvTiktokPackage != null) {
+                mTvTiktokPackage.setText("None Detected");
+                mTvTiktokPackage.setTextColor(ContextCompat.getColor(this, R.color.text_tertiary));
+            }
+            if (mTvTiktokVersion != null) {
+                mTvTiktokVersion.setText("Not Installed");
+                mTvTiktokVersion.setTextColor(ContextCompat.getColor(this, R.color.text_tertiary));
+            }
+            if (mTvTiktokSupportStatus != null) {
+                mTvTiktokSupportStatus.setText("TikTok Not Installed");
+                mTvTiktokSupportStatus.setTextColor(ContextCompat.getColor(this, R.color.ios_red));
+            }
         }
     }
 }
-

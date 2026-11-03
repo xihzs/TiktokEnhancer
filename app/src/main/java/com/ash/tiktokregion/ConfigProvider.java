@@ -25,22 +25,19 @@ public class ConfigProvider extends ContentProvider {
     public static final String KEY_LOCALE_COUNTRY = "locale_country";
     public static final String KEY_NO_WATERMARK = "no_watermark";
     public static final String KEY_BYPASS_DOWNLOAD_RESTRICTION = "bypass_download_restriction";
-    public static final String KEY_HD_UPLOAD = "hd_upload";
-    public static final String KEY_UPLOAD_4K = "upload_4k";
-    public static final String KEY_FORCE_HIGH_QUALITY = "force_high_quality";
-    public static final String KEY_TELEMETRY_HUD = "telemetry_hud";
-    public static final String KEY_TELEMETRY_POPUP = "telemetry_popup";
     public static final String KEY_HIDE_ADS = "hide_ads";
     public static final String KEY_FORCE_REGION = "force_region";
     public static final String KEY_STRICT_FORCE_REGION = "strict_force_region";
-    public static final String KEY_LOCKED_REGION_FILTER = "locked_region_filter";
-    public static final String KEY_LANGUAGE_FILTER = "language_filter";
-    public static final String KEY_ALLOWED_LANGUAGES = "allowed_languages";
     public static final String KEY_DOWNLOAD_STORY = "download_story";
-    public static final String KEY_HIDE_NEARBY_TAB = "hide_nearby_tab";
     public static final String KEY_BLOCK_COUNTRIES = "block_countries";
+    public static final String KEY_BLOCK_COUNTRY_SONGS = "block_country_songs";
     public static final String KEY_BLOCKED_COUNTRY_LIST = "blocked_country_list";
-    public static final String KEY_ACTIVE_PROFILE = "active_profile";
+    public static final String KEY_FORCE_HIGHEST_QUALITY = "force_highest_quality";
+    public static final String KEY_FILTER_NON_HD = "filter_non_hd";
+    public static final String KEY_ANTI_DELETE_MSG = "anti_delete_msg";
+    public static final String KEY_FORCE_MASTER_UPLOAD = "force_master_upload";
+    public static final String KEY_ANONYMOUS_VIEW = "anonymous_view";
+    public static final String KEY_DISABLE_POPUPS = "disable_popups";
     public static final String PREF_LAST_PING = "last_hook_ping";
 
     @Override
@@ -55,6 +52,7 @@ public class ConfigProvider extends ContentProvider {
             if (context != null) {
                 SharedPreferences sp = context.getSharedPreferences(MainActivity.PREF_NAME, Context.MODE_PRIVATE);
 
+                // Record hook ping timestamp to indicate active status even before opening companion app
                 sp.edit().putLong(PREF_LAST_PING, System.currentTimeMillis()).apply();
 
                 CountryPreset defPreset = CountryPreset.getDefault();
@@ -66,36 +64,19 @@ public class ConfigProvider extends ContentProvider {
                 boolean spoofLocale = sp.getBoolean(MainActivity.KEY_SPOOF_LOCALE, false);
                 boolean noWatermark = sp.getBoolean(MainActivity.KEY_NO_WATERMARK, true);
                 boolean bypassDownload = sp.getBoolean(MainActivity.KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
-                boolean hdUpload = sp.getBoolean(MainActivity.KEY_HD_UPLOAD, true);
-                boolean upload4K = sp.getBoolean(MainActivity.KEY_UPLOAD_4K, false);
-                if (!upload4K) {
-                    try {
-                        Context deContext = context.createDeviceProtectedStorageContext();
-                        SharedPreferences dePrefs = deContext.getSharedPreferences(MainActivity.PREF_NAME, Context.MODE_PRIVATE);
-                        upload4K = dePrefs.getBoolean(MainActivity.KEY_UPLOAD_4K, false);
-                    } catch (Throwable ignored) {}
-                }
-                boolean forceHighQuality = sp.getBoolean(MainActivity.KEY_FORCE_HIGH_QUALITY, true);
-                boolean telemetryHUD = sp.getBoolean(MainActivity.KEY_TELEMETRY_HUD, true);
-                boolean telemetryPopup = sp.getBoolean(MainActivity.KEY_TELEMETRY_POPUP, true);
                 boolean hideAds = sp.getBoolean(MainActivity.KEY_HIDE_ADS, true);
                 boolean forceRegion = sp.getBoolean(MainActivity.KEY_FORCE_REGION, true);
                 boolean strictForceRegion = sp.getBoolean(MainActivity.KEY_STRICT_FORCE_REGION, false);
-                boolean lockedRegionFilter = sp.getBoolean(MainActivity.KEY_LOCKED_REGION_FILTER, false);
-                boolean languageFilter = sp.getBoolean(MainActivity.KEY_LANGUAGE_FILTER, false);
-                String allowedLanguages = sp.getString(MainActivity.KEY_ALLOWED_LANGUAGES, "");
                 boolean downloadStory = sp.getBoolean(MainActivity.KEY_DOWNLOAD_STORY, true);
-                boolean hideNearbyTab = sp.getBoolean(MainActivity.KEY_HIDE_NEARBY_TAB, false);
-                if (!hideNearbyTab) {
-                    try {
-                        Context deContext = context.createDeviceProtectedStorageContext();
-                        SharedPreferences dePrefs = deContext.getSharedPreferences(MainActivity.PREF_NAME, Context.MODE_PRIVATE);
-                        hideNearbyTab = dePrefs.getBoolean(MainActivity.KEY_HIDE_NEARBY_TAB, false);
-                    } catch (Throwable ignored) {}
-                }
                 boolean blockCountries = sp.getBoolean(MainActivity.KEY_BLOCK_COUNTRIES, false);
+                boolean blockCountrySongs = sp.getBoolean(MainActivity.KEY_BLOCK_COUNTRY_SONGS, true);
                 String blockedCountryList = sp.getString(MainActivity.KEY_BLOCKED_COUNTRY_LIST, "");
-                String activeProfile = sp.getString(MainActivity.KEY_ACTIVE_PROFILE, MainActivity.PROFILE_GLOBAL);
+                boolean forceHighestQuality = sp.getBoolean(KEY_FORCE_HIGHEST_QUALITY, true);
+                boolean filterNonHd = sp.getBoolean(KEY_FILTER_NON_HD, true);
+                boolean antiDeleteMsg = sp.getBoolean(KEY_ANTI_DELETE_MSG, true);
+                boolean forceMasterUpload = sp.getBoolean(KEY_FORCE_MASTER_UPLOAD, true);
+                boolean anonymousView = sp.getBoolean(KEY_ANONYMOUS_VIEW, true);
+                boolean disablePopups = sp.getBoolean(KEY_DISABLE_POPUPS, true);
 
                 String countryIso = isCustom
                         ? sp.getString(MainActivity.KEY_CUSTOM_ISO, preset.getCountryIso())
@@ -116,9 +97,10 @@ public class ConfigProvider extends ContentProvider {
 
                 Bundle bundle = new Bundle();
                 bundle.putBoolean(KEY_ENABLED, enabled);
-                bundle.putString(KEY_ACTIVE_PROFILE, activeProfile);
                 bundle.putString(KEY_SIM_COUNTRY, countryIso.toLowerCase());
+                bundle.putString("country_iso", countryIso.toLowerCase());
                 bundle.putString(KEY_SIM_OPERATOR, operatorMccMnc);
+                bundle.putString("operator_mcc_mnc", operatorMccMnc);
                 bundle.putString(KEY_OPERATOR_NAME, operatorName);
                 bundle.putString(KEY_MCC, mcc);
                 bundle.putString(KEY_MNC, mnc);
@@ -127,21 +109,24 @@ public class ConfigProvider extends ContentProvider {
                 bundle.putString(KEY_LOCALE_COUNTRY, preset.getLocaleCountry());
                 bundle.putBoolean(KEY_NO_WATERMARK, noWatermark);
                 bundle.putBoolean(KEY_BYPASS_DOWNLOAD_RESTRICTION, bypassDownload);
-                bundle.putBoolean(KEY_HD_UPLOAD, hdUpload);
-                bundle.putBoolean(KEY_UPLOAD_4K, upload4K);
-                bundle.putBoolean(KEY_FORCE_HIGH_QUALITY, forceHighQuality);
-                bundle.putBoolean(KEY_TELEMETRY_HUD, telemetryHUD);
-                bundle.putBoolean(KEY_TELEMETRY_POPUP, telemetryPopup);
                 bundle.putBoolean(KEY_HIDE_ADS, hideAds);
                 bundle.putBoolean(KEY_FORCE_REGION, forceRegion);
                 bundle.putBoolean(KEY_STRICT_FORCE_REGION, strictForceRegion);
-                bundle.putBoolean(KEY_LOCKED_REGION_FILTER, lockedRegionFilter);
-                bundle.putBoolean(KEY_LANGUAGE_FILTER, languageFilter);
-                bundle.putString(KEY_ALLOWED_LANGUAGES, allowedLanguages);
                 bundle.putBoolean(KEY_DOWNLOAD_STORY, downloadStory);
-                bundle.putBoolean(KEY_HIDE_NEARBY_TAB, hideNearbyTab);
                 bundle.putBoolean(KEY_BLOCK_COUNTRIES, blockCountries);
+                bundle.putBoolean(KEY_BLOCK_COUNTRY_SONGS, blockCountrySongs);
                 bundle.putString(KEY_BLOCKED_COUNTRY_LIST, blockedCountryList);
+                bundle.putString("blocked_countries_csv", blockedCountryList);
+                bundle.putBoolean(KEY_FORCE_HIGHEST_QUALITY, forceHighestQuality);
+                bundle.putBoolean(KEY_FILTER_NON_HD, filterNonHd);
+                bundle.putBoolean(KEY_ANTI_DELETE_MSG, antiDeleteMsg);
+                bundle.putBoolean("anti_delete", antiDeleteMsg);
+                bundle.putBoolean(KEY_FORCE_MASTER_UPLOAD, forceMasterUpload);
+                bundle.putBoolean("master_upload", forceMasterUpload);
+                bundle.putBoolean(KEY_ANONYMOUS_VIEW, anonymousView);
+                bundle.putBoolean("ghost_story_view", anonymousView);
+                bundle.putBoolean(KEY_DISABLE_POPUPS, disablePopups);
+                bundle.putBoolean("suppress_popups", disablePopups);
 
                 return bundle;
             }
@@ -174,4 +159,3 @@ public class ConfigProvider extends ContentProvider {
         return 0;
     }
 }
-

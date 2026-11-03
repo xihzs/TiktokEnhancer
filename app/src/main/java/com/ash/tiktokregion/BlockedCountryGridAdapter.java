@@ -151,4 +151,3 @@ public class BlockedCountryGridAdapter extends RecyclerView.Adapter<BlockedCount
         }
     }
 }
-

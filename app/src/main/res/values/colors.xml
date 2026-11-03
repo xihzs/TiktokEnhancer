@@ -1,68 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Pure AMOLED True Black Canvas -->
+    <!-- Apple iOS Modern Dark Grouped Palette -->
     <color name="bg_dark">#000000</color>
-    <color name="ios_canvas">#000000</color>
-
-    <!-- Liquid Glass Surfaces (Deep Obsidian & Frosted Materials) -->
-    <color name="surface_card">#0E1017</color>
-    <color name="surface_card_secondary">#161922</color>
-    <color name="surface_card_tertiary">#1E222F</color>
-    <color name="surface_input">#07080C</color>
-
-    <!-- Precision Hairline Borders & Specular Edges (No Diffuse Halos) -->
-    <color name="border_subtle">#1D212C</color>
-    <color name="border_glass">#252A38</color>
+    <color name="surface_card">#141416</color>
+    <color name="surface_card_secondary">#1F1F23</color>
+    <color name="surface_input">#1A1A1E</color>
+    
+    <!-- iOS System Separators & Borders -->
+    <color name="border_subtle">#26262B</color>
     <color name="border_focused">#0A84FF</color>
-    <color name="divider_dark">#151720</color>
-    <color name="divider_glass">#1A1D27</color>
+    <color name="divider_dark">#222227</color>
 
-    <!-- Typography: iOS Hierarchy -->
-    <color name="text_primary">#F5F6F8</color>
-    <color name="text_secondary">#8E94A4</color>
-    <color name="text_tertiary">#5D6374</color>
+    <!-- iOS Dynamic Typography Hierarchy -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#9898A0</color>
+    <color name="text_tertiary">#686872</color>
 
-    <!-- Apple System Accents -->
+    <!-- Apple iOS Modern System Accents -->
     <color name="ios_blue">#0A84FF</color>
-    <color name="ios_green">#34C759</color>
+    <color name="ios_green">#30D158</color>
     <color name="ios_orange">#FF9F0A</color>
     <color name="ios_red">#FF453A</color>
-    <color name="accent_silver">#E5E8F0</color>
-    <color name="accent_tint">#1F2432</color>
+    <color name="ios_purple">#BF5AF2</color>
+    <color name="ios_teal">#64D2FF</color>
+    <color name="ios_indigo">#5E5CE6</color>
+    <color name="ios_pink">#FF375F</color>
+    <color name="ios_gray_bg">#222226</color>
 
-    <!-- Status Indicators -->
-    <color name="status_active_dot">#34C759</color>
-    <color name="status_active_bg">#11261B</color>
-    <color name="status_active_border">#1D4A32</color>
-    <color name="status_inactive_dot">#8E94A4</color>
-    <color name="status_inactive_bg">#141720</color>
-    <color name="status_inactive_border">#232836</color>
+    <!-- Semantic Status Mappings -->
+    <color name="accent_silver">#FFFFFF</color>
+    <color name="accent_tint">#1F1F23</color>
+    <color name="status_active_dot">#30D158</color>
+    <color name="status_active_bg">#102616</color>
+    <color name="status_active_border">#1E4226</color>
+    <color name="status_inactive_dot">#9898A0</color>
+    <color name="status_inactive_bg">#1A1A1E</color>
+    <color name="status_inactive_border">#28282E</color>
 
+    <!-- Blocked State Colors -->
     <color name="status_blocked_dot">#FF453A</color>
-    <color name="status_blocked_bg">#291316</color>
-    <color name="status_blocked_border">#542128</color>
+    <color name="status_blocked_bg">#281214</color>
+    <color name="status_blocked_border">#4D1C20</color>
 
-    <!-- iOS Switch Styling -->
+    <!-- iOS Cupertino Switch Colors -->
     <color name="switch_thumb_checked">#FFFFFF</color>
-    <color name="switch_thumb_unchecked">#9E9EA5</color>
-    <color name="switch_track_checked">#34C759</color>
-    <color name="switch_track_unchecked">#282D3A</color>
-
-    <!-- Cupertino Segmented Control -->
-    <color name="profile_segment_bg">#12141C</color>
-    <color name="profile_segment_border">#232836</color>
-    <color name="profile_tab_active_bg">#252B3A</color>
-    <color name="profile_tab_active_border">#3B445A</color>
-    <color name="profile_tab_text_active">#FFFFFF</color>
-    <color name="profile_tab_text_inactive">#868C9E</color>
-
-    <!-- Douyin / China Mode -->
-    <color name="china_banner_bg">#161510</color>
-    <color name="china_banner_border">#3D2F17</color>
-    <color name="china_amber">#FF9F0A</color>
-
-    <!-- Version Compatibility Warning -->
-    <color name="version_warning_bg">#17140E</color>
-    <color name="version_warning_border">#4E320D</color>
-    <color name="version_warning_accent">#F59E0B</color>
+    <color name="switch_thumb_unchecked">#FFFFFF</color>
+    <color name="switch_track_checked">#30D158</color>
+    <color name="switch_track_unchecked">#36363B</color>
 </resources>

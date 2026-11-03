@@ -117,13 +117,8 @@ esac
 CLASSPATH="\\\"\\\""
 
 
-if [ -z "$JAVA_HOME" ] && [ -d "/nix/store/fb9q18s7g5p2f0pjpz6gss1z38g423fn-android-studio-unwrapped-2026.1.3.8/jbr" ] ; then
-    JAVA_HOME="/nix/store/fb9q18s7g5p2f0pjpz6gss1z38g423fn-android-studio-unwrapped-2026.1.3.8/jbr"
-fi
-
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then
-
     if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
         # IBM's JDK on AIX uses strange locations for the executables
         JAVACMD=$JAVA_HOME/jre/sh/java

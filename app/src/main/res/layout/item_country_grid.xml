@@ -11,6 +11,7 @@
     android:orientation="vertical"
     android:padding="14dp">
 
+    <!-- Top Row: Flag + ISO Badge + Selected Checkmark -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -21,7 +22,6 @@
             android:id="@+id/tv_grid_flag"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="🇺🇸"
             android:textColor="@color/text_primary"
             android:textSize="24sp" />
 
@@ -50,6 +50,7 @@
             android:visibility="gone" />
     </LinearLayout>
 
+    <!-- Country Name -->
     <TextView
         android:id="@+id/tv_grid_country"
         android:layout_width="match_parent"
@@ -62,6 +63,7 @@
         android:textSize="14.5sp"
         android:textStyle="bold" />
 
+    <!-- Carrier & Code Subtitle -->
     <TextView
         android:id="@+id/tv_grid_carrier"
         android:layout_width="match_parent"
@@ -74,4 +76,3 @@
         android:textSize="12sp" />
 
 </LinearLayout>
-

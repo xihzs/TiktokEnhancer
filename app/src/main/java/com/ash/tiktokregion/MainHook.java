@@ -1,194 +1,82 @@
 package com.ash.tiktokregion;
 
-import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
-
+import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.database.ContentObserver;
 import android.os.Build;
-import android.os.LocaleList;
+import android.os.Handler;
+import android.os.Looper;
+
+import com.ash.tiktokregion.core.DexKitManager;
+import com.ash.tiktokregion.core.ModuleConfig;
+import com.ash.tiktokregion.hooks.feed.FeedFilterHook;
+import com.ash.tiktokregion.hooks.media.StoryDownloadHook;
+import com.ash.tiktokregion.hooks.media.VideoQualityHook;
+import com.ash.tiktokregion.hooks.media.WatermarkBypassHook;
+import com.ash.tiktokregion.hooks.network.TTNetHook;
+import com.ash.tiktokregion.hooks.social.AntiDeleteHook;
+import com.ash.tiktokregion.hooks.social.GhostModeHook;
+import com.ash.tiktokregion.hooks.telephony.SystemPropHook;
+import com.ash.tiktokregion.hooks.telephony.TelephonyHook;
+import com.ash.tiktokregion.hooks.ui.MasterUploadHook;
+import com.ash.tiktokregion.hooks.ui.PopupHook;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
+import de.robv.android.xposed.IXposedHookZygoteInit;
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XSharedPreferences;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
-public class MainHook implements IXposedHookLoadPackage {
+/**
+ * Clean coordinator for TikTok Enhancer.
+ * Dispatches to modular feature packages and coordinates DexKit 2.3.0 lifecycle.
+ */
+public class MainHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 
     private static final String TAG = "TikTokRegion";
-    public static final String MODULE_PACKAGE = "com.ash.tiktokregion";
+    public static final String PACKAGE_NAME = "com.ash.tiktokregion";
 
-    private static final boolean DEBUG = false;
-
-    public static void log(String msg) {
-        if (DEBUG) {
-            Log.i(TAG, msg);
-        }
-    }
-
-    public static void logD(String msg) {
-        Log.d(TAG, msg);
-    }
-
-    public static final String PACKAGE_GLOBAL = "com.zhiliaoapp.musically";
-    public static final String PACKAGE_ASIA = "com.ss.android.ugc.trill";
-    public static final String PACKAGE_CHINA = "com.ss.android.ugc.aweme";
-
-    private static final Set<String> TARGET_PACKAGES = new HashSet<>(Arrays.asList(
-            PACKAGE_GLOBAL,
-            PACKAGE_ASIA,
-            PACKAGE_CHINA,
+    public static final List<String> TARGET_PACKAGES = Arrays.asList(
+            "com.zhiliaoapp.musically",
+            "com.ss.android.ugc.trill",
             "com.zhiliaoapp.musically.go",
             "com.tiktok.business"
-    ));
-
-    private static volatile String sCurrentPackage = null;
-
-    public static boolean isChinaPackage() {
-        return PACKAGE_CHINA.equals(sCurrentPackage);
-    }
-
-    public static String getCurrentPackage() {
-        return sCurrentPackage;
-    }
-
-    static volatile boolean sEnabled = true;
-    static volatile String sCountryIso = "us";
-    static volatile String sOperatorMccMnc = "310260";
-    static volatile String sOperatorName = "T-Mobile";
-    static volatile String sMcc = "310";
-    static volatile String sMnc = "260";
-    static volatile boolean sSpoofLocale = false;
-    static volatile String sLocaleLang = "en";
-    static volatile String sLocaleCountry = "US";
-    static volatile Locale sCachedSpoofedLocale = new Locale("en", "US");
-    private static volatile boolean sNoWatermark = true;
-    private static volatile boolean sBypassDownloadRestriction = true;
-    private static volatile boolean sHDUpload = true;
-    private static volatile boolean sUpload4K = false;
-    private static volatile boolean sHideAds = true;
-    private static volatile boolean sForceRegion = true;
-    private static volatile boolean sStrictForceRegion = false;
-    private static volatile boolean sLockedRegionFilter = false;
-    private static volatile boolean sLanguageFilter = false;
-    private static volatile Set<String> sAllowedLanguages = java.util.Collections.emptySet();
-    private static volatile String sAllowedLanguagesRaw = "";
-    private static volatile boolean sDownloadStory = true;
-    private static volatile boolean sBlockCountries = false;
-    private static volatile Set<String> sBlockedCountries = java.util.Collections.emptySet();
-    private static volatile boolean sForceHighQuality = true;
-    private static volatile boolean sTelemetryHUD = true;
-    private static volatile boolean sTelemetryPopup = true;
-    private static volatile boolean sHideNearbyTab = false;
+    );
 
     private static volatile Context sAppContext = null;
     private static volatile long sLastConfigFetchTime = 0;
-    private static final long CONFIG_CACHE_MS = 5000;
+    private static final long CONFIG_CACHE_MS = 1_500L;
 
-    public static boolean isEnabled() {
-        return sEnabled;
-    }
-
-    public static boolean isNoWatermarkEnabled() {
-        return sNoWatermark;
-    }
-
-    public static boolean isBypassDownloadRestrictionEnabled() {
-        return sBypassDownloadRestriction;
-    }
-
-    public static boolean isHDUploadEnabled() {
-        return sHDUpload;
-    }
-
-    public static boolean isUpload4KEnabled() {
-        return sUpload4K;
-    }
-
-    public static boolean isForceHighQualityEnabled() {
-        return sForceHighQuality;
-    }
-
-    public static boolean isTelemetryHUDEnabled() {
-        return sTelemetryHUD;
-    }
-
-    public static boolean isTelemetryPopupEnabled() {
-        return sTelemetryPopup;
-    }
-
-    public static boolean isHideNearbyTabEnabled() {
-        return sHideNearbyTab;
-    }
-
-    public static boolean isHideAdsEnabled() {
-        return sHideAds;
-    }
-
-    public static boolean isForceRegionEnabled() {
-        return sForceRegion;
-    }
-
-    public static boolean isStrictForceRegionEnabled() {
-        return sStrictForceRegion;
-    }
-
-    public static boolean isLockedRegionFilterEnabled() {
-        return sLockedRegionFilter;
-    }
-
-    public static boolean isLanguageFilterEnabled() {
-        return sLanguageFilter;
-    }
-
-    public static Set<String> getAllowedLanguages() {
-        return sAllowedLanguages;
-    }
-
-    public static String getAllowedLanguagesRaw() {
-        return sAllowedLanguagesRaw;
-    }
-
-    public static boolean isDownloadStoryEnabled() {
-        return sDownloadStory;
-    }
-
-    public static boolean isBlockCountriesEnabled() {
-        return sBlockCountries;
-    }
-
-    public static Set<String> getBlockedCountries() {
-        return sBlockedCountries;
-    }
-
-    public static String getTargetCountryIso() {
-        return sCountryIso;
+    @Override
+    public void initZygote(StartupParam startupParam) throws Throwable {
+        XposedBridge.log(TAG + ": Initializing in Zygote (DexKit 2.3.0 Engine)");
+        new TelephonyHook().hook(MainHook.class.getClassLoader());
+        new SystemPropHook().hook(MainHook.class.getClassLoader());
     }
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
-
-        if (MODULE_PACKAGE.equals(lpparam.packageName)) {
+        if (PACKAGE_NAME.equals(lpparam.packageName)) {
             hookSelfStatus(lpparam.classLoader);
+            return;
+        }
+
+        if ("android".equals(lpparam.packageName)) {
+            new TelephonyHook().hook(lpparam.classLoader);
+            new SystemPropHook().hook(lpparam.classLoader);
             return;
         }
 
@@ -196,65 +84,36 @@ public class MainHook implements IXposedHookLoadPackage {
             return;
         }
 
-        sCurrentPackage = lpparam.packageName;
-        boolean isChina = isChinaPackage();
+        XposedBridge.log(TAG + ": Target TikTok detected -> " + lpparam.packageName + " (" + lpparam.processName + ")");
 
-        log("Initializing TikTok hooks for package: " + lpparam.packageName + " (isChina=" + isChina + ")");
-
-        loadConfigFromPrefs();
-
-        hookApplicationLifecycle(lpparam.classLoader);
-        hookClassLoader(lpparam.classLoader);
-
-        if (!isChina) {
-            hookCronetNetworkStack(lpparam.classLoader);
-            hookClientAIFeatures(lpparam.classLoader);
-            hookNetworkCommonParams(lpparam.classLoader);
-            TelephonyAndSystemHook.hook(lpparam.classLoader);
-            hookUrlQueryParams(lpparam.classLoader);
-        } else {
-            log("TikTok China (Douyin) detected - skipping telephony, locale, and network region spoofing");
+        // 1. Initialize DexKit 2.3.0 native C++ dex-parser
+        if (lpparam.appInfo != null && lpparam.appInfo.sourceDir != null) {
+            DexKitManager.init(lpparam.appInfo.sourceDir);
         }
 
-        if (isChina) {
-            log("TikTok China (Douyin) detected - hooks will be initialized deferred after SafeMode loader");
-        } else {
-            try {
-                WatermarkHook.hook(lpparam.classLoader);
-            } catch (Throwable t) {
-                logD("WatermarkHook.hook error: " + t.getMessage());
-            }
-        }
+        // 2. Application lifecycle hook for Context and IPC config loading (attachBaseContext + onCreate)
+        hookApplicationLifecycle(lpparam);
 
-        try {
-            AdsHook.hook(lpparam.classLoader);
-        } catch (Throwable t) {
-            logD("AdsHook.hook error: " + t.getMessage());
-        }
+        // 3. Telephony and System Properties hooks inside TikTok process
+        new TelephonyHook().hook(lpparam.classLoader);
+        new SystemPropHook().hook(lpparam.classLoader);
 
-        if (!isChina) {
-            try {
-                HDUploadHook.hook(lpparam.classLoader);
-            } catch (Throwable t) {
-                logD("HDUploadHook.hook error: " + t.getMessage());
-            }
-            try {
-                hookContentLanguageService(lpparam.classLoader);
-            } catch (Throwable ignored) {}
-            try {
-                QualityAndTelemetryHook.hook(lpparam.classLoader);
-            } catch (Throwable t) {
-                logD("QualityAndTelemetryHook.hook error: " + t.getMessage());
-            }
-        }
-
-        log("All initial hooks dispatched for " + lpparam.packageName);
+        // 4. Initialize Modular Feature Hooks
+        new TTNetHook().hook(lpparam.classLoader);
+        new FeedFilterHook().hook(lpparam.classLoader);
+        new WatermarkBypassHook().hook(lpparam.classLoader);
+        new VideoQualityHook().hook(lpparam.classLoader);
+        new StoryDownloadHook().hook(lpparam.classLoader);
+        new GhostModeHook().hook(lpparam.classLoader);
+        new AntiDeleteHook().hook(lpparam.classLoader);
+        new PopupHook().hook(lpparam.classLoader);
+        new MasterUploadHook().hook(lpparam.classLoader);
     }
 
     private void hookSelfStatus(ClassLoader classLoader) {
         try {
             Class<?> mainActivityClass = XposedHelpers.findClassIfExists(
-                    MODULE_PACKAGE + ".MainActivity", classLoader);
+                    PACKAGE_NAME + ".MainActivity", classLoader);
             if (mainActivityClass != null) {
                 XposedHelpers.findAndHookMethod(mainActivityClass, "isModuleActive",
                         new XC_MethodHook() {
@@ -263,41 +122,30 @@ public class MainHook implements IXposedHookLoadPackage {
                                 param.setResult(true);
                             }
                         });
-                log("Hooked isModuleActive() -> true");
+                XposedBridge.log(TAG + ": Hooked MainActivity.isModuleActive() -> true");
             }
         } catch (Throwable t) {
-            logD("Failed hooking isModuleActive: " + t.getMessage());
+            Log.d(TAG, "Failed hooking isModuleActive: " + t.getMessage());
         }
     }
 
-    private static final AtomicBoolean sLifecycleInitialized = new AtomicBoolean(false);
-    private static volatile boolean sDeferredHooksInstalled = false;
-
-    private void hookApplicationLifecycle(ClassLoader classLoader) {
-        XC_MethodHook appAttachHook = new XC_MethodHook() {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) {
-                Context context = null;
-                if (param.args != null && param.args.length > 0 && param.args[0] instanceof Context) {
-                    context = (Context) param.args[0];
-                }
-                if (param.thisObject instanceof Application) {
-                    sAppContext = (Application) param.thisObject;
-                }
-                final Context ctx = (context != null) ? context : sAppContext;
-                if (ctx != null && sLifecycleInitialized.compareAndSet(false, true)) {
-                    refreshConfig(ctx, true);
-                    installDeferredHooks(ctx.getClassLoader());
-                }
-            }
-        };
-
+    private void hookApplicationLifecycle(XC_LoadPackage.LoadPackageParam lpparam) {
         try {
-            XposedHelpers.findAndHookMethod(Application.class, "attachBaseContext", Context.class, appAttachHook);
-        } catch (Throwable ignored) {}
-
-        try {
-            XposedHelpers.findAndHookMethod(Application.class, "attach", Context.class, appAttachHook);
+            XposedHelpers.findAndHookMethod(
+                    Application.class,
+                    "attachBaseContext",
+                    Context.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                            Context ctx = (Context) param.args[0];
+                            if (ctx != null) {
+                                sAppContext = ctx;
+                                refreshConfig(ctx, true);
+                            }
+                        }
+                    }
+            );
         } catch (Throwable ignored) {}
 
         try {
@@ -306,285 +154,102 @@ public class MainHook implements IXposedHookLoadPackage {
                     "onCreate",
                     new XC_MethodHook() {
                         @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            if (param.thisObject instanceof Application) {
-                                sAppContext = (Application) param.thisObject;
-                            }
-                            final Context ctx = sAppContext;
-                            if (ctx != null && sLifecycleInitialized.compareAndSet(false, true)) {
-                                refreshConfig(ctx, true);
-                                installDeferredHooks(ctx.getClassLoader());
-                            }
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                            Application app = (Application) param.thisObject;
+                            sAppContext = app;
+                            refreshConfig(app, true);
+                            setupLiveConfigListeners(app);
                         }
                     }
             );
-        } catch (Throwable ignored) {}
+        } catch (Throwable t) {
+            Log.d(TAG, "Application.onCreate hook fallback: " + t.getMessage());
+        }
 
-        try {
-            XposedHelpers.findAndHookMethod(
-                    Activity.class,
-                    "onCreate",
-                    Bundle.class,
-                    new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            if (param.thisObject instanceof Activity) {
-                                Activity act = (Activity) param.thisObject;
-                                HDUploadHook.onActivityLifecycle(act);
-                            }
-                        }
-                    }
-            );
-        } catch (Throwable ignored) {}
-
+        // Hook Activity.onResume for real-time config sync without restarting TikTok
         try {
             XposedHelpers.findAndHookMethod(
                     Activity.class,
                     "onResume",
                     new XC_MethodHook() {
                         @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            if (param.thisObject instanceof Activity) {
-                                Activity act = (Activity) param.thisObject;
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                            Activity activity = (Activity) param.thisObject;
+                            if (activity != null) {
                                 if (sAppContext == null) {
-                                    sAppContext = act.getApplication();
+                                    sAppContext = activity.getApplicationContext();
                                 }
-                                checkConfigRefreshAsync(act);
-                                HDUploadHook.onActivityLifecycle(act);
-                                checkAndNotifyVersion(act);
+                                refreshConfig(activity, false);
                             }
                         }
                     }
             );
-        } catch (Throwable ignored) {}
-    }
-
-    private static final AtomicBoolean sVersionNotified = new AtomicBoolean(false);
-
-    public static int compareVersions(String v1, String v2) {
-        if (v1 == null || v2 == null) return 0;
-        String clean1 = v1.replaceAll("[^0-9.]", "");
-        String clean2 = v2.replaceAll("[^0-9.]", "");
-        String[] parts1 = clean1.split("\\.");
-        String[] parts2 = clean2.split("\\.");
-        int length = Math.max(parts1.length, parts2.length);
-        for (int i = 0; i < length; i++) {
-            long num1 = (i < parts1.length && !parts1[i].isEmpty()) ? Long.parseLong(parts1[i]) : 0;
-            long num2 = (i < parts2.length && !parts2[i].isEmpty()) ? Long.parseLong(parts2[i]) : 0;
-            if (num1 != num2) {
-                return Long.compare(num1, num2);
-            }
+            XposedBridge.log(TAG + ": Hooked Activity.onResume for seamless live config sync");
+        } catch (Throwable t) {
+            Log.d(TAG, "Activity.onResume hook failed: " + t.getMessage());
         }
-        return 0;
     }
 
-    private static void checkAndNotifyVersion(Activity act) {
-        if (act == null || sVersionNotified.get()) return;
-        if (isChinaPackage()) return;
+    public static final String ACTION_SETTINGS_CHANGED = "com.ash.tiktokregion.ACTION_SETTINGS_CHANGED";
+    public static final String ACTION_FORCE_STOP = "com.ash.tiktokregion.ACTION_FORCE_STOP";
+    public static final String EXTRA_AUTO_KILL = "auto_kill";
+
+    private void setupLiveConfigListeners(final Application app) {
+        // 1. Dynamic BroadcastReceiver for immediate non-root process termination or live config refresh
         try {
-            String pkg = act.getPackageName();
-            String versionName = act.getPackageManager().getPackageInfo(pkg, 0).versionName;
-            if (versionName == null || versionName.isEmpty()) return;
-            int cmp = compareVersions(versionName, "47.1.3");
-            if (cmp != 0 && sVersionNotified.compareAndSet(false, true)) {
-                final String msg;
-                if (cmp < 0) {
-                    msg = "⚠️ TikTok Enhancer: TikTok version (" + versionName + ") is outdated. Tested on v47.1.3. Some features may break. Please upgrade TikTok.";
-                } else {
-                    msg = "⚠️ TikTok Enhancer: TikTok version (" + versionName + ") is newer than supported v47.1.3. Some features may break. Please wait until support is added or downgrade.";
-                }
-                act.runOnUiThread(() -> {
-                    try {
-                        android.widget.Toast.makeText(act.getApplicationContext(), msg, android.widget.Toast.LENGTH_LONG).show();
-                    } catch (Throwable ignored) {}
-                });
-            }
-        } catch (Throwable ignored) {}
-    }
+            BroadcastReceiver receiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    if (intent == null) return;
+                    String action = intent.getAction();
+                    boolean autoKill = intent.getBooleanExtra(EXTRA_AUTO_KILL, true);
 
-    private static volatile boolean sClassLoaderHooked = false;
-    private static final ThreadLocal<Boolean> sInLoadClass = ThreadLocal.withInitial(() -> Boolean.FALSE);
+                    XposedBridge.log(TAG + ": Broadcast received (" + action + ", autoKill=" + autoKill + ")");
 
-    private void hookClassLoader(ClassLoader classLoader) {
-        if (sClassLoaderHooked) return;
-        sClassLoaderHooked = true;
-
-        XC_MethodHook loadClassHook = new XC_MethodHook() {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) {
-                if (sInLoadClass.get()) return;
-                sInLoadClass.set(Boolean.TRUE);
-                try {
-                    Object result = param.getResult();
-                    if (result instanceof Class<?>) {
-                        onClassLoaded((Class<?>) result);
+                    if (ACTION_FORCE_STOP.equals(action) || (ACTION_SETTINGS_CHANGED.equals(action) && autoKill)) {
+                        XposedBridge.log(TAG + ": Self-terminating TikTok process (PID " + android.os.Process.myPid() + ") without root");
+                        android.os.Process.killProcess(android.os.Process.myPid());
+                        System.exit(0);
+                        return;
                     }
-                } finally {
-                    sInLoadClass.set(Boolean.FALSE);
+
+                    refreshConfig(context != null ? context : app, true);
                 }
-            }
-        };
+            };
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(ACTION_SETTINGS_CHANGED);
+            filter.addAction(ACTION_FORCE_STOP);
 
-        try {
-            XposedHelpers.findAndHookMethod(ClassLoader.class, "loadClass", String.class, boolean.class, loadClassHook);
-        } catch (Throwable ignored) {}
-
-        try {
-            XposedHelpers.findAndHookMethod(ClassLoader.class, "loadClass", String.class, loadClassHook);
-        } catch (Throwable ignored) {}
-    }
-
-    public static void onClassLoaded(Class<?> clazz) {
-        if (clazz == null) return;
-        String name = clazz.getName();
-
-        if (name.startsWith("android.") || name.startsWith("java.") || name.startsWith("javax.")
-                || name.startsWith("kotlin.") || name.startsWith("androidx.") || name.startsWith("com.google.")
-                || name.startsWith("com.ash.tiktokregion.")) {
-            return;
-        }
-
-        if ("com.bytedance.ttnet.TTNetInit".equals(name)) {
-            hookTTNetInitClass(clazz);
-        } else if ("com.ss.ugc.clientai.core.api.FeatureProducer".equals(name)) {
-            hookFeatureProducerClass(clazz);
-        } else if ("com.ss.android.ugc.aweme.setting.services.SettingServiceImpl".equals(name)) {
-            hookSettingServiceImplClass(clazz);
-        } else if ("X.03JI".equals(name) || "LX.03JI".equals(name)
-                || "X.03IJ".equals(name) || "LX.03IJ".equals(name)
-                || "X.04JI".equals(name) || "LX.04JI".equals(name)) {
-            hookParamMapClass(clazz);
-        } else if ("X.03jl".equals(name) || "LX.03jl".equals(name)
-                || "X.03im".equals(name) || "LX.03im".equals(name)
-                || "X.04jl".equals(name) || "LX.04jl".equals(name)) {
-            hookNetworkCommonParamsClass(clazz);
-        } else if ("com.ss.android.ugc.aweme.watermark.WaterMarkServiceImpl".equals(name)
-                || "com.ss.android.ugc.aweme.services.watermark.WaterMarkBuilder".equals(name)) {
-            if (isChinaPackage()) {
-                DouyinWatermarkHook.hookWatermarkServiceClass(clazz);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                app.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
             } else {
-                WatermarkHook.hookWatermarkServiceClass(clazz);
+                app.registerReceiver(receiver, filter);
             }
-        } else if ("com.ss.android.ugc.aweme.base.model.UrlModel".equals(name)) {
-            WatermarkHook.hookUrlModelClass(clazz);
-        } else if ("com.ss.android.ugc.aweme.feed.model.FeedItemList".equals(name)) {
-            AdsHook.hookFeedItemListClass(clazz);
-        } else if ("com.ss.android.ugc.aweme.feed.panel.BaseListFragmentPanel".equals(name)
-                || "com.ss.android.ugc.aweme.feed.panel.FullFeedFragmentPanel".equals(name)
-                || "com.ss.android.ugc.aweme.feed.panel.RecommendFeedFragmentPanel".equals(name)
-                || "com.ss.android.ugc.aweme.feed.panel.FollowFeedFragmentPanelMT".equals(name)
-                || "com.ss.android.ugc.aweme.stemfeed.panel.StemFeedFragmentPanel".equals(name)
-                || "com.ss.android.ugc.aweme.repostfeed.feed.RepostFeedPanel".equals(name)) {
-            AdsHook.hookFeedPanel(clazz.getClassLoader());
-        } else if ("com.ss.android.ugc.aweme.feed.model.Aweme".equals(name)) {
-            if (isChinaPackage()) {
-                DouyinWatermarkHook.hookAwemeClass(clazz);
-            } else {
-                WatermarkHook.hookAwemeClass(clazz);
-            }
-        } else if ("com.ss.android.ugc.aweme.feed.model.Video".equals(name)) {
-            if (isChinaPackage()) {
-                DouyinWatermarkHook.hookVideoClass(clazz);
-            }
-        } else if ("X.03bD".equals(name) || "LX.03bD".equals(name) || "X.C868003bD".equals(name)) {
-            TelephonyAndSystemHook.hookByteDanceRegionClass(clazz);
-        } else if ("X.06yR".equals(name) || "LX.06yR".equals(name) || "X.C1776406yR".equals(name)) {
-            TelephonyAndSystemHook.hookByteDanceMccMncClass(clazz);
-        } else if ("com.ss.android.ugc.aweme.follow.presenter.FollowFeedList".equals(name)) {
-            AdsHook.hookFollowFeedListClass(clazz);
-        } else if ("com.ss.android.ugc.aweme.friendstab.api.FriendsFeedResponse".equals(name)) {
-            AdsHook.hookFriendsFeedResponseClass(clazz);
-        } else if ("com.ss.android.ugc.nearby.tab.NearbyTabProtocol".equals(name)) {
-            NearbyTabHook.onClassLoaded(clazz);
-        } else if (name != null && (name.contains("Nearby") || name.equals("X.03nG") || name.contains("MainTabStrip") || name.contains("HomeTabViewModel") || name.contains("TabAbilityAssem"))) {
-            NearbyTabHook.onClassLoaded(clazz);
-            if (!isChinaPackage()) {
-                FeedLandingHook.onClassLoaded(clazz);
-            }
-        } else if (isChinaPackage()) {
-            DouyinWatermarkHook.onClassLoaded(clazz);
-        } else {
-            FeedLandingHook.onClassLoaded(clazz);
-            HDUploadHook.onClassLoaded(clazz);
-            QualityAndTelemetryHook.onClassLoaded(clazz);
+            XposedBridge.log(TAG + ": Registered non-root self-kill & settings broadcast receiver in TikTok");
+        } catch (Throwable t) {
+            Log.d(TAG, "Failed registering broadcast receiver: " + t.getMessage());
         }
-    }
 
-    public static void installDeferredHooks(ClassLoader classLoader) {
-        if (classLoader == null || sDeferredHooksInstalled) return;
-        sDeferredHooksInstalled = true;
-        boolean isChina = isChinaPackage();
-        if (!isChina) {
-            hookCronetNetworkStack(classLoader);
-            hookClientAIFeatures(classLoader);
-            hookNetworkCommonParams(classLoader);
-            hookUrlQueryParams(classLoader);
-        }
-        if (isChina) {
-            DouyinWatermarkHook.hook(classLoader);
-        } else {
-            WatermarkHook.hook(classLoader);
-        }
-        AdsHook.hook(classLoader);
-        if (!isChina) {
-            HDUploadHook.hook(classLoader);
-            QualityAndTelemetryHook.hook(classLoader);
-            NearbyTabHook.hook(classLoader);
-            FeedLandingHook.hook(classLoader);
-        }
-    }
-
-    public static void hookNearbyTabProtocol(Class<?> clazz) {
-        NearbyTabHook.hookNearbyTabProtocolClass(clazz);
-    }
-
-    public static void hookNearbyTab(ClassLoader classLoader) {
-        NearbyTabHook.hook(classLoader);
-    }
-
-    public static void loadConfigFromDeStorage(Context context) {
-        if (context == null) return;
+        // 2. ContentObserver for immediate notification when ConfigProvider URI changes -> self-kill TikTok cleanly
         try {
-            Context deContext = context.createDeviceProtectedStorageContext();
-            SharedPreferences dePrefs = deContext.getSharedPreferences(MainActivity.PREF_NAME, Context.MODE_PRIVATE);
-            sHideNearbyTab = dePrefs.getBoolean(MainActivity.KEY_HIDE_NEARBY_TAB, sHideNearbyTab);
-            NearbyTabHook.setEnabled(sHideNearbyTab);
-            sEnabled = dePrefs.getBoolean(MainActivity.KEY_ENABLED, sEnabled);
-            sForceRegion = dePrefs.getBoolean(MainActivity.KEY_FORCE_REGION, sForceRegion);
-            sStrictForceRegion = dePrefs.getBoolean(MainActivity.KEY_STRICT_FORCE_REGION, sStrictForceRegion);
-            sLockedRegionFilter = dePrefs.getBoolean(MainActivity.KEY_LOCKED_REGION_FILTER, sLockedRegionFilter);
-            sLanguageFilter = dePrefs.getBoolean(MainActivity.KEY_LANGUAGE_FILTER, sLanguageFilter);
-            sBlockCountries = dePrefs.getBoolean(MainActivity.KEY_BLOCK_COUNTRIES, sBlockCountries);
-            sDownloadStory = dePrefs.getBoolean(MainActivity.KEY_DOWNLOAD_STORY, sDownloadStory);
-            sHideAds = dePrefs.getBoolean(MainActivity.KEY_HIDE_ADS, sHideAds);
-            sNoWatermark = dePrefs.getBoolean(MainActivity.KEY_NO_WATERMARK, sNoWatermark);
-            sBypassDownloadRestriction = dePrefs.getBoolean(MainActivity.KEY_BYPASS_DOWNLOAD_RESTRICTION, sBypassDownloadRestriction);
-            sHDUpload = dePrefs.getBoolean(MainActivity.KEY_HD_UPLOAD, sHDUpload);
-            sUpload4K = dePrefs.getBoolean(MainActivity.KEY_UPLOAD_4K, sUpload4K);
-            sForceHighQuality = dePrefs.getBoolean(MainActivity.KEY_FORCE_HIGH_QUALITY, sForceHighQuality);
-            sTelemetryHUD = dePrefs.getBoolean(MainActivity.KEY_TELEMETRY_HUD, sTelemetryHUD);
-            sTelemetryPopup = dePrefs.getBoolean(MainActivity.KEY_TELEMETRY_POPUP, sTelemetryPopup);
-            sSpoofLocale = dePrefs.getBoolean(MainActivity.KEY_SPOOF_LOCALE, sSpoofLocale);
-        } catch (Throwable ignored) {}
-    }
-
-    public static void checkConfigRefreshAsync(Context context) {
-        long now = System.currentTimeMillis();
-        if (now - sLastConfigFetchTime >= CONFIG_CACHE_MS) {
-            final Context ctx = (context != null) ? context : sAppContext;
-            if (ctx != null) {
-                new Thread(() -> refreshConfig(ctx), "TikTokEnhancer-ConfigRefresh").start();
-            }
+            ContentObserver observer = new ContentObserver(new Handler(Looper.getMainLooper())) {
+                @Override
+                public void onChange(boolean selfChange, Uri uri) {
+                    XposedBridge.log(TAG + ": ContentObserver detected ConfigProvider change -> self-terminating TikTok (PID " + android.os.Process.myPid() + ")");
+                    android.os.Process.killProcess(android.os.Process.myPid());
+                    System.exit(0);
+                }
+            };
+            app.getContentResolver().registerContentObserver(ConfigProvider.CONTENT_URI, true, observer);
+            XposedBridge.log(TAG + ": Registered ConfigProvider ContentObserver in TikTok");
+        } catch (Throwable t) {
+            Log.d(TAG, "Failed registering ContentObserver: " + t.getMessage());
         }
-    }
-
-    public static synchronized void refreshConfig(Context context) {
-        refreshConfig(context, false);
     }
 
     public static synchronized void refreshConfig(Context context, boolean force) {
         long now = System.currentTimeMillis();
-        if (!force && now - sLastConfigFetchTime < CONFIG_CACHE_MS) {
+        if (!force && (now - sLastConfigFetchTime < CONFIG_CACHE_MS)) {
             return;
         }
         sLastConfigFetchTime = now;
@@ -598,939 +263,34 @@ public class MainHook implements IXposedHookLoadPackage {
                 Uri uri = Uri.parse(ConfigProvider.CONTENT_URI.toString());
                 Bundle bundle = context.getContentResolver().call(uri, ConfigProvider.METHOD_GET_CONFIG, null, null);
                 if (bundle != null) {
-                    sEnabled = bundle.getBoolean(ConfigProvider.KEY_ENABLED, true);
-                    sCountryIso = bundle.getString(ConfigProvider.KEY_SIM_COUNTRY, "us");
-                    sOperatorMccMnc = bundle.getString(ConfigProvider.KEY_SIM_OPERATOR, "310260");
-                    sOperatorName = bundle.getString(ConfigProvider.KEY_OPERATOR_NAME, "T-Mobile");
-                    sMcc = bundle.getString(ConfigProvider.KEY_MCC, "310");
-                    sMnc = bundle.getString(ConfigProvider.KEY_MNC, "260");
-                    sSpoofLocale = bundle.getBoolean(ConfigProvider.KEY_SPOOF_LOCALE, false);
-                    sLocaleLang = bundle.getString(ConfigProvider.KEY_LOCALE_LANG, "en");
-                    sLocaleCountry = bundle.getString(ConfigProvider.KEY_LOCALE_COUNTRY, "US");
-                    sCachedSpoofedLocale = new Locale(sLocaleLang, sLocaleCountry);
-                    sNoWatermark = bundle.getBoolean(ConfigProvider.KEY_NO_WATERMARK, true);
-                    sBypassDownloadRestriction = bundle.getBoolean(ConfigProvider.KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
-                    sHDUpload = bundle.getBoolean(ConfigProvider.KEY_HD_UPLOAD, true);
-                    sUpload4K = bundle.getBoolean(ConfigProvider.KEY_UPLOAD_4K, false);
-                    sHideAds = bundle.getBoolean(ConfigProvider.KEY_HIDE_ADS, true);
-                    sForceRegion = bundle.getBoolean(ConfigProvider.KEY_FORCE_REGION, true);
-                    sStrictForceRegion = bundle.getBoolean(ConfigProvider.KEY_STRICT_FORCE_REGION, false);
-                    sLockedRegionFilter = bundle.getBoolean(ConfigProvider.KEY_LOCKED_REGION_FILTER, false);
-                    sLanguageFilter = bundle.getBoolean(ConfigProvider.KEY_LANGUAGE_FILTER, false);
-                    sAllowedLanguagesRaw = bundle.getString(ConfigProvider.KEY_ALLOWED_LANGUAGES, "");
-                    sAllowedLanguages = parseIsoSet(sAllowedLanguagesRaw);
-                    sDownloadStory = bundle.getBoolean(ConfigProvider.KEY_DOWNLOAD_STORY, true);
-                    sBlockCountries = bundle.getBoolean(ConfigProvider.KEY_BLOCK_COUNTRIES, false);
-                    sBlockedCountries = parseIsoSet(bundle.getString(ConfigProvider.KEY_BLOCKED_COUNTRY_LIST, ""));
-                    sForceHighQuality = bundle.getBoolean(ConfigProvider.KEY_FORCE_HIGH_QUALITY, true);
-                    sTelemetryHUD = bundle.getBoolean(ConfigProvider.KEY_TELEMETRY_HUD, true);
-                    sTelemetryPopup = bundle.getBoolean(ConfigProvider.KEY_TELEMETRY_POPUP, true);
-                    sHideNearbyTab = bundle.getBoolean(ConfigProvider.KEY_HIDE_NEARBY_TAB, false);
-                    NearbyTabHook.setEnabled(sHideNearbyTab);
-
-                    log("Config loaded via ContentProvider IPC: enabled=" + sEnabled
-                            + ", country=" + sCountryIso + ", op=" + sOperatorName + " (" + sOperatorMccMnc + ")"
-                            + ", forceRegion=" + sForceRegion + ", strictForceRegion=" + sStrictForceRegion
-                            + ", lockedRegionFilter=" + sLockedRegionFilter + ", languageFilter=" + sLanguageFilter + " (" + sAllowedLanguages.size() + ")"
-                            + ", blockCountries=" + sBlockCountries + " (" + sBlockedCountries.size() + ")"
-                            + ", hideAds=" + sHideAds + ", downloadStory=" + sDownloadStory
-                            + ", hideNearby=" + sHideNearbyTab);
-                    return;
+                    ModuleConfig.updateFromBundle(bundle);
+                    String logMsg = "Config refreshed: country=" + ModuleConfig.countryIso
+                            + ", op=" + ModuleConfig.operatorName + ", forceRegion=" + ModuleConfig.forceRegion
+                            + ", noWatermark=" + ModuleConfig.noWatermark;
+                    Log.i(TAG, logMsg);
+                    XposedBridge.log(TAG + ": " + logMsg);
                 }
             } catch (Throwable t) {
-                Log.d(TAG, "ContentProvider IPC call failed, falling back to prefs: " + t.getMessage());
-            }
-
-            try {
-                Context deContext = context.createDeviceProtectedStorageContext();
-                SharedPreferences dePrefs = deContext.getSharedPreferences(MainActivity.PREF_NAME, Context.MODE_PRIVATE);
-                if (dePrefs.contains(MainActivity.KEY_HIDE_NEARBY_TAB)) {
-                    sHideNearbyTab = dePrefs.getBoolean(MainActivity.KEY_HIDE_NEARBY_TAB, sHideNearbyTab);
-                    NearbyTabHook.setEnabled(sHideNearbyTab);
-                }
-            } catch (Throwable ignored) {}
-        }
-
-        loadConfigFromPrefs();
-    }
-
-    private static Set<String> parseIsoSet(String raw) {
-        if (raw == null || raw.trim().isEmpty()) {
-            return java.util.Collections.emptySet();
-        }
-        String[] parts = raw.split("[,;]");
-        Set<String> set = new HashSet<>();
-        for (String p : parts) {
-            String trimmed = p.trim().toLowerCase(Locale.ROOT);
-            if (!trimmed.isEmpty()) {
-                set.add(trimmed);
-            }
-        }
-        return set;
-    }
-
-    private static void loadConfigFromPrefs() {
-        try {
-            XSharedPreferences prefs = new XSharedPreferences(MODULE_PACKAGE, MainActivity.PREF_NAME);
-            prefs.reload();
-
-            sEnabled = prefs.getBoolean(MainActivity.KEY_ENABLED, true);
-            String presetId = prefs.getString(MainActivity.KEY_PRESET_ID, "US_TMOBILE");
-            CountryPreset preset = CountryPreset.getById(presetId);
-
-            boolean isCustom = prefs.getBoolean(MainActivity.KEY_IS_CUSTOM, false);
-            sSpoofLocale = prefs.getBoolean(MainActivity.KEY_SPOOF_LOCALE, false);
-            sNoWatermark = prefs.getBoolean(MainActivity.KEY_NO_WATERMARK, true);
-            sBypassDownloadRestriction = prefs.getBoolean(MainActivity.KEY_BYPASS_DOWNLOAD_RESTRICTION, true);
-            sHDUpload = prefs.getBoolean(MainActivity.KEY_HD_UPLOAD, true);
-            sUpload4K = prefs.getBoolean(MainActivity.KEY_UPLOAD_4K, false);
-            sHideAds = prefs.getBoolean(MainActivity.KEY_HIDE_ADS, true);
-            sForceRegion = prefs.getBoolean(MainActivity.KEY_FORCE_REGION, true);
-            sStrictForceRegion = prefs.getBoolean(MainActivity.KEY_STRICT_FORCE_REGION, false);
-            sLockedRegionFilter = prefs.getBoolean(MainActivity.KEY_LOCKED_REGION_FILTER, false);
-            sLanguageFilter = prefs.getBoolean(MainActivity.KEY_LANGUAGE_FILTER, false);
-            sAllowedLanguagesRaw = prefs.getString(MainActivity.KEY_ALLOWED_LANGUAGES, "");
-            sAllowedLanguages = parseIsoSet(sAllowedLanguagesRaw);
-            sDownloadStory = prefs.getBoolean(MainActivity.KEY_DOWNLOAD_STORY, true);
-            sBlockCountries = prefs.getBoolean(MainActivity.KEY_BLOCK_COUNTRIES, false);
-            sBlockedCountries = parseIsoSet(prefs.getString(MainActivity.KEY_BLOCKED_COUNTRY_LIST, ""));
-            sForceHighQuality = prefs.getBoolean(MainActivity.KEY_FORCE_HIGH_QUALITY, true);
-            sTelemetryHUD = prefs.getBoolean(MainActivity.KEY_TELEMETRY_HUD, true);
-            sTelemetryPopup = prefs.getBoolean(MainActivity.KEY_TELEMETRY_POPUP, true);
-            sHideNearbyTab = prefs.getBoolean(MainActivity.KEY_HIDE_NEARBY_TAB, false);
-            NearbyTabHook.setEnabled(sHideNearbyTab);
-
-            if (isCustom) {
-                sCountryIso = prefs.getString(MainActivity.KEY_CUSTOM_ISO, preset.getCountryIso()).toLowerCase();
-                sOperatorMccMnc = prefs.getString(MainActivity.KEY_CUSTOM_OPERATOR, preset.getOperatorMccMnc());
-                sOperatorName = prefs.getString(MainActivity.KEY_CUSTOM_NAME, preset.getOperatorName());
-            } else {
-                sCountryIso = preset.getCountryIso();
-                sOperatorMccMnc = preset.getOperatorMccMnc();
-                sOperatorName = preset.getOperatorName();
-            }
-
-            if (sOperatorMccMnc != null && sOperatorMccMnc.length() >= 5) {
-                sMcc = sOperatorMccMnc.substring(0, 3);
-                sMnc = sOperatorMccMnc.substring(3);
-            } else {
-                sMcc = preset.getMcc();
-                sMnc = preset.getMnc();
-            }
-
-            sLocaleLang = preset.getLocaleLanguage();
-            sLocaleCountry = preset.getLocaleCountry();
-            sCachedSpoofedLocale = new Locale(sLocaleLang, sLocaleCountry);
-
-            log("Config loaded via XSharedPreferences: enabled=" + sEnabled
-                    + ", country=" + sCountryIso + ", forceRegion=" + sForceRegion
-                    + ", blockCountries=" + sBlockCountries + " (" + sBlockedCountries.size() + ")");
-        } catch (Throwable t) {
-            Log.e(TAG, "Failed loading XSharedPreferences fallback", t);
-        }
-    }
-
-    private static volatile boolean sTTNetInitHooked = false;
-
-    private static void hookCronetNetworkStack(ClassLoader classLoader) {
-        if (classLoader == null) return;
-
-        Class<?> ttnetClass = XposedHelpers.findClassIfExists("com.bytedance.ttnet.TTNetInit", classLoader);
-        if (ttnetClass != null) {
-            hookTTNetInitClass(ttnetClass);
-        }
-
-        String[] cronetClasses = {
-                "com.bytedance.frameworks.baselib.network.http.cronet.ICronetAppProvider",
-                "com.bytedance.ttnet.cronet.AbsCronetDependAdapter"
-        };
-
-        for (String className : cronetClasses) {
-            hookMethodReturn(classLoader, className, "getRegion", new MethodReturnValue() {
-                @Override
-                public Object getValue() {
-                    return sEnabled ? sCountryIso.toUpperCase(Locale.ROOT) : null;
-                }
-            });
-
-            hookMethodReturn(classLoader, className, "getCarrierRegion", new MethodReturnValue() {
-                @Override
-                public Object getValue() {
-                    return sEnabled ? sCountryIso.toUpperCase(Locale.ROOT) : null;
-                }
-            });
-
-            hookMethodReturn(classLoader, className, "getSysRegion", new MethodReturnValue() {
-                @Override
-                public Object getValue() {
-                    return sEnabled ? sCountryIso.toUpperCase(Locale.ROOT) : null;
-                }
-            });
-
-            hookMethodReturn(classLoader, className, "getSimOperator", new MethodReturnValue() {
-                @Override
-                public Object getValue() {
-                    return sEnabled ? sOperatorMccMnc : null;
-                }
-            });
-
-            hookMethodReturn(classLoader, className, "getNetworkOperator", new MethodReturnValue() {
-                @Override
-                public Object getValue() {
-                    return sEnabled ? sOperatorMccMnc : null;
-                }
-            });
-
-            hookMethodReturn(classLoader, className, "getAppInitialRegionInfo", new MethodReturnValue() {
-                @Override
-                public Object getValue() {
-                    return sEnabled ? sCountryIso.toUpperCase(Locale.ROOT) : null;
-                }
-            });
-        }
-    }
-
-    interface MethodReturnValue extends TelephonyAndSystemHook.MethodReturnValue {}
-
-    private static void hookMethodReturn(ClassLoader classLoader, String className, String methodName, MethodReturnValue callback) {
-        TelephonyAndSystemHook.hookMethodReturn(classLoader, className, methodName, callback);
-    }
-
-    public static void hookTTNetInitClass(Class<?> ttnetInitClass) {
-        if (ttnetInitClass == null || sTTNetInitHooked) return;
-        try {
-            for (Method method : ttnetInitClass.getDeclaredMethods()) {
-                if ("setCronetDepend".equals(method.getName()) && method.getParameterTypes().length == 1) {
-                    final Class<?> providerInterface = method.getParameterTypes()[0];
-                    XposedBridge.hookMethod(method, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) {
-                            if (param.args != null && param.args.length > 0 && param.args[0] != null) {
-                                Object original = param.args[0];
-                                if (!Proxy.isProxyClass(original.getClass())) {
-                                    param.args[0] = createCronetProxy(original, providerInterface);
-                                    log("Wrapped TTNetInit.setCronetDepend in dynamic proxy");
-                                }
-                            }
-                        }
-                    });
-                    sTTNetInitHooked = true;
-                    log("Hooked TTNetInit.setCronetDepend successfully");
-                }
-            }
-            checkAndProxyExistingCronetProvider(ttnetInitClass);
-        } catch (Throwable t) {
-            logD("hookTTNetInitClass failed: " + t.getMessage());
-        }
-    }
-
-    private static void checkAndProxyExistingCronetProvider(Class<?> ttnetInitClass) {
-        try {
-            Field f = XposedHelpers.findFieldIfExists(ttnetInitClass, "sCronetProvider");
-            if (f != null) {
-                f.setAccessible(true);
-                Object current = f.get(null);
-                if (current != null && !Proxy.isProxyClass(current.getClass())) {
-                    Class<?> providerInterface = f.getType();
-                    f.set(null, createCronetProxy(current, providerInterface));
-                    log("Replaced existing TTNetInit.sCronetProvider with dynamic proxy");
-                }
-            }
-        } catch (Throwable ignored) {}
-    }
-
-    private static Object createCronetProxy(final Object originalProvider, final Class<?> providerInterface) {
-        ClassLoader cl = providerInterface.getClassLoader();
-        if (cl == null && originalProvider != null) {
-            cl = originalProvider.getClass().getClassLoader();
-        }
-        if (cl == null) {
-            cl = MainHook.class.getClassLoader();
-        }
-        return Proxy.newProxyInstance(
-                cl,
-                new Class<?>[]{providerInterface},
-                new InvocationHandler() {
-                    @Override
-                    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-                        String mName = method.getName();
-                        if (sEnabled) {
-                            if ("getRegion".equals(mName)
-                                    || "getCarrierRegion".equals(mName)
-                                    || "getSysRegion".equals(mName)
-                                    || "getAppInitialRegionInfo".equals(mName)) {
-                                return sCountryIso.toUpperCase(Locale.ROOT);
-                            }
-                            if ("getSimOperator".equals(mName) || "getNetworkOperator".equals(mName)) {
-                                return sOperatorMccMnc;
-                            }
-                        }
-                        return method.invoke(originalProvider, args);
-                    }
-                }
-        );
-    }
-
-    private static volatile boolean sFeatureProducerHooked = false;
-    private static volatile boolean sParamMapHooked = false;
-    private static volatile boolean sNetworkParamsHooked = false;
-
-    private static final String[] PARAM_MAP_CLASS_NAMES = {
-            "X.03II", "LX.03II",
-            "X.04II", "LX.04II",
-            "X.03JI", "LX.03JI",
-            "X.04JI", "LX.04JI",
-            "X.03IJ", "LX.03IJ",
-            "X.04IJ", "LX.04IJ",
-            "X.03IK", "LX.03IK",
-            "X.04IK", "LX.04IK",
-            "X.03IL", "LX.03IL",
-            "X.04IL", "LX.04IL",
-    };
-
-    private static final String[] NETWORK_COMMON_PARAMS_CLASSES = {
-            "X.03iB", "LX.03iB",
-            "X.04iB", "LX.04iB",
-            "X.03jl", "LX.03jl",
-            "X.04jl", "LX.04jl",
-            "X.03im", "LX.03im",
-            "X.04im", "LX.04im",
-            "X.03in", "LX.03in",
-            "X.04in", "LX.04in",
-    };
-
-    public static void hookNetworkCommonParams(ClassLoader classLoader) {
-        if (classLoader == null || sNetworkParamsHooked) return;
-        for (String className : NETWORK_COMMON_PARAMS_CLASSES) {
-            Class<?> clazz = XposedHelpers.findClassIfExists(className, classLoader);
-            if (clazz != null) {
-                hookNetworkCommonParamsClass(clazz);
-                if (sNetworkParamsHooked) break;
+                Log.d(TAG, "ContentProvider IPC call failed: " + t.getMessage());
             }
         }
     }
 
-    public static void hookClientAIFeatures(ClassLoader classLoader) {
-        if (classLoader == null) return;
-
-        Class<?> fpClass = XposedHelpers.findClassIfExists("com.ss.ugc.clientai.core.api.FeatureProducer", classLoader);
-        if (fpClass != null) {
-            hookFeatureProducerClass(fpClass);
-        }
-
-        Class<?> settingServiceClass = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.setting.services.SettingServiceImpl", classLoader);
-        if (settingServiceClass != null) {
-            hookSettingServiceImplClass(settingServiceClass);
-        }
-
-        if (!sParamMapHooked) {
-            for (String className : PARAM_MAP_CLASS_NAMES) {
-                Class<?> paramMapClass = XposedHelpers.findClassIfExists(className, classLoader);
-                if (paramMapClass != null) {
-                    hookParamMapClass(paramMapClass);
-                    if (sParamMapHooked) break;
-                }
-            }
-        }
-
-        if (!sNetworkParamsHooked) {
-            hookNetworkCommonParams(classLoader);
-        }
-    }
-
-    public static void hookFeatureProducerClass(Class<?> fpClass) {
-        if (fpClass == null || sFeatureProducerHooked) return;
-        try {
-            XC_MethodHook featureHook = new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) {
-                    if (!sEnabled || param.args == null || param.args.length == 0) return;
-                    String featureKey = null;
-                    for (Object arg : param.args) {
-                        if (arg instanceof String && ((String) arg).startsWith("f_global_")) {
-                            featureKey = (String) arg;
-                            break;
-                        }
-                    }
-                    if (featureKey != null) {
-                        String upper = sCountryIso.toUpperCase(Locale.ROOT);
-                        switch (featureKey) {
-
-                            case "f_global_carrier_region":
-                            case "f_global_carrier_region_v2":
-                            case "f_global_sys_region":
-                            case "f_global_account_region":
-                            case "f_global_residence":
-                            case "f_global_region":
-                            case "f_global_op_region":
-                            case "f_global_current_region":
-                            case "f_global_store_region":
-                                param.setResult(upper);
-                                break;
-
-                            case "f_global_mcc_mnc":
-                                param.setResult(sOperatorMccMnc);
-                                break;
-
-                            case "f_global_fake_region":
-                                param.setResult("");
-                                break;
-
-                            case "f_global_timezone":
-                            case "f_global_timezone_name":
-                            case "f_global_timezone_display":
-                                String tz = getTimezoneForCountry(sCountryIso);
-                                if (tz != null) param.setResult(tz);
-                                break;
-                            case "f_global_timezone_offset":
-                                String tzOff = getTimezoneOffsetForCountry(sCountryIso);
-                                if (tzOff != null) param.setResult(tzOff);
-                                break;
-
-                            case "f_global_language":
-                            case "f_global_app_language":
-                            case "f_global_keyboard_language":
-                                if (sSpoofLocale) {
-                                    param.setResult(sLocaleLang);
-                                }
-                                break;
-                            case "f_global_content_language":
-                                if (sLanguageFilter && !sAllowedLanguages.isEmpty()) {
-                                    param.setResult(String.join(",", sAllowedLanguages));
-                                } else if (sSpoofLocale) {
-                                    param.setResult(sLocaleLang);
-                                }
-                                break;
-                            case "f_global_locale":
-                                if (sSpoofLocale) {
-                                    param.setResult(sLocaleLang + "-" + sLocaleCountry);
-                                }
-                                break;
-                        }
-                    }
-                }
-            };
-
-            for (Method m : fpClass.getDeclaredMethods()) {
-                if (m.getName().startsWith("getStringFeature") || m.getName().startsWith("getFeature")) {
-                    XposedBridge.hookMethod(m, featureHook);
-                }
-            }
-            sFeatureProducerHooked = true;
-            log("Hooked FeatureProducer for ClientAI parameters (region + timezone + language)");
-        } catch (Throwable t) {
-            logD("hookFeatureProducerClass failed: " + t.getMessage());
-        }
-    }
-
-    private static volatile boolean sSettingServiceHooked = false;
-
-    public static void hookSettingServiceImplClass(Class<?> settingServiceClass) {
-        if (settingServiceClass == null || sSettingServiceHooked) return;
-        sSettingServiceHooked = true;
-        try {
-            for (Method m : settingServiceClass.getDeclaredMethods()) {
-                if ("installCommonParams".equals(m.getName()) && m.getParameterTypes().length == 0) {
-                    XposedBridge.hookMethod(m, new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            if (!sParamMapHooked) {
-                                try {
-                                    discoverParamMapFromSettingService(param.thisObject);
-                                } catch (Throwable t) {
-                                    logD("Dynamic param map discovery failed: " + t.getMessage());
-                                }
-                            }
-                            if (!sNetworkParamsHooked && param.thisObject != null) {
-                                ClassLoader cl = param.thisObject.getClass().getClassLoader();
-                                if (cl != null) {
-                                    hookNetworkCommonParams(cl);
-                                }
-                            }
-                        }
-                    });
-                    log("Hooked SettingServiceImpl.installCommonParams for dynamic param map discovery");
-                }
-            }
-        } catch (Throwable ignored) {}
-    }
-
-    private static void discoverParamMapFromSettingService(Object settingService) {
-        if (settingService == null || sParamMapHooked) return;
-        try {
-
-            Class<?> serviceClass = settingService.getClass();
-            for (Field field : serviceClass.getDeclaredFields()) {
-                field.setAccessible(true);
-                Object fieldValue = field.get(settingService);
-                if (fieldValue == null) continue;
-                Class<?> fieldClass = fieldValue.getClass();
-
-                for (Method m : fieldClass.getDeclaredMethods()) {
-                    if (m.getParameterTypes().length == 2
-                            && m.getParameterTypes()[0] == String.class
-                            && m.getParameterTypes()[1] == String.class) {
-                        hookParamMapMethod(fieldClass, m.getName());
-                        if (sParamMapHooked) {
-                            log("Dynamically discovered param map class: " + fieldClass.getName() + "." + m.getName());
-                            return;
-                        }
-                    }
-                }
-            }
-
-            for (Field field : serviceClass.getDeclaredFields()) {
-                if (!java.lang.reflect.Modifier.isStatic(field.getModifiers())) continue;
-                field.setAccessible(true);
-                Object fieldValue = field.get(null);
-                if (fieldValue == null) continue;
-                Class<?> fieldClass = fieldValue.getClass();
-                for (Method m : fieldClass.getDeclaredMethods()) {
-                    if (m.getParameterTypes().length == 2
-                            && m.getParameterTypes()[0] == String.class
-                            && m.getParameterTypes()[1] == String.class) {
-                        hookParamMapMethod(fieldClass, m.getName());
-                        if (sParamMapHooked) {
-                            log("Dynamically discovered param map class (static): " + fieldClass.getName() + "." + m.getName());
-                            return;
-                        }
-                    }
-                }
-            }
-        } catch (Throwable t) {
-            logD("discoverParamMapFromSettingService error: " + t.getMessage());
-        }
-    }
-
-    public static void injectSpoofedNetworkParams(Map<String, String> map) {
-        if (map == null || !sEnabled) return;
-        String upper = sCountryIso.toUpperCase(Locale.ROOT);
-        map.put("carrier_region", upper);
-        map.put("carrier_region1", upper);
-        map.put("carrier_region_v2", upper);
-        map.put("sys_region", upper);
-        map.put("account_region", upper);
-        map.put("residence", upper);
-        map.put("region", upper);
-        map.put("app_region", upper);
-        map.put("device_region", upper);
-        map.put("user_region", upper);
-        map.put("current_region", upper);
-        map.put("op_region", upper);
-        map.put("store_region", upper);
-        map.put("sim_region", upper);
-        map.put("priority_region", upper);
-        map.put("reg_store_region", upper);
-        map.put("user_selected_region", upper);
-        map.put("mcc_mnc", sOperatorMccMnc);
-
-        String tz = getTimezoneForCountry(sCountryIso);
-        if (tz != null) {
-            map.put("timezone_name", tz);
-            map.put("tz_name", tz);
-        }
-        String tzOff = getTimezoneOffsetForCountry(sCountryIso);
-        if (tzOff != null) {
-            map.put("timezone_offset", tzOff);
-            map.put("tz_offset", tzOff);
-        }
-
-        if (sSpoofLocale) {
-            map.put("language", sLocaleLang);
-            map.put("app_language", sLocaleLang);
-            map.put("content_language", sLocaleLang);
-        }
-    }
-
-    public static void hookNetworkCommonParamsClass(Class<?> clazz) {
-        if (clazz == null || sNetworkParamsHooked) return;
-        try {
-            for (Method m : clazz.getDeclaredMethods()) {
-                Class<?>[] pTypes = m.getParameterTypes();
-
-                if (pTypes.length >= 3
-                        && Context.class.isAssignableFrom(pTypes[0])
-                        && (pTypes[1] == boolean.class || pTypes[1] == Boolean.class)
-                        && Map.class.isAssignableFrom(pTypes[2])) {
-                    XposedBridge.hookMethod(m, new XC_MethodHook() {
-                        @Override
-                        @SuppressWarnings("unchecked")
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            if (!sEnabled) return;
-                            try {
-                                Map<String, String> map = (Map<String, String>) param.args[2];
-                                if (map != null) {
-                                    injectSpoofedNetworkParams(map);
-                                }
-                            } catch (Throwable ignored) {}
-                        }
-                    });
-                    sNetworkParamsHooked = true;
-                    log("Hooked TTNet common params: " + clazz.getName() + "." + m.getName() + "(Context, boolean, Map, ...)");
-                }
-
-                if (pTypes.length >= 3
-                        && Context.class.isAssignableFrom(pTypes[0])
-                        && StringBuilder.class.isAssignableFrom(pTypes[1])
-                        && (pTypes[2] == boolean.class || pTypes[2] == Boolean.class)
-                        && m.getReturnType() == String.class) {
-                    XposedBridge.hookMethod(m, new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            if (!sEnabled) return;
-                            try {
-                                String resultUrl = (String) param.getResult();
-                                if (resultUrl != null && !resultUrl.isEmpty()) {
-                                    String rewritten = rewriteQueryString(resultUrl);
-                                    if (!resultUrl.equals(rewritten)) {
-                                        param.setResult(rewritten);
-                                        StringBuilder sb = (StringBuilder) param.args[1];
-                                        if (sb != null) {
-                                            sb.delete(0, sb.length());
-                                            sb.append(rewritten);
-                                        }
-                                    }
-                                }
-                            } catch (Throwable ignored) {}
-                        }
-                    });
-                    log("Hooked TTNet URL builder: " + clazz.getName() + "." + m.getName() + "(Context, StringBuilder, ...)");
-                }
-            }
-        } catch (Throwable t) {
-            logD("hookNetworkCommonParamsClass failed for " + clazz.getName() + ": " + t.getMessage());
-        }
-    }
-
-
-    private static final XC_MethodHook PARAM_MAP_HOOK = new XC_MethodHook() {
-        @Override
-        protected void beforeHookedMethod(MethodHookParam param) {
-            if (!sEnabled) return;
-            String key = (String) param.args[0];
-            if (key == null) return;
-            switch (key) {
-
-                case "carrier_region":
-                case "carrier_region1":
-                case "carrier_region_v2":
-                case "sys_region":
-                case "account_region":
-                case "residence":
-                case "region":
-                case "app_region":
-                case "device_region":
-                case "user_region":
-                case "current_region":
-                case "op_region":
-                case "store_region":
-                case "sim_region":
-                case "priority_region":
-                case "reg_store_region":
-                case "user_selected_region":
-                    param.args[1] = sCountryIso.toUpperCase(Locale.ROOT);
-                    break;
-
-                case "mcc_mnc":
-                    param.args[1] = sOperatorMccMnc;
-                    break;
-
-                case "timezone_name":
-                case "tz_name": {
-                    String tz = getTimezoneForCountry(sCountryIso);
-                    if (tz != null) param.args[1] = tz;
-                    break;
-                }
-                case "timezone_offset":
-                case "tz_offset": {
-                    String tzOff = getTimezoneOffsetForCountry(sCountryIso);
-                    if (tzOff != null) param.args[1] = tzOff;
-                    break;
-                }
-
-                case "language":
-                case "content_language":
-                    if (sSpoofLocale) {
-                        param.args[1] = sLocaleLang;
-                    }
-                    break;
-            }
-        }
-    };
-
-    public static void hookParamMapClass(Class<?> paramMapClass) {
-        if (paramMapClass == null || sParamMapHooked) return;
-        hookParamMapMethod(paramMapClass, "LIZ");
-
-        try {
-            for (Method m : paramMapClass.getDeclaredMethods()) {
-                Class<?>[] pTypes = m.getParameterTypes();
-                if (pTypes.length >= 2 && Map.class.isAssignableFrom(pTypes[0])
-                        && (pTypes[1] == boolean.class || pTypes[1] == Boolean.class)) {
-                    XposedBridge.hookMethod(m, new XC_MethodHook() {
-                        @Override
-                        @SuppressWarnings("unchecked")
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            if (!sEnabled) return;
-                            try {
-                                Map<String, String> map = (Map<String, String>) param.args[0];
-                                if (map != null) {
-                                    injectSpoofedNetworkParams(map);
-                                }
-                            } catch (Throwable ignored) {}
-                        }
-                    });
-                    log("Hooked param map builder: " + paramMapClass.getName() + "." + m.getName() + "(Map, boolean, ...)");
-                }
-                if (pTypes.length >= 2 && StringBuilder.class.isAssignableFrom(pTypes[0])
-                        && (pTypes[1] == boolean.class || pTypes[1] == Boolean.class)) {
-                    XposedBridge.hookMethod(m, new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            if (!sEnabled) return;
-                            try {
-                                StringBuilder sb = (StringBuilder) param.args[0];
-                                if (sb != null && sb.length() > 0) {
-                                    String rewritten = rewriteQueryString(sb.toString());
-                                    if (!sb.toString().equals(rewritten)) {
-                                        sb.delete(0, sb.length());
-                                        sb.append(rewritten);
-                                    }
-                                }
-                            } catch (Throwable ignored) {}
-                        }
-                    });
-                    log("Hooked param map URL builder: " + paramMapClass.getName() + "." + m.getName() + "(StringBuilder, boolean, ...)");
-                }
-            }
-        } catch (Throwable ignored) {}
-    }
-
-    private static void hookParamMapMethod(Class<?> paramMapClass, String methodName) {
-        if (paramMapClass == null || sParamMapHooked) return;
-        try {
-            for (Method m : paramMapClass.getDeclaredMethods()) {
-                if (m.getName().equals(methodName) && m.getParameterTypes().length == 2
-                        && m.getParameterTypes()[0] == String.class && m.getParameterTypes()[1] == String.class) {
-                    XposedBridge.hookMethod(m, PARAM_MAP_HOOK);
-                    sParamMapHooked = true;
-                    log("Hooked param map: " + paramMapClass.getName() + "." + methodName + " for network common parameters");
-                    return;
-                }
-            }
-        } catch (Throwable t) {
-            logD("hookParamMapMethod failed for " + paramMapClass.getName() + ": " + t.getMessage());
-        }
-    }
-
-    static String getTimezoneForCountry(String countryIso) {
-        if (countryIso == null) return null;
-        switch (countryIso.toLowerCase(Locale.ROOT)) {
-            case "us": return "America/New_York";
-            case "gb": return "Europe/London";
-            case "jp": return "Asia/Tokyo";
-            case "kr": return "Asia/Seoul";
-            case "de": return "Europe/Berlin";
-            case "fr": return "Europe/Paris";
-            case "br": return "America/Sao_Paulo";
-            case "in": return "Asia/Kolkata";
-            case "au": return "Australia/Sydney";
-            case "ca": return "America/Toronto";
-            case "mx": return "America/Mexico_City";
-            case "id": return "Asia/Jakarta";
-            case "ru": return "Europe/Moscow";
-            case "tr": return "Europe/Istanbul";
-            case "sa": return "Asia/Riyadh";
-            case "ae": return "Asia/Dubai";
-            case "eg": return "Africa/Cairo";
-            case "th": return "Asia/Bangkok";
-            case "vn": return "Asia/Ho_Chi_Minh";
-            case "ph": return "Asia/Manila";
-            case "sg": return "Asia/Singapore";
-            case "my": return "Asia/Kuala_Lumpur";
-            case "il": return "Asia/Jerusalem";
-            case "pk": return "Asia/Karachi";
-            case "bd": return "Asia/Dhaka";
-            case "ng": return "Africa/Lagos";
-            case "ar": return "America/Argentina/Buenos_Aires";
-            case "co": return "America/Bogota";
-            case "cl": return "America/Santiago";
-            case "it": return "Europe/Rome";
-            case "es": return "Europe/Madrid";
-            case "nl": return "Europe/Amsterdam";
-            case "pl": return "Europe/Warsaw";
-            case "se": return "Europe/Stockholm";
-            case "no": return "Europe/Oslo";
-            case "fi": return "Europe/Helsinki";
-            case "dk": return "Europe/Copenhagen";
-            case "at": return "Europe/Vienna";
-            case "ch": return "Europe/Zurich";
-            case "pt": return "Europe/Lisbon";
-            case "be": return "Europe/Brussels";
-            case "ie": return "Europe/Dublin";
-            case "nz": return "Pacific/Auckland";
-            case "za": return "Africa/Johannesburg";
-            case "tw": return "Asia/Taipei";
-            case "hk": return "Asia/Hong_Kong";
-            case "kz": return "Asia/Almaty";
-            case "cn": return "Asia/Shanghai";
-            default: return null;
-        }
-    }
-
-    static String getTimezoneOffsetForCountry(String countryIso) {
-        String tzId = getTimezoneForCountry(countryIso);
-        if (tzId == null) return null;
-        try {
-            java.util.TimeZone tz = java.util.TimeZone.getTimeZone(tzId);
-            int offsetMs = tz.getRawOffset();
-            return String.valueOf(offsetMs / 1000);
-        } catch (Throwable ignored) {
-            return null;
-        }
-    }
-
-    private static volatile boolean sUrlQueryParamsHooked = false;
-
-    private static final Set<String> URL_REGION_PARAMS = new HashSet<>(Arrays.asList(
-            "carrier_region", "carrier_region1", "carrier_region_v2",
-            "sys_region", "account_region", "residence", "region",
-            "app_region", "device_region", "user_region", "current_region",
-            "op_region", "store_region", "sim_region", "priority_region",
-            "reg_store_region", "user_selected_region", "store_country",
-            "country_code", "country"
-    ));
-
-    private static void hookUrlQueryParams(ClassLoader classLoader) {
-        if (sUrlQueryParamsHooked) return;
-        sUrlQueryParamsHooked = true;
-
-        try {
-            XposedHelpers.findAndHookMethod(
-                    Uri.Builder.class,
-                    "appendQueryParameter",
-                    String.class, String.class,
-                    new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) {
-                            if (!sEnabled) return;
-                            String key = (String) param.args[0];
-                            if (key == null) return;
-
-                            if (URL_REGION_PARAMS.contains(key)) {
-                                param.args[1] = sCountryIso.toUpperCase(Locale.ROOT);
-                            } else if ("mcc_mnc".equals(key)) {
-                                param.args[1] = sOperatorMccMnc;
-                            } else if ("timezone_name".equals(key) || "tz_name".equals(key)) {
-                                String tz = getTimezoneForCountry(sCountryIso);
-                                if (tz != null) param.args[1] = tz;
-                            } else if ("timezone_offset".equals(key) || "tz_offset".equals(key)) {
-                                String tzOff = getTimezoneOffsetForCountry(sCountryIso);
-                                if (tzOff != null) param.args[1] = tzOff;
-                            } else if ("content_language".equals(key)) {
-                                if (sLanguageFilter && !sAllowedLanguages.isEmpty()) {
-                                    param.args[1] = String.join(",", sAllowedLanguages);
-                                } else if (sSpoofLocale) {
-                                    param.args[1] = sLocaleLang;
-                                }
-                            } else if (sSpoofLocale && "language".equals(key)) {
-                                param.args[1] = sLocaleLang;
-                            }
-                        }
-                    }
-            );
-            log("Hooked Uri.Builder.appendQueryParameter for URL-level region param interception");
-        } catch (Throwable t) {
-            logD("Uri.Builder.appendQueryParameter hook failed: " + t.getMessage());
-        }
-
-        try {
-            XposedHelpers.findAndHookMethod(
-                    "android.net.Uri$Builder", classLoader,
-                    "encodedQuery",
-                    String.class,
-                    new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) {
-                            if (!sEnabled || param.args == null || param.args[0] == null) return;
-                            String query = (String) param.args[0];
-                            param.args[0] = rewriteQueryString(query);
-                        }
-                    }
-            );
-        } catch (Throwable ignored) {}
-
-        try {
-            Class<?> httpUrlBuilder = XposedHelpers.findClassIfExists("okhttp3.HttpUrl$Builder", classLoader);
-            if (httpUrlBuilder != null) {
-                XposedHelpers.findAndHookMethod(httpUrlBuilder, "addQueryParameter",
-                        String.class, String.class,
-                        new XC_MethodHook() {
-                            @Override
-                            protected void beforeHookedMethod(MethodHookParam param) {
-                                if (!sEnabled) return;
-                                String key = (String) param.args[0];
-                                if (key == null) return;
-
-                                if (URL_REGION_PARAMS.contains(key)) {
-                                    param.args[1] = sCountryIso.toUpperCase(Locale.ROOT);
-                                } else if ("mcc_mnc".equals(key)) {
-                                    param.args[1] = sOperatorMccMnc;
-                                }
-                            }
-                        }
-                );
-                log("Hooked okhttp3.HttpUrl.Builder.addQueryParameter for URL-level region param interception");
-            }
-        } catch (Throwable ignored) {}
-    }
-
-    public static String rewriteQueryString(String query) {
-        if (query == null || query.isEmpty()) return query;
-        String upper = sCountryIso.toUpperCase(Locale.ROOT);
-        for (String param : URL_REGION_PARAMS) {
-
-            query = query.replaceAll("(?<=[?&]|^)" + param + "=[^&]*", param + "=" + upper);
-        }
-        query = query.replaceAll("(?<=[?&]|^)mcc_mnc=[^&]*", "mcc_mnc=" + sOperatorMccMnc);
-        String tz = getTimezoneForCountry(sCountryIso);
-        if (tz != null) {
-            query = query.replaceAll("(?<=[?&]|^)timezone_name=[^&]*", "timezone_name=" + tz);
-            query = query.replaceAll("(?<=[?&]|^)tz_name=[^&]*", "tz_name=" + tz);
-        }
-        String tzOff = getTimezoneOffsetForCountry(sCountryIso);
-        if (tzOff != null) {
-            query = query.replaceAll("(?<=[?&]|^)timezone_offset=[^&]*", "timezone_offset=" + tzOff);
-            query = query.replaceAll("(?<=[?&]|^)tz_offset=[^&]*", "tz_offset=" + tzOff);
-        }
-        if (sLanguageFilter && !sAllowedLanguages.isEmpty()) {
-            query = query.replaceAll("(?<=[?&]|^)content_language=[^&]*", "content_language=" + String.join(",", sAllowedLanguages));
-        } else if (sSpoofLocale) {
-            query = query.replaceAll("(?<=[?&]|^)content_language=[^&]*", "content_language=" + sLocaleLang);
-        }
-        if (sSpoofLocale) {
-            query = query.replaceAll("(?<=[?&]|^)language=[^&]*", "language=" + sLocaleLang);
-            query = query.replaceAll("(?<=[?&]|^)app_language=[^&]*", "app_language=" + sLocaleLang);
-        }
-        return query;
-    }
-
-    private static void hookContentLanguageService(ClassLoader classLoader) {
-        if (classLoader == null) return;
-        try {
-            Class<?> cls = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.contentlanguage.ContentLanguageServiceImpl", classLoader);
-            if (cls != null) {
-                XposedHelpers.findAndHookMethod(cls, "getLanguage", new XC_MethodHook() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) {
-                        if (sLanguageFilter && !sAllowedLanguages.isEmpty()) {
-                            param.setResult(new ArrayList<>(sAllowedLanguages));
-                        }
-                    }
-                });
-                log("Hooked ContentLanguageServiceImpl.getLanguage()");
-            }
-        } catch (Throwable ignored) {}
-    }
-
+    // ──────────────────────────────────────────────────────────────────────────
+    // Backward Compatibility Delegates
+    // ──────────────────────────────────────────────────────────────────────────
+    public static boolean isEnabled() { return ModuleConfig.enabled; }
+    public static String getTargetCountryIso() { return ModuleConfig.countryIso; }
+    public static String getSimOperator() { return ModuleConfig.operatorMccMnc; }
+    public static String getSimOperatorName() { return ModuleConfig.operatorName; }
+    public static boolean isNoWatermarkEnabled() { return ModuleConfig.noWatermark; }
+    public static boolean isBypassDownloadRestrictionEnabled() { return ModuleConfig.bypassDownloadRestriction; }
+    public static boolean isDownloadStoryEnabled() { return ModuleConfig.downloadStory; }
+    public static boolean isHideAdsEnabled() { return ModuleConfig.hideAds; }
+    public static boolean isForceRegionEnabled() { return ModuleConfig.forceRegion; }
+    public static boolean isStrictForceRegionEnabled() { return ModuleConfig.strictForceRegion; }
+    public static boolean isBlockCountriesEnabled() { return ModuleConfig.blockCountries; }
+    public static Set<String> getBlockedCountries() { return ModuleConfig.blockedCountries; }
+    public static boolean isFilterNonHdEnabled() { return ModuleConfig.filterNonHd; }
+    public static boolean isForceHighestQualityEnabled() { return ModuleConfig.forceHighestQuality; }
 }
