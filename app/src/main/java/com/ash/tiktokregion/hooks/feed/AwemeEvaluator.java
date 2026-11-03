@@ -25,23 +25,32 @@ public final class AwemeEvaluator {
     public static final int DECISION_DISCARD_WRONG_REGION = 3;
     public static final int DECISION_DISCARD_NON_HD = 4;
     public static final int DECISION_DISCARD_BLOCKED_SONG = 5;
+    public static final int DECISION_DISCARD_PROMOTED_MUSIC = 6;
 
     private static volatile BlockedMatcher sCachedMatcher = null;
 
     private AwemeEvaluator() {}
 
     public static int evaluate(Object aweme, boolean isFyp, boolean isColdStart) {
-        if (aweme == null || !isFyp) {
+        if (aweme == null) {
             return DECISION_KEEP;
         }
 
-        // 1. Check Ad / Commercial (hard discard)
+        // 1. Check Ad / Commercial (hard discard across all feeds)
         if (ModuleConfig.hideAds && isAdAweme(aweme)) {
             return DECISION_DISCARD_AD;
         }
 
-        // 2. Check Blocked Countries & Blocked Songs (hard blacklist, evaluated before story bypass!)
-        boolean hasBlockedCountries = !ModuleConfig.blockedCountries.isEmpty();
+        // 2. Check Promoted / Commercial Music (hard discard across all feeds)
+        if (isPromotedMusic(aweme)) {
+            return DECISION_DISCARD_PROMOTED_MUSIC;
+        }
+
+        // 3. Check Blocked Countries & Blocked Songs (hard blacklist, evaluated on ALL feeds before story bypass)
+        boolean hasBlockedCountries = ModuleConfig.blockCountries
+                && ModuleConfig.blockedCountries != null
+                && !ModuleConfig.blockedCountries.isEmpty();
+
         if (hasBlockedCountries) {
             if (isBlockedCountry(aweme, ModuleConfig.blockedCountries)) {
                 return DECISION_DISCARD_BLOCKED_COUNTRY;
@@ -51,12 +60,17 @@ public final class AwemeEvaluator {
             }
         }
 
-        // 3. Preserve Story Awemes so user profile story viewing works without being dropped by region/HD filters
+        // Non-FYP feeds don't apply region targeting / HD filters
+        if (!isFyp) {
+            return DECISION_KEEP;
+        }
+
+        // 4. Preserve Story Awemes so user profile story viewing works without being dropped by region/HD filters
         if (StoryDownloadHook.isStoryAweme(aweme)) {
             return DECISION_KEEP;
         }
 
-        // 4. Check Force Region (Strict vs Smart)
+        // 5. Check Force Region (Strict vs Smart)
         boolean strict = ModuleConfig.strictForceRegion && isFyp;
         boolean smart = !isColdStart && !ModuleConfig.strictForceRegion && ModuleConfig.forceRegion && isFyp;
         if (strict || smart) {
@@ -65,7 +79,7 @@ public final class AwemeEvaluator {
             }
         }
 
-        // 5. Check Non-HD Filtering
+        // 6. Check Non-HD Filtering
         if (!isColdStart && ModuleConfig.filterNonHd && isFyp) {
             if (isNonHdVideo(aweme)) {
                 return DECISION_DISCARD_NON_HD;
@@ -76,9 +90,11 @@ public final class AwemeEvaluator {
     }
 
     public static boolean isAdAweme(Object aweme) {
+        if (aweme == null) return false;
+
         try {
-            boolean isAd = (boolean) XposedHelpers.callMethod(aweme, "isAd");
-            if (isAd) return true;
+            Object isAd = XposedHelpers.callMethod(aweme, "isAd");
+            if (isTruthy(isAd)) return true;
         } catch (Throwable ignored) {}
 
         try {
@@ -87,20 +103,225 @@ public final class AwemeEvaluator {
         } catch (Throwable ignored) {}
 
         try {
-            int type = (int) XposedHelpers.callMethod(aweme, "getAwemeType");
-            if (type == 2 || type == 101) return true;
+            Object type = XposedHelpers.callMethod(aweme, "getAwemeType");
+            if (type instanceof Number) {
+                int t = ((Number) type).intValue();
+                if (t == 2 || t == 101) return true;
+            }
         } catch (Throwable ignored) {}
 
         try {
-            boolean fakeUser = (boolean) XposedHelpers.callMethod(aweme, "withFakeUser");
-            if (fakeUser) return true;
+            Object fakeUser = XposedHelpers.callMethod(aweme, "withFakeUser");
+            if (isTruthy(fakeUser)) return true;
         } catch (Throwable ignored) {}
+
+        if (isPromotedMusic(aweme)) return true;
 
         try {
-            boolean promoMusic = (boolean) XposedHelpers.callMethod(aweme, "isWithPromotionalMusic");
-            if (promoMusic) return true;
+            Object isLiveAd = XposedHelpers.callMethod(aweme, "isLiveAd");
+            if (isTruthy(isLiveAd)) return true;
         } catch (Throwable ignored) {}
 
+        return false;
+    }
+
+    public static boolean isPromotedMusic(Object aweme) {
+        if (aweme == null) return false;
+
+        // 1. Direct Aweme promotional music flags (getters & fields)
+        String[] promoMethods = {
+                "isWithPromotionalMusic", "withPromotionalMusic", "getWithPromotionalMusic",
+                "isPromoted", "isBoost"
+        };
+        for (String m : promoMethods) {
+            try {
+                Object val = XposedHelpers.callMethod(aweme, m);
+                if (isTruthy(val)) return true;
+            } catch (Throwable ignored) {}
+        }
+
+        String[] promoFields = {
+                "withPromotionalMusic", "isWithPromotionalMusic", "isPromoted"
+        };
+        for (String f : promoFields) {
+            try {
+                Object val = XposedHelpers.getObjectField(aweme, f);
+                if (isTruthy(val)) return true;
+            } catch (Throwable ignored) {}
+        }
+
+        // 2. Aweme promote toast, brand, boost objects
+        try {
+            Object boost = XposedHelpers.callMethod(aweme, "getBoost");
+            if (boost != null && isTruthy(boost)) return true;
+        } catch (Throwable ignored) {}
+        try {
+            Object brand = XposedHelpers.callMethod(aweme, "getPromoteBrandInfo");
+            if (brand != null) return true;
+        } catch (Throwable ignored) {}
+        try {
+            Object toast = XposedHelpers.callMethod(aweme, "getPromoteToast");
+            if (toast instanceof String && !((String) toast).trim().isEmpty()) return true;
+        } catch (Throwable ignored) {}
+        try {
+            Object toastKey = XposedHelpers.callMethod(aweme, "getPromoteToastKey");
+            if (toastKey instanceof String && !((String) toastKey).trim().isEmpty()) return true;
+        } catch (Throwable ignored) {}
+
+        // 3. Commercial Tool Info on Aweme
+        try {
+            Object commInfo = XposedHelpers.callMethod(aweme, "getCommercialToolInfo");
+            if (commInfo == null) {
+                commInfo = XposedHelpers.getObjectField(aweme, "commercialToolInfo");
+            }
+            if (commInfo != null) {
+                try {
+                    Object val = XposedHelpers.callMethod(commInfo, "hasCommercialMusic");
+                    if (isTruthy(val)) return true;
+                } catch (Throwable ignored) {}
+                try {
+                    Object val = XposedHelpers.callMethod(commInfo, "getHasCommercialMusic");
+                    if (isTruthy(val)) return true;
+                } catch (Throwable ignored) {}
+                try {
+                    Object val = XposedHelpers.getObjectField(commInfo, "hasCommercialMusic");
+                    if (isTruthy(val)) return true;
+                } catch (Throwable ignored) {}
+                try {
+                    Object val = XposedHelpers.callMethod(commInfo, "hasAdTag");
+                    if (isTruthy(val)) return true;
+                } catch (Throwable ignored) {}
+                try {
+                    Object val = XposedHelpers.getObjectField(commInfo, "hasAdTag");
+                    if (isTruthy(val)) return true;
+                } catch (Throwable ignored) {}
+            }
+        } catch (Throwable ignored) {}
+
+        // 4. Music model inspection
+        Object music = null;
+        try {
+            music = XposedHelpers.callMethod(aweme, "getMusic");
+        } catch (Throwable ignored) {}
+        if (music == null) {
+            try {
+                music = XposedHelpers.callMethod(aweme, "getAddedSoundMusicInfo");
+            } catch (Throwable ignored) {}
+        }
+        if (music == null) {
+            try {
+                music = XposedHelpers.getObjectField(aweme, "music");
+            } catch (Throwable ignored) {}
+        }
+
+        if (music != null) {
+            // A. Promotional & commercial music boolean methods
+            String[] musicPromoMethods = {
+                    "isCommerceMusic", "isCommercialMusic", "getIsCommerceMusic",
+                    "isOriginalPromote", "isPromoteMusic", "isPromotedMusic", "isPromote"
+            };
+            for (String mm : musicPromoMethods) {
+                try {
+                    Object val = XposedHelpers.callMethod(music, mm);
+                    if (isTruthy(val)) return true;
+                } catch (Throwable ignored) {}
+            }
+
+            // B. Direct fields on Music
+            String[] musicPromoFields = {
+                    "isCommerceMusic", "isCommercialMusic", "isOriginalPromote", "isPromoteMusic"
+            };
+            for (String mf : musicPromoFields) {
+                try {
+                    Object val = XposedHelpers.getObjectField(music, mf);
+                    if (isTruthy(val)) return true;
+                } catch (Throwable ignored) {}
+            }
+
+            // C. Commercial music type (> 0)
+            try {
+                Object cType = XposedHelpers.callMethod(music, "getCommercialMusicType");
+                if (cType instanceof Number && ((Number) cType).intValue() > 0) return true;
+            } catch (Throwable ignored) {}
+            try {
+                Object cType = XposedHelpers.getObjectField(music, "commercialMusicType");
+                if (cType instanceof Number && ((Number) cType).intValue() > 0) return true;
+            } catch (Throwable ignored) {}
+
+            // D. Music Tags (e.g. "Promoted", "Commercial", "Sponsored")
+            try {
+                Object tags = XposedHelpers.callMethod(music, "getMusicTags");
+                if (tags == null) {
+                    tags = XposedHelpers.getObjectField(music, "musicTags");
+                }
+                if (tags instanceof List) {
+                    for (Object tagObj : (List<?>) tags) {
+                        if (tagObj == null) continue;
+                        String tagStr = null;
+                        try {
+                            Object t = XposedHelpers.callMethod(tagObj, "getTagTitle");
+                            if (t instanceof String) tagStr = (String) t;
+                        } catch (Throwable ignored) {}
+                        if (tagStr == null) {
+                            try {
+                                Object t = XposedHelpers.callMethod(tagObj, "getTitle");
+                                if (t instanceof String) tagStr = (String) t;
+                            } catch (Throwable ignored) {}
+                        }
+                        if (tagStr == null) {
+                            tagStr = tagObj.toString();
+                        }
+                        if (tagStr != null) {
+                            String s = tagStr.toLowerCase(Locale.ROOT);
+                            if (s.contains("promot") || s.contains("commercial") || s.contains("sponsor")) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {}
+
+            // E. Music extra / logExtra JSON checking
+            String[] extraMethods = {"getExtra", "getLogExtra"};
+            for (String em : extraMethods) {
+                try {
+                    Object extra = XposedHelpers.callMethod(music, em);
+                    if (extra instanceof String) {
+                        String lower = ((String) extra).toLowerCase(Locale.ROOT);
+                        if (lower.contains("\"is_promoted\":true")
+                                || lower.contains("\"is_promoted\": true")
+                                || lower.contains("\"is_promoted\":1")
+                                || lower.contains("\"is_promoted\": 1")
+                                || lower.contains("\"is_commerce_music\":true")
+                                || lower.contains("\"is_commerce_music\": true")
+                                || lower.contains("\"is_commerce_music\":1")
+                                || lower.contains("\"is_commerce_music\": 1")
+                                || lower.contains("\"is_commercial\":true")
+                                || lower.contains("\"is_commercial\": true")
+                                || lower.contains("\"is_original_promote\":true")
+                                || lower.contains("\"is_original_promote\": true")
+                                || lower.contains("\"is_original_promote\":1")
+                                || lower.contains("\"is_original_promote\": 1")
+                                || lower.contains("\"promoted_music\":true")
+                                || lower.contains("\"promoted_music\": true")) {
+                            return true;
+                        }
+                    }
+                } catch (Throwable ignored) {}
+            }
+        }
+
+        return false;
+    }
+
+    private static boolean isTruthy(Object val) {
+        if (val == null) return false;
+        if (val instanceof Boolean) return (Boolean) val;
+        if (val instanceof Number) return ((Number) val).intValue() == 1;
+        if (val instanceof String) {
+            String s = ((String) val).trim().toLowerCase(Locale.ROOT);
+            return "true".equals(s) || "1".equals(s);
+        }
         return false;
     }
 
@@ -232,6 +453,23 @@ public final class AwemeEvaluator {
             Object sLang = XposedHelpers.callMethod(aweme, "getTextStickerMajorityLang");
             if (sLang instanceof String && matcher.matchesUniqueLanguage((String) sLang)) {
                 return true;
+            }
+            try {
+                Object dlField = XposedHelpers.getObjectField(aweme, "descLanguage");
+                if (dlField instanceof String && matcher.matchesUniqueLanguage((String) dlField)) {
+                    return true;
+                }
+            } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {}
+
+        // 9. Anchor Info / TikTok Shop
+        try {
+            Object anchor = XposedHelpers.callMethod(aweme, "getAnchorInfo");
+            if (anchor != null) {
+                Object title = XposedHelpers.callMethod(anchor, "getTitle");
+                if (title instanceof String && (matcher.containsCountryName((String) title) || ((String) title).contains("Rp") || ((String) title).contains("IDR"))) return true;
+                Object desc = XposedHelpers.callMethod(anchor, "getDescription");
+                if (desc instanceof String && (matcher.containsCountryName((String) desc) || ((String) desc).contains("Rp") || ((String) desc).contains("IDR"))) return true;
             }
         } catch (Throwable ignored) {}
 
@@ -479,6 +717,12 @@ public final class AwemeEvaluator {
 
             Object sigLang = XposedHelpers.callMethod(author, "getSignatureLanguage");
             if (sigLang instanceof String && matcher.matchesUniqueLanguage((String) sigLang)) return true;
+
+            // 7. Telephone country calling code (e.g. 62 / +62 for Indonesia)
+            try {
+                Object cc = XposedHelpers.callMethod(author, "getCountryCode");
+                if (cc instanceof String && ("62".equals(cc) || "+62".equals(cc) || matcher.matchesCountryOrIso((String) cc))) return true;
+            } catch (Throwable ignored) {}
         } catch (Throwable ignored) {}
         return false;
     }

@@ -53,31 +53,24 @@ public class StoryDownloadHook implements BaseHook {
         final String awemeClass = "com.ss.android.ugc.aweme.feed.model.Aweme";
         final String userStoryClass = "com.ss.android.ugc.aweme.feed.model.story.UserStory";
 
+        XC_MethodHook trackAwemeHook = new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                if (param.thisObject != null) {
+                    sCurrentAweme = param.thisObject;
+                    if (!isStoryAweme(param.thisObject)) {
+                        synchronized (sCurrentStoryList) {
+                            sCurrentStoryList.clear();
+                        }
+                    }
+                }
+            }
+        };
+
         try {
-            XposedHelpers.findAndHookMethod(awemeClass, classLoader, "getVideo", new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    if (param.thisObject != null && isStoryAweme(param.thisObject)) {
-                        sCurrentAweme = param.thisObject;
-                    }
-                }
-            });
-            XposedHelpers.findAndHookMethod(awemeClass, classLoader, "getImageInfos", new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    if (param.thisObject != null && isStoryAweme(param.thisObject)) {
-                        sCurrentAweme = param.thisObject;
-                    }
-                }
-            });
-            XposedHelpers.findAndHookMethod(awemeClass, classLoader, "getPhotoModeImageInfo", new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    if (param.thisObject != null && isStoryAweme(param.thisObject)) {
-                        sCurrentAweme = param.thisObject;
-                    }
-                }
-            });
+            XposedHelpers.findAndHookMethod(awemeClass, classLoader, "getVideo", trackAwemeHook);
+            XposedHelpers.findAndHookMethod(awemeClass, classLoader, "getImageInfos", trackAwemeHook);
+            XposedHelpers.findAndHookMethod(awemeClass, classLoader, "getPhotoModeImageInfo", trackAwemeHook);
         } catch (Throwable ignored) {}
 
         try {
@@ -177,14 +170,29 @@ public class StoryDownloadHook implements BaseHook {
     public static boolean isStoryAweme(Object aweme) {
         if (aweme == null) return false;
         if (sKnownStoryAwemes.contains(aweme)) return true;
-        try {
-            String aid = (String) XposedHelpers.callMethod(aweme, "getAid");
-            if (aid != null && sKnownStoryAids.contains(aid)) return true;
-        } catch (Throwable ignored) {}
+
+        String aid = getAwemeAid(aweme);
+        if (aid != null && !aid.isEmpty() && sKnownStoryAids.contains(aid)) return true;
 
         synchronized (sCurrentStoryList) {
             if (sCurrentStoryList.contains(aweme)) return true;
+            if (aid != null && !aid.isEmpty()) {
+                for (Object s : sCurrentStoryList) {
+                    if (s != null && aid.equals(getAwemeAid(s))) return true;
+                }
+            }
         }
+
+        try {
+            Object typeObj = XposedHelpers.callMethod(aweme, "getAwemeType");
+            if (typeObj instanceof Number) {
+                int type = ((Number) typeObj).intValue();
+                // 40: story video, 43: story photo, 150: story
+                if (type == 40 || type == 43 || type == 150) return true;
+                // Regular feed video (0), ad (2), normal photo mode album (68) are not stories
+                if (type == 0 || type == 2 || type == 68) return false;
+            }
+        } catch (Throwable ignored) {}
 
         try {
             Object isStory = XposedHelpers.callMethod(aweme, "isStory");
@@ -201,28 +209,89 @@ public class StoryDownloadHook implements BaseHook {
         } catch (Throwable ignored) {}
 
         try {
-            Object userStory = XposedHelpers.callMethod(aweme, "getUserStory");
-            if (userStory != null) return true;
-        } catch (Throwable ignored) {}
-
-        try {
             Object story = XposedHelpers.callMethod(aweme, "getStory");
-            if (story != null) return true;
-        } catch (Throwable ignored) {}
-
-        try {
-            Object storyModel = XposedHelpers.callMethod(aweme, "getStoryModel");
-            if (storyModel != null) return true;
-        } catch (Throwable ignored) {}
-
-        try {
-            Object typeObj = XposedHelpers.callMethod(aweme, "getAwemeType");
-            if (typeObj instanceof Number) {
-                int type = ((Number) typeObj).intValue();
-                if (type == 40 || type == 43 || type == 150) return true;
+            if (story != null) {
+                Object isStoryFlag = null;
+                try { isStoryFlag = XposedHelpers.callMethod(story, "isStory"); } catch (Throwable ignored) {}
+                if (Boolean.TRUE.equals(isStoryFlag)) return true;
             }
         } catch (Throwable ignored) {}
 
+        try {
+            Object userStory = XposedHelpers.callMethod(aweme, "getUserStory");
+            if (userStory != null) {
+                List<?> stories = (List<?>) XposedHelpers.callMethod(userStory, "getStories");
+                if (stories != null && !stories.isEmpty()) {
+                    if (stories.contains(aweme)) return true;
+                    if (aid != null && !aid.isEmpty()) {
+                        for (Object s : stories) {
+                            if (s != null && aid.equals(getAwemeAid(s))) return true;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        return false;
+    }
+
+    private static String getAwemeAid(Object aweme) {
+        if (aweme == null) return null;
+        try {
+            return (String) XposedHelpers.callMethod(aweme, "getAid");
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static boolean isStoryDetailActivity(Activity activity) {
+        if (activity == null) return false;
+        if (isSavedVideoList(activity)) return false;
+
+        String activityName = activity.getClass().getName();
+        if (activityName.contains("Story") || activityName.contains("story")) {
+            return true;
+        }
+
+        Intent intent = activity.getIntent();
+        if (intent != null) {
+            if (intent.getBooleanExtra("is_story", false)
+                    || intent.getBooleanExtra("is_from_story", false)
+                    || intent.hasExtra("story_id")) {
+                return true;
+            }
+            Bundle extras = intent.getExtras();
+            if (extras != null) {
+                for (String key : extras.keySet()) {
+                    if (key.toLowerCase(Locale.US).contains("story")) {
+                        try {
+                            Object val = extras.get(key);
+                            if (Boolean.TRUE.equals(val) || (val instanceof String && ((String) val).toLowerCase(Locale.US).contains("story"))) {
+                                return true;
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean isSavedVideoList(Activity activity) {
+        if (activity == null) return false;
+        String activityName = activity.getClass().getName();
+        if (activityName.contains("Favorite") || activityName.contains("Bookmark")
+                || activityName.contains("Collection")) {
+            return true;
+        }
+        Intent intent = activity.getIntent();
+        if (intent != null) {
+            if (intent.getBooleanExtra("is_story", false)
+                    || intent.getBooleanExtra("is_from_story", false)
+                    || intent.hasExtra("story_id")) {
+                return false;
+            }
+        }
         return false;
     }
 
@@ -230,7 +299,7 @@ public class StoryDownloadHook implements BaseHook {
         XC_MethodHook dialogHook = new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                if (!ModuleConfig.downloadStory && !ModuleConfig.noWatermark) return;
+                if (!ModuleConfig.downloadStory) return;
                 if (param.thisObject instanceof Dialog) {
                     attachSaveButtonToShareDialog((Dialog) param.thisObject);
                 }
@@ -245,6 +314,12 @@ public class StoryDownloadHook implements BaseHook {
 
     private void attachSaveButtonToShareDialog(final Dialog dialog) {
         if (dialog == null) return;
+        String dialogClassName = dialog.getClass().getName();
+        if (dialogClassName.contains("Progress") || dialogClassName.contains("Loading")
+                || dialogClassName.contains("Toast") || dialogClassName.contains("Alert")) {
+            return;
+        }
+
         final Window window = dialog.getWindow();
         if (window == null) return;
         final View decor = window.getDecorView();
@@ -252,20 +327,36 @@ public class StoryDownloadHook implements BaseHook {
 
         Runnable attachTask = () -> {
             try {
+                if (!dialog.isShowing()) return;
                 final ViewGroup decorGroup = (ViewGroup) decor;
                 final String tag = "tiktok_enhancer_share_dl_btn";
                 if (decorGroup.findViewWithTag(tag) != null) return;
 
                 TextView reportTv = findActionTextView(decorGroup);
                 if (reportTv == null) return;
-                if (hasNativeDownloadButton(decorGroup)) return;
 
                 Context ctx = dialog.getContext();
                 Activity activity = getActivityFromContext(ctx);
                 if (activity == null) activity = dialog.getOwnerActivity();
 
-                boolean isStory = isStoryAweme(sCurrentAweme) || !sCurrentStoryList.isEmpty();
-                String buttonText = isStory ? "Save Story" : "Save Video";
+                if (isSavedVideoList(activity)) return;
+
+                Object currentAweme = (sCurrentAweme != null) ? sCurrentAweme : WatermarkBypassHook.getCurrentAweme();
+                boolean isStory = isStoryAweme(currentAweme) || isStoryDetailActivity(activity);
+
+                // The "Save Story" button must ONLY appear on 24-hour stories!
+                // Normal videos already have native clean saving enabled by WatermarkBypassHook.
+                if (!isStory) {
+                    return;
+                }
+
+                if (!ModuleConfig.downloadStory) {
+                    return;
+                }
+
+                if (hasNativeDownloadButton(decorGroup)) return;
+
+                String buttonText = "Save Story";
 
                 TextView saveBtn = new TextView(ctx);
                 saveBtn.setTag(tag);
@@ -292,7 +383,7 @@ public class StoryDownloadHook implements BaseHook {
 
                 saveBtn.setOnClickListener(v -> {
                     try { dialog.dismiss(); } catch (Throwable ignored) {}
-                    downloadAweme(ctx, sCurrentAweme);
+                    downloadAweme(ctx, currentAweme);
                 });
 
                 decorGroup.addView(saveBtn, lp);
@@ -307,14 +398,13 @@ public class StoryDownloadHook implements BaseHook {
         if (view == null) return false;
         if (view instanceof TextView && view.getVisibility() == View.VISIBLE) {
             CharSequence text = ((TextView) view).getText();
-            if (text != null) {
-                String s = text.toString().trim().toLowerCase(Locale.US);
-                if (s.equals("download") || s.equals("save video") || s.equals("unduh")
-                        || s.equals("herunterladen") || s.equals("télécharger") || s.equals("descargar")
-                        || s.equals("simpan video") || s.equals("lưu video") || s.equals("salvar vídeo")) {
-                    return true;
-                }
+            if (text != null && isDownloadActionText(text.toString())) {
+                return true;
             }
+        }
+        CharSequence cd = view.getContentDescription();
+        if (cd != null && isDownloadActionText(cd.toString())) {
+            return true;
         }
         if (view instanceof ViewGroup) {
             ViewGroup vg = (ViewGroup) view;
@@ -325,13 +415,30 @@ public class StoryDownloadHook implements BaseHook {
         return false;
     }
 
+    private static boolean isDownloadActionText(String str) {
+        if (str == null) return false;
+        String s = str.trim().toLowerCase(Locale.US);
+        return s.equals("download") || s.equals("save video") || s.equals("unduh")
+                || s.equals("herunterladen") || s.equals("télécharger") || s.equals("descargar")
+                || s.equals("guardar video") || s.equals("simpan video") || s.equals("lưu video")
+                || s.equals("salvar vídeo") || s.equals("salvar video") || s.equals("scarica video")
+                || s.equals("video speichern") || s.equals("videoyu kaydet") || s.equals("скачать")
+                || s.equals("сохранить видео") || s.equals("บันทึกวิดีโอ") || s.equals("muat turun")
+                || s.contains("保存本地") || s.contains("保存视频") || s.contains("下载")
+                || s.contains("動画を保存") || s.contains("동영상 저장");
+    }
+
     private static TextView findActionTextView(View view) {
         if (view instanceof TextView) {
             CharSequence text = ((TextView) view).getText();
             if (text != null) {
                 String s = text.toString().trim().toLowerCase(Locale.US);
                 if (s.equals("report") || s.equals("reportar") || s.equals("signaler")
-                        || s.equals("laporkan") || s.equals("melden") || s.equals("báo cáo")) {
+                        || s.equals("laporkan") || s.equals("melden") || s.equals("báo cáo")
+                        || s.equals("segnala") || s.equals("пожаловаться") || s.equals("bildir")
+                        || s.contains("举报") || s.contains("报告")
+                        || s.equals("通報") || s.equals("신고") || s.equals("copy link")
+                        || s.equals("salin tautan") || s.equals("copiar enlace")) {
                     return (TextView) view;
                 }
             }
@@ -349,6 +456,9 @@ public class StoryDownloadHook implements BaseHook {
     public static void downloadAweme(Context ctx, Object aweme) {
         if (ctx == null) return;
         Object target = (aweme != null) ? aweme : sCurrentAweme;
+        if (target == null) {
+            target = WatermarkBypassHook.getCurrentAweme();
+        }
         if (target == null && !sCurrentStoryList.isEmpty()) {
             synchronized (sCurrentStoryList) {
                 if (!sCurrentStoryList.isEmpty()) target = sCurrentStoryList.get(0);

@@ -23,8 +23,112 @@ public class FeedFilterHook implements BaseHook {
 
     @Override
     public void hook(ClassLoader classLoader) {
+        hookFeedItemList(classLoader);
+        hookFeedPanel(classLoader);
         hookFullFeedPanel(classLoader);
         hookAwemeModel(classLoader);
+    }
+
+    private void hookFeedItemList(ClassLoader classLoader) {
+        final String feedItemListClass = "com.ss.android.ugc.aweme.feed.model.FeedItemList";
+        try {
+            Class<?> clazz = XposedHelpers.findClassIfExists(feedItemListClass, classLoader);
+            if (clazz == null) return;
+
+            XC_MethodHook getListHook = new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    Object feedItemList = param.thisObject;
+                    if (feedItemList == null) return;
+
+                    Object result = param.getResult();
+                    if (result instanceof List) {
+                        List<?> list = (List<?>) result;
+                        if (list.isEmpty()) return;
+                        if (Boolean.TRUE.equals(XposedHelpers.getAdditionalInstanceField(list, "tiktok_enhancer_clean"))) {
+                            return;
+                        }
+
+                        List<Object> clean = filterList(list, feedItemList);
+                        XposedHelpers.setAdditionalInstanceField(clean, "tiktok_enhancer_clean", Boolean.TRUE);
+                        XposedHelpers.setAdditionalInstanceField(list, "tiktok_enhancer_clean", Boolean.TRUE);
+
+                        if (clean.size() != list.size()) {
+                            try { XposedHelpers.setBooleanField(feedItemList, "hasAd", false); } catch (Throwable ignored) {}
+                            try { XposedHelpers.setObjectField(feedItemList, "preloadAds", null); } catch (Throwable ignored) {}
+                            try { XposedHelpers.setObjectField(feedItemList, "items", clean); } catch (Throwable ignored) {}
+                            param.setResult(clean);
+                        }
+                    }
+                }
+            };
+
+            XposedHelpers.findAndHookMethod(clazz, "getItems", getListHook);
+            try {
+                XposedHelpers.findAndHookMethod(clazz, "getAwemeList", getListHook);
+            } catch (Throwable ignored) {}
+
+            XposedHelpers.findAndHookMethod(clazz, "setItems", List.class, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    if (param.args != null && param.args.length > 0 && param.args[0] instanceof List) {
+                        List<?> incoming = (List<?>) param.args[0];
+                        if (incoming != null && !incoming.isEmpty()) {
+                            if (Boolean.TRUE.equals(XposedHelpers.getAdditionalInstanceField(incoming, "tiktok_enhancer_clean"))) {
+                                return;
+                            }
+                            List<Object> clean = filterList(incoming, param.thisObject);
+                            XposedHelpers.setAdditionalInstanceField(clean, "tiktok_enhancer_clean", Boolean.TRUE);
+                            XposedHelpers.setAdditionalInstanceField(incoming, "tiktok_enhancer_clean", Boolean.TRUE);
+                            param.args[0] = clean;
+                        }
+                    }
+                }
+            });
+            XposedBridge.log(TAG + ": Hooked FeedItemList (getItems, getAwemeList, setItems)");
+        } catch (Throwable t) {
+            Log.d(TAG, "Hook FeedItemList failed: " + t.getMessage());
+        }
+    }
+
+    private void hookFeedPanel(ClassLoader classLoader) {
+        String[] panelClasses = {
+                "com.ss.android.ugc.aweme.feed.panel.FullFeedFragmentPanel",
+                "com.ss.android.ugc.aweme.feed.panel.RecommendFeedFragmentPanel",
+                "com.ss.android.ugc.aweme.feed.panel.FollowFeedFragmentPanelMT",
+                "com.ss.android.ugc.aweme.stemfeed.panel.StemFeedFragmentPanel"
+        };
+
+        for (String panelClass : panelClasses) {
+            try {
+                Class<?> clazz = XposedHelpers.findClassIfExists(panelClass, classLoader);
+                if (clazz == null) continue;
+
+                XposedHelpers.findAndHookMethod(clazz, "getAwemeList", new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                        if (param.thisObject != null && isProfileOrDetailContext(param.thisObject)) {
+                            return;
+                        }
+                        Object result = param.getResult();
+                        if (result instanceof List) {
+                            List<?> list = (List<?>) result;
+                            if (list.isEmpty()) return;
+                            if (Boolean.TRUE.equals(XposedHelpers.getAdditionalInstanceField(list, "tiktok_enhancer_clean"))) {
+                                return;
+                            }
+
+                            List<Object> clean = filterList(list, param.thisObject);
+                            XposedHelpers.setAdditionalInstanceField(clean, "tiktok_enhancer_clean", Boolean.TRUE);
+                            XposedHelpers.setAdditionalInstanceField(list, "tiktok_enhancer_clean", Boolean.TRUE);
+                            if (clean.size() != list.size()) {
+                                param.setResult(clean);
+                            }
+                        }
+                    }
+                });
+            } catch (Throwable ignored) {}
+        }
     }
 
     private void hookFullFeedPanel(ClassLoader classLoader) {
@@ -38,8 +142,7 @@ public class FeedFilterHook implements BaseHook {
                     List<?> list = (List<?>) param.args[0];
                     if (list.isEmpty()) return;
 
-                    // Strictly filter only if confirmed to be Recommend / FYP feed ("homepage_hot")
-                    if (!isRecommendFeed(param.thisObject)) return;
+                    if (isProfileOrDetailContext(param.thisObject)) return;
 
                     List<Object> clean = filterList(list, param.thisObject);
                     if (clean.size() != list.size()) {
@@ -68,7 +171,7 @@ public class FeedFilterHook implements BaseHook {
                         XposedBridge.hookMethod(m, new XC_MethodHook() {
                             @Override
                             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                                if (!isRecommendFeed(param.thisObject)) return;
+                                if (isProfileOrDetailContext(param.thisObject)) return;
 
                                 Object holder = param.args[0];
                                 if (holder != null) {
@@ -96,6 +199,16 @@ public class FeedFilterHook implements BaseHook {
     }
 
     private List<Object> filterList(List<?> sourceList, Object context) {
+        if (sourceList == null || sourceList.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        if (isProfileOrDetailContext(context) || isSingleAuthorProfileFeed(sourceList)) {
+            @SuppressWarnings("unchecked")
+            List<Object> raw = (List<Object>) sourceList;
+            return raw;
+        }
+
         boolean isFyp = isRecommendFeed(context);
         boolean isColdStart = isColdStartFeed(context);
 
@@ -116,12 +229,12 @@ public class FeedFilterHook implements BaseHook {
         if (smart && kept.size() < minHealthy && !sourceList.isEmpty()) {
             for (Object item : sourceList) {
                 if (item != null && !kept.contains(item)) {
-                    // Only restore non-ad and strictly non-blocked items (never restore blocked country or song items)
-                    boolean isAd = AwemeEvaluator.isAdAweme(item);
-                    boolean isBlockedCountry = (!ModuleConfig.blockedCountries.isEmpty())
+                    // Only restore non-ad and strictly non-blocked items (never restore blocked country, song, or promoted music items!)
+                    boolean isAd = AwemeEvaluator.isAdAweme(item) || AwemeEvaluator.isPromotedMusic(item);
+                    boolean isBlockedCountry = (ModuleConfig.blockCountries && !ModuleConfig.blockedCountries.isEmpty())
                             && AwemeEvaluator.isBlockedCountry(item, ModuleConfig.blockedCountries);
-                    boolean isBlockedSong = ModuleConfig.blockCountrySongs
-                            && (!ModuleConfig.blockedCountries.isEmpty())
+                    boolean isBlockedSong = (ModuleConfig.blockCountries && ModuleConfig.blockCountrySongs
+                            && !ModuleConfig.blockedCountries.isEmpty())
                             && AwemeEvaluator.isBlockedSong(item, ModuleConfig.blockedCountries);
 
                     if (!isAd && !isBlockedCountry && !isBlockedSong) {
@@ -135,27 +248,107 @@ public class FeedFilterHook implements BaseHook {
         return kept;
     }
 
-    private boolean isRecommendFeed(Object context) {
-        if (context == null) return false;
+    public static boolean isRecommendFeed(Object context) {
+        if (context == null) return true;
+        if (isProfileOrDetailContext(context)) return false;
 
-        // 1. Panels / Fragments / Adapters with getEventType()
+        String className = context.getClass().getName();
+        if (className.contains("RecommendFeedFragmentPanel") || className.contains("FullFeedFragmentPanel")) {
+            return true;
+        }
+
         try {
             Object eventType = XposedHelpers.callMethod(context, "getEventType");
             if (eventType instanceof String) {
-                // Strictly "homepage_hot" is the For You Page recommendation feed
                 return "homepage_hot".equals(eventType);
             }
         } catch (Throwable ignored) {}
 
-        // 2. Objects with eventType field (e.g. BaseFeedPageParams)
         try {
-            Object eventType = XposedHelpers.getObjectField(context, "eventType");
-            if (eventType instanceof String) {
-                return "homepage_hot".equals(eventType);
+            Object param = XposedHelpers.callMethod(context, "getParam");
+            if (param != null) {
+                Object eventType = XposedHelpers.callMethod(param, "getEventType");
+                if (eventType instanceof String) {
+                    return "homepage_hot".equals(eventType);
+                }
             }
         } catch (Throwable ignored) {}
 
+        try {
+            Object param = XposedHelpers.getObjectField(context, "mParam");
+            if (param != null) {
+                Object eventType = XposedHelpers.getObjectField(param, "eventType");
+                if (eventType instanceof String) {
+                    return "homepage_hot".equals(eventType);
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        try {
+            Object ft = XposedHelpers.callMethod(context, "getFeedType");
+            if (ft instanceof Number) {
+                return ((Number) ft).intValue() == 0;
+            }
+        } catch (Throwable ignored) {}
+
+        return true;
+    }
+
+    public static boolean isProfileOrDetailContext(Object contextObj) {
+        if (contextObj == null) return false;
+        String className = contextObj.getClass().getName();
+        if (className.contains("Profile")
+                || className.contains("User")
+                || className.contains("Detail")
+                || className.contains("AwemeList")
+                || className.contains("Favorite")
+                || className.contains("Bookmark")
+                || className.contains("Music")
+                || className.contains("Challenge")
+                || className.contains("Search")) {
+            return true;
+        }
+        try {
+            Object uid = XposedHelpers.callMethod(contextObj, "getDataUserId");
+            if (uid instanceof String && !((String) uid).trim().isEmpty()) {
+                return true;
+            }
+        } catch (Throwable ignored) {}
+        try {
+            Object uid = XposedHelpers.getObjectField(contextObj, "dataUserId");
+            if (uid instanceof String && !((String) uid).trim().isEmpty()) {
+                return true;
+            }
+        } catch (Throwable ignored) {}
         return false;
+    }
+
+    public static boolean isSingleAuthorProfileFeed(List<?> items) {
+        if (items == null || items.size() < 2) return false;
+        String firstUid = null;
+        int checked = 0;
+        for (Object aweme : items) {
+            if (aweme == null) continue;
+            try {
+                Object author = XposedHelpers.callMethod(aweme, "getAuthor");
+                if (author == null) author = XposedHelpers.getObjectField(aweme, "author");
+                if (author == null) continue;
+                Object uidObj = XposedHelpers.callMethod(author, "getUid");
+                if (uidObj == null) uidObj = XposedHelpers.getObjectField(author, "uid");
+                if (uidObj instanceof String) {
+                    String uid = (String) uidObj;
+                    if (uid.isEmpty()) continue;
+                    if (firstUid == null) {
+                        firstUid = uid;
+                    } else if (!firstUid.equals(uid)) {
+                        return false;
+                    }
+                    checked++;
+                    if (checked >= 3) break;
+                }
+            } catch (Throwable ignored) {}
+        }
+        return checked >= 2;
     }
 
     private boolean isColdStartFeed(Object context) {
