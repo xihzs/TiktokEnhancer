@@ -248,8 +248,10 @@ public class StoryDownloadHook implements BaseHook {
         if (activity == null) return false;
         if (isSavedVideoList(activity)) return false;
 
-        String activityName = activity.getClass().getName();
-        if (activityName.contains("Story") || activityName.contains("story")) {
+        String simpleName = activity.getClass().getSimpleName();
+        if ("StoryDetailActivity".equals(simpleName)
+                || "StoryViewerActivity".equals(simpleName)
+                || "StoryViewsActivity".equals(simpleName)) {
             return true;
         }
 
@@ -259,19 +261,6 @@ public class StoryDownloadHook implements BaseHook {
                     || intent.getBooleanExtra("is_from_story", false)
                     || intent.hasExtra("story_id")) {
                 return true;
-            }
-            Bundle extras = intent.getExtras();
-            if (extras != null) {
-                for (String key : extras.keySet()) {
-                    if (key.toLowerCase(Locale.US).contains("story")) {
-                        try {
-                            Object val = extras.get(key);
-                            if (Boolean.TRUE.equals(val) || (val instanceof String && ((String) val).toLowerCase(Locale.US).contains("story"))) {
-                                return true;
-                            }
-                        } catch (Throwable ignored) {}
-                    }
-                }
             }
         }
         return false;
@@ -342,7 +331,12 @@ public class StoryDownloadHook implements BaseHook {
                 if (isSavedVideoList(activity)) return;
 
                 Object currentAweme = (sCurrentAweme != null) ? sCurrentAweme : WatermarkBypassHook.getCurrentAweme();
-                boolean isStory = isStoryAweme(currentAweme) || isStoryDetailActivity(activity);
+                boolean isStory = false;
+                if (currentAweme != null) {
+                    isStory = isStoryAweme(currentAweme);
+                } else if (activity != null) {
+                    isStory = isStoryDetailActivity(activity);
+                }
 
                 // The "Save Story" button must ONLY appear on 24-hour stories!
                 // Normal videos already have native clean saving enabled by WatermarkBypassHook.

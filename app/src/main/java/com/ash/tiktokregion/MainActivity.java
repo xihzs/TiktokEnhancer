@@ -926,7 +926,10 @@ public class MainActivity extends AppCompatActivity {
                 mTvTiktokVersion.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
             }
             if (mTvTiktokSupportStatus != null) {
-                if (versionName.equals("47.6.3") || versionName.startsWith("47.6.3")) {
+                if (versionName.equals("47.9.3") || versionName.startsWith("47.9.3")) {
+                    mTvTiktokSupportStatus.setText("Supported (v47.9.3 Optimized)");
+                    mTvTiktokSupportStatus.setTextColor(ContextCompat.getColor(this, R.color.ios_green));
+                } else if (versionName.equals("47.6.3") || versionName.startsWith("47.6.3")) {
                     mTvTiktokSupportStatus.setText("Supported (v47.6.3 Optimized)");
                     mTvTiktokSupportStatus.setTextColor(ContextCompat.getColor(this, R.color.ios_green));
                 } else if (versionName.startsWith("47.") || versionName.startsWith("46.")) {

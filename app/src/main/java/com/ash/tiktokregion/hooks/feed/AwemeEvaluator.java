@@ -81,6 +81,30 @@ public final class AwemeEvaluator {
         return DECISION_KEEP;
     }
 
+    private static final java.util.regex.Pattern AD_HASHTAG_PATTERN = java.util.regex.Pattern.compile("(?i)#\\w*ad\\b");
+    private static final java.util.regex.Pattern PROMO_CODE_PATTERN = java.util.regex.Pattern.compile("(?i)(use\\s+(code|“|\"|')|code\\s*:\\s*|discount\\s*code|promo\\s*code|coupon\\s*code|%\\s*off|\\$\\$\\s*off)");
+
+    public static boolean isSponsoredOrAdText(String text) {
+        if (text == null || text.trim().isEmpty()) return false;
+        String lower = text.toLowerCase(Locale.ROOT);
+
+        // Hashtags: #...ad (e.g. #ad, #ediktedad, #sheinad, #temuad, etc.)
+        if (AD_HASHTAG_PATTERN.matcher(text).find()) return true;
+        if (lower.contains("#sponsored") || lower.contains("#paidpartnership")
+                || lower.contains("#brandpartner") || lower.contains("#brandambassador")
+                || lower.contains("#freegift") || lower.contains("#gifted")
+                || lower.contains("#collab") || lower.contains("#sponsorship")
+                || lower.contains("#tiktokshop") || lower.contains("#tiktokmademebuyit")
+                || lower.contains("#ad ") || lower.contains("#ad\n") || lower.endsWith("#ad")) {
+            return true;
+        }
+
+        // Promo/Discount codes
+        if (PROMO_CODE_PATTERN.matcher(text).find()) return true;
+
+        return false;
+    }
+
     public static boolean isAdAweme(Object aweme) {
         if (aweme == null) return false;
 
@@ -108,8 +132,64 @@ public final class AwemeEvaluator {
             Object type = XposedHelpers.callMethod(aweme, "getAwemeType");
             if (type instanceof Number) {
                 int t = ((Number) type).intValue();
-                if (t == 2 || t == 101) return true;
+                if (t == 2 || t == 101 || t == 34 || t == 35) return true;
             }
+        } catch (Throwable ignored) {}
+
+        try {
+            Object isSoftAd = XposedHelpers.callMethod(aweme, "isSoftAd");
+            if (isTruthy(isSoftAd)) return true;
+        } catch (Throwable ignored) {}
+
+        try {
+            Object isSoftAdField = XposedHelpers.getObjectField(aweme, "_isSoftAd");
+            if (isTruthy(isSoftAdField)) return true;
+        } catch (Throwable ignored) {}
+
+        try {
+            Object isPaid = XposedHelpers.callMethod(aweme, "isPaidContent");
+            if (isTruthy(isPaid)) return true;
+        } catch (Throwable ignored) {}
+
+        try {
+            Object linkAd = XposedHelpers.callMethod(aweme, "getLinkAdData");
+            if (linkAd == null) linkAd = XposedHelpers.getObjectField(aweme, "linkAdData");
+            if (linkAd != null) return true;
+        } catch (Throwable ignored) {}
+
+        try {
+            Object promoteModel = XposedHelpers.callMethod(aweme, "getPromoteModel");
+            if (promoteModel == null) promoteModel = XposedHelpers.getObjectField(aweme, "promoteModel");
+            if (promoteModel != null) return true;
+        } catch (Throwable ignored) {}
+
+        try {
+            Object promoteIcon = XposedHelpers.callMethod(aweme, "getPromoteIconText");
+            if (promoteIcon instanceof String && !((String) promoteIcon).trim().isEmpty()) return true;
+        } catch (Throwable ignored) {}
+
+        try {
+            Object commAuth = XposedHelpers.callMethod(aweme, "getCommerceVideoAuthInfo");
+            if (commAuth == null) commAuth = XposedHelpers.getObjectField(aweme, "mCommerceVideoAuthInfo");
+            if (commAuth != null) return true;
+        } catch (Throwable ignored) {}
+
+        try {
+            Object commVideo = XposedHelpers.callMethod(aweme, "getCommercialVideoInfo");
+            if (commVideo == null) commVideo = XposedHelpers.getObjectField(aweme, "commercialVideoInfo");
+            if (commVideo != null) return true;
+        } catch (Throwable ignored) {}
+
+        try {
+            Object commSticker = XposedHelpers.callMethod(aweme, "getCommerceStickerInfo");
+            if (commSticker == null) commSticker = XposedHelpers.getObjectField(aweme, "commerceStickerInfo");
+            if (commSticker != null) return true;
+        } catch (Throwable ignored) {}
+
+        try {
+            Object brandAccounts = XposedHelpers.callMethod(aweme, "getBrandContentAccounts");
+            if (brandAccounts == null) brandAccounts = XposedHelpers.getObjectField(aweme, "brandContentAccounts");
+            if (brandAccounts instanceof List && !((List<?>) brandAccounts).isEmpty()) return true;
         } catch (Throwable ignored) {}
 
         try {
@@ -127,6 +207,28 @@ public final class AwemeEvaluator {
         try {
             Object isLiveAd = XposedHelpers.callMethod(aweme, "isLiveAd");
             if (isTruthy(isLiveAd)) return true;
+        } catch (Throwable ignored) {}
+
+        // Sponsored / Promotional Captions & Hashtags (e.g. #ediktedad, discount codes)
+        try {
+            Object desc = XposedHelpers.callMethod(aweme, "getDesc");
+            if (desc == null) desc = XposedHelpers.getObjectField(aweme, "desc");
+            if (desc instanceof String && isSponsoredOrAdText((String) desc)) {
+                return true;
+            }
+        } catch (Throwable ignored) {}
+
+        // Upload misc / metadata indicators
+        try {
+            Object uploadMisc = XposedHelpers.callMethod(aweme, "getUploadMiscInfoStructStr");
+            if (uploadMisc == null) uploadMisc = XposedHelpers.getObjectField(aweme, "uploadMiscInfoStructStr");
+            if (uploadMisc instanceof String) {
+                String s = ((String) uploadMisc).toLowerCase(Locale.ROOT);
+                if (s.contains("\"is_promoted\":true") || s.contains("\"is_ad\":true")
+                        || s.contains("\"has_ad\":true") || s.contains("\"is_commerce\":true")) {
+                    return true;
+                }
+            }
         } catch (Throwable ignored) {}
 
         return false;
@@ -187,6 +289,20 @@ public final class AwemeEvaluator {
 
         if (music != null) {
             try {
+                Object isComm = XposedHelpers.callMethod(music, "isCommerceMusic");
+                if (isTruthy(isComm)) return true;
+            } catch (Throwable ignored) {}
+            try {
+                Object isCommField = XposedHelpers.getObjectField(music, "isCommerceMusic");
+                if (isTruthy(isCommField)) return true;
+            } catch (Throwable ignored) {}
+
+            try {
+                Object commExclusive = XposedHelpers.callMethod(music, "getCommerceExclusive");
+                if (isTruthy(commExclusive)) return true;
+            } catch (Throwable ignored) {}
+
+            try {
                 Object pId = XposedHelpers.callMethod(music, "getPromoId");
                 if (pId instanceof String && !((String) pId).trim().isEmpty()) return true;
             } catch (Throwable ignored) {}
@@ -210,16 +326,38 @@ public final class AwemeEvaluator {
                     for (Object tagObj : (List<?>) tags) {
                         if (tagObj == null) continue;
                         String s = tagObj.toString().toLowerCase(Locale.ROOT);
-                        if (s.contains("promot") || s.contains("sponsor")) return true;
+                        if (s.contains("promot") || s.contains("sponsor") || s.contains("commercial")) return true;
                     }
                 }
             } catch (Throwable ignored) {}
 
             try {
+                Object musicName = XposedHelpers.callMethod(music, "getMusicName");
+                if (musicName instanceof String && isPromoKeyword((String) musicName)) return true;
+            } catch (Throwable ignored) {}
+
+            try {
+                Object authorName = XposedHelpers.callMethod(music, "getAuthorName");
+                if (authorName instanceof String && isPromoKeyword((String) authorName)) return true;
+            } catch (Throwable ignored) {}
+
+            try {
                 Object extra = XposedHelpers.callMethod(music, "getExtra");
                 if (extra instanceof String) {
-                    String ex = (String) extra;
-                    if (ex.contains("\"is_promoted\":true") || ex.contains("\"promo_tag\"") || ex.contains("\"promotion\"")) {
+                    String ex = ((String) extra).toLowerCase(Locale.ROOT);
+                    if (ex.contains("\"is_promoted\":true") || ex.contains("\"promo_tag\"")
+                            || ex.contains("\"promotion\"") || ex.contains("\"commerce\"")) {
+                        return true;
+                    }
+                }
+            } catch (Throwable ignored) {}
+
+            try {
+                Object logExtra = XposedHelpers.callMethod(music, "getLogExtra");
+                if (logExtra instanceof String) {
+                    String lx = ((String) logExtra).toLowerCase(Locale.ROOT);
+                    if (lx.contains("\"is_promoted\":true") || lx.contains("\"promo_tag\"")
+                            || lx.contains("\"promotion\"") || lx.contains("\"commerce\"")) {
                         return true;
                     }
                 }
@@ -249,7 +387,11 @@ public final class AwemeEvaluator {
     private static boolean isPromoKeyword(String str) {
         if (str == null || str.isEmpty()) return false;
         String s = str.toLowerCase(Locale.ROOT);
-        return s.contains("promoted music") || s.contains("music promotion") || s.contains("sponsored music") || s.contains("promo_music");
+        return s.contains("promoted music") || s.contains("music promotion")
+                || s.contains("sponsored music") || s.contains("promo_music")
+                || s.contains("promoted sound") || s.contains("sound promotion")
+                || s.contains("sponsored sound") || s.contains("promo_sound")
+                || s.contains("promoted song") || s.contains("sponsored song");
     }
 
     private static boolean isTruthy(Object val) {
@@ -338,6 +480,13 @@ public final class AwemeEvaluator {
         try {
             Object searchExtra = XposedHelpers.callMethod(aweme, "getSearchExtra");
             if (searchExtra instanceof String && matcher.matchesMetadataJson((String) searchExtra)) {
+                return true;
+            }
+        } catch (Throwable ignored) {}
+        try {
+            Object uploadMisc = XposedHelpers.callMethod(aweme, "getUploadMiscInfoStructStr");
+            if (uploadMisc == null) uploadMisc = XposedHelpers.getObjectField(aweme, "uploadMiscInfoStructStr");
+            if (uploadMisc instanceof String && matcher.matchesMetadataJson((String) uploadMisc)) {
                 return true;
             }
         } catch (Throwable ignored) {}
@@ -728,7 +877,11 @@ public final class AwemeEvaluator {
             } catch (Throwable ignored) {}
 
             Object bio = XposedHelpers.callMethod(author, "getBioLocation");
-            if (bio instanceof String && matcher.containsCountryName((String) bio)) return true;
+            if (bio instanceof String && (matcher.containsCountryName((String) bio) || matcher.matchesCountryOrIso((String) bio))) return true;
+            try {
+                Object bf = XposedHelpers.getObjectField(author, "bioLocation");
+                if (bf instanceof String && (matcher.containsCountryName((String) bf) || matcher.matchesCountryOrIso((String) bf))) return true;
+            } catch (Throwable ignored) {}
 
             // 5. Bio signature & nickname (flag emoji or country names)
             try {
@@ -1485,10 +1638,19 @@ public final class AwemeEvaluator {
                 if (matchesJsonKey(lower, "region", iso)
                         || matchesJsonKey(lower, "country", iso)
                         || matchesJsonKey(lower, "country_code", iso)
-                        || matchesJsonKey(lower, "ip_region", iso)
+                        || matchesJsonKey(lower, "video_region", iso)
                         || matchesJsonKey(lower, "upload_region", iso)
+                        || matchesJsonKey(lower, "upload_country", iso)
+                        || matchesJsonKey(lower, "ip_region", iso)
                         || matchesJsonKey(lower, "shoot_region", iso)
+                        || matchesJsonKey(lower, "shoot_country", iso)
                         || matchesJsonKey(lower, "create_region", iso)
+                        || matchesJsonKey(lower, "create_country", iso)
+                        || matchesJsonKey(lower, "origin_region", iso)
+                        || matchesJsonKey(lower, "origin_country", iso)
+                        || matchesJsonKey(lower, "post_region", iso)
+                        || matchesJsonKey(lower, "publish_region", iso)
+                        || matchesJsonKey(lower, "item_region", iso)
                         || matchesJsonKey(lower, "store_region", iso)
                         || matchesJsonKey(lower, "store_country", iso)
                         || matchesJsonKey(lower, "account_region", iso)
@@ -1499,7 +1661,9 @@ public final class AwemeEvaluator {
                         || matchesJsonKey(lower, "region_of_residence", iso)
                         || matchesJsonKey(lower, "gps_resolve_region", iso)
                         || matchesJsonKey(lower, "user_region", iso)
+                        || matchesJsonKey(lower, "user_country", iso)
                         || matchesJsonKey(lower, "author_region", iso)
+                        || matchesJsonKey(lower, "author_country", iso)
                         || matchesJsonKey(lower, "source_region", iso)
                         || matchesJsonKey(lower, "owner_region", iso)
                         || matchesJsonKey(lower, "music_region", iso)
@@ -1516,7 +1680,11 @@ public final class AwemeEvaluator {
         private static boolean matchesJsonKey(String json, String key, String val) {
             String q1 = "\"" + key + "\":\"" + val + "\"";
             String q2 = "\"" + key + "\": \"" + val + "\"";
-            return json.contains(q1) || json.contains(q2);
+            String q3 = "\"" + key + "\":\\\"" + val + "\\\"";
+            String q4 = "\\\"" + key + "\\\":\\\"" + val + "\\\"";
+            String q5 = "'" + key + "':'" + val + "'";
+            String q6 = "'" + key + "': '" + val + "'";
+            return json.contains(q1) || json.contains(q2) || json.contains(q3) || json.contains(q4) || json.contains(q5) || json.contains(q6);
         }
     }
 }

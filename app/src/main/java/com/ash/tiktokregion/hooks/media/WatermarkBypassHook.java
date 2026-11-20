@@ -545,7 +545,8 @@ public class WatermarkBypassHook implements BaseHook {
             });
         } catch (Throwable ignored) {}
 
-        // ShareExtServiceImpl hooks: LJIJI (v47.1.4) & LJIJJ (v47.6.3), LJJZ (v47.1.4) & LJII (v47.6.3)
+        // ShareExtServiceImpl hooks: LJIJI (v47.1.4), LJIJJ (v47.6.3), LJIJ (v47.9.3)
+        // and LJJZ (v47.1.4), LJII (v47.6.3), LJJJI (v47.9.3)
         try {
             Class<?> shareExtClass = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.share.ShareExtServiceImpl", classLoader);
             if (shareExtClass != null) {
@@ -578,6 +579,20 @@ public class WatermarkBypassHook implements BaseHook {
                     XposedBridge.log(TAG + ": Hooked ShareExtServiceImpl.LJIJJ(Context, Aweme, String)");
                 } catch (Throwable ignored) {}
 
+                // v47.9.3: LJIJ(Context, Aweme, String)
+                try {
+                    XposedHelpers.findAndHookMethod(shareExtClass, "LJIJ",
+                            Context.class, awemeClazz, String.class, new XC_MethodHook() {
+                                @Override
+                                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                    if (ModuleConfig.bypassDownloadRestriction || ModuleConfig.downloadStory) {
+                                        param.setResult(true);
+                                    }
+                                }
+                            });
+                    XposedBridge.log(TAG + ": Hooked ShareExtServiceImpl.LJIJ(Context, Aweme, String)");
+                } catch (Throwable ignored) {}
+
                 // v47.1.4: LJJZ
                 XposedBridge.hookAllMethods(shareExtClass, "LJJZ", new XC_MethodHook() {
                     @Override
@@ -601,12 +616,24 @@ public class WatermarkBypassHook implements BaseHook {
                         }
                     }
                 });
-                XposedBridge.log(TAG + ": Hooked ShareExtServiceImpl.LJII(Context, Activity, ...)");
+
+                // v47.9.3: LJJJI(Context, Activity, ...)
+                XposedBridge.hookAllMethods(shareExtClass, "LJJJI", new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        if (param.args != null && param.args.length >= 4) {
+                            if (ModuleConfig.bypassDownloadRestriction || ModuleConfig.downloadStory) {
+                                param.setResult(true);
+                            }
+                        }
+                    }
+                });
+                XposedBridge.log(TAG + ": Hooked ShareExtServiceImpl.LJII/LJJJI(Context, Activity, ...)");
             }
         } catch (Throwable ignored) {}
 
-        // Age gate / share check helpers: X.02y7 (v47.1.4) & X.02yn (v47.6.3)
-        String[] ageGateClasses = {"X.02y7", "X.02yn"};
+        // Age gate / share check helpers: X.02y7 (v47.1.4), X.02yn (v47.6.3), X.03F7 (v47.9.3)
+        String[] ageGateClasses = {"X.02y7", "X.02yn", "X.03F7"};
         for (String agClass : ageGateClasses) {
             try {
                 XposedHelpers.findAndHookMethod(agClass, classLoader, "LJIIIZ", new XC_MethodHook() {
@@ -620,68 +647,76 @@ public class WatermarkBypassHook implements BaseHook {
             } catch (Throwable ignored) {}
         }
 
-        // Share action enable and lock bypass (X.0IIy & X.0IJ3 on v47.1.4, X.0G3d on v47.6.3)
-        try {
-            XposedHelpers.findAndHookMethod("X.0IIy", classLoader, "enable", new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    if (ModuleConfig.bypassDownloadRestriction || ModuleConfig.downloadStory) {
-                        param.setResult(true);
-                    }
-                }
-            });
-            XposedHelpers.findAndHookMethod("X.0IIy", classLoader, "LJI", new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    if (ModuleConfig.bypassDownloadRestriction || ModuleConfig.downloadStory) {
-                        param.setResult(false);
-                    }
-                }
-            });
-        } catch (Throwable ignored) {}
+        // Share action enable and lock bypass
+        // v47.1.4: X.0IIy & X.0IJ3
+        // v47.6.3: X.0G3d
+        // v47.9.3: X.0HnX (Video Save), X.18XC (Photo Save), X.14b8 (Chat Save), X.14b5 (Now Save)
+        String[] downloadActionClasses = {"X.0IIy", "X.0IJ3", "X.0G3d", "X.0HnX", "X.18XC", "X.14b8", "X.14b5"};
+        for (String actionCls : downloadActionClasses) {
+            try {
+                Class<?> cls = XposedHelpers.findClassIfExists(actionCls, classLoader);
+                if (cls != null) {
+                    try {
+                        XposedHelpers.findAndHookMethod(cls, "enable", new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                if (ModuleConfig.bypassDownloadRestriction || ModuleConfig.downloadStory) {
+                                    param.setResult(true);
+                                }
+                            }
+                        });
+                    } catch (Throwable ignored) {}
 
-        try {
-            XposedHelpers.findAndHookMethod("X.0IJ3", classLoader, "enable", new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    if (ModuleConfig.bypassDownloadRestriction || ModuleConfig.downloadStory) {
-                        param.setResult(true);
-                    }
-                }
-            });
-            XposedHelpers.findAndHookMethod("X.0IJ3", classLoader, "LJIIL", new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    if (ModuleConfig.bypassDownloadRestriction || ModuleConfig.downloadStory) {
-                        param.setResult(0);
-                    }
-                }
-            });
-        } catch (Throwable ignored) {}
+                    try {
+                        XposedHelpers.findAndHookMethod(cls, "LJJJI", new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                if (ModuleConfig.bypassDownloadRestriction || ModuleConfig.downloadStory) {
+                                    param.setResult(true);
+                                }
+                            }
+                        });
+                    } catch (Throwable ignored) {}
 
-        // v47.6.3 Download Action: X.0G3d
-        try {
-            Class<?> g3dClass = XposedHelpers.findClassIfExists("X.0G3d", classLoader);
-            if (g3dClass != null) {
-                XposedHelpers.findAndHookMethod(g3dClass, "enable", new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        if (ModuleConfig.bypassDownloadRestriction || ModuleConfig.downloadStory) {
-                            param.setResult(true);
-                        }
-                    }
-                });
-                XposedHelpers.findAndHookMethod(g3dClass, "LJIIL", new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        if (ModuleConfig.bypassDownloadRestriction || ModuleConfig.downloadStory) {
-                            param.setResult(0);
-                        }
-                    }
-                });
-                XposedBridge.log(TAG + ": Hooked X.0G3d (DownloadAction) for v47.6.3");
-            }
-        } catch (Throwable ignored) {}
+                    try {
+                        XposedHelpers.findAndHookMethod(cls, "LJIIJ", new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                if (ModuleConfig.bypassDownloadRestriction || ModuleConfig.downloadStory) {
+                                    param.setResult(true);
+                                }
+                            }
+                        });
+                    } catch (Throwable ignored) {}
+
+                    try {
+                        XposedHelpers.findAndHookMethod(cls, "LJIIL", new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                if (ModuleConfig.bypassDownloadRestriction || ModuleConfig.downloadStory) {
+                                    param.setResult(0);
+                                }
+                            }
+                        });
+                    } catch (Throwable ignored) {}
+
+                    try {
+                        XposedHelpers.findAndHookMethod(cls, "LJI", new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                if (param.method instanceof Method && ((Method) param.method).getReturnType() == boolean.class) {
+                                    if (ModuleConfig.bypassDownloadRestriction || ModuleConfig.downloadStory) {
+                                        param.setResult(false);
+                                    }
+                                }
+                            }
+                        });
+                    } catch (Throwable ignored) {}
+
+                    XposedBridge.log(TAG + ": Hooked " + actionCls + " (DownloadAction)");
+                }
+            } catch (Throwable ignored) {}
+        }
 
         try {
             Class<?> awemeClazz = XposedHelpers.findClass("com.ss.android.ugc.aweme.feed.model.Aweme", classLoader);
@@ -769,8 +804,8 @@ public class WatermarkBypassHook implements BaseHook {
             });
         } catch (Throwable ignored) {}
 
-        // Hook X.0VYO.LIZ (v47.1.4) and X.0YI0.LIZ (v47.6.3) (context, aweme, str) -> return true
-        String[] gatekeeperClasses = {"X.0VYO", "X.0YI0"};
+        // Hook X.0VYO.LIZ (v47.1.4), X.0YI0.LIZ (v47.6.3), X.14Wk.LIZ (v47.9.3) (context, aweme, str) -> return true
+        String[] gatekeeperClasses = {"X.0VYO", "X.0YI0", "X.14Wk"};
         for (String cls : gatekeeperClasses) {
             try {
                 Class<?> awemeClazz = XposedHelpers.findClass("com.ss.android.ugc.aweme.feed.model.Aweme", classLoader);
@@ -786,8 +821,8 @@ public class WatermarkBypassHook implements BaseHook {
             } catch (Throwable ignored) {}
         }
 
-        // Hook X.19ae.LIZ (v47.1.4) and X.10uv.LIZ (v47.6.3) (aweme) -> return 0
-        String[] aclCodeClasses = {"X.19ae", "X.10uv"};
+        // Hook X.19ae.LIZ (v47.1.4), X.10uv.LIZ (v47.6.3), X.0Dgg.LIZ (v47.9.3) (aweme) -> return 0
+        String[] aclCodeClasses = {"X.19ae", "X.10uv", "X.0Dgg"};
         for (String cls : aclCodeClasses) {
             try {
                 Class<?> awemeClazz = XposedHelpers.findClass("com.ss.android.ugc.aweme.feed.model.Aweme", classLoader);
@@ -810,8 +845,8 @@ public class WatermarkBypassHook implements BaseHook {
      * or when save_path_security rejects the output directory.
      */
     private void hookDownloaderStorage(ClassLoader classLoader) {
-        // 1. Bypass save_path_security check in X.0Meh (v47.1.4) and X.0L8G (v47.6.3)
-        String[] dirUtilsClasses = {"X.0Meh", "X.0L8G"};
+        // 1. Bypass save_path_security check in X.0Meh (v47.1.4), X.0L8G (v47.6.3), X.0M69 (v47.9.3)
+        String[] dirUtilsClasses = {"X.0Meh", "X.0L8G", "X.0M69"};
         for (String cls : dirUtilsClasses) {
             try {
                 XposedHelpers.findAndHookMethod(cls, classLoader, "LIZIZ", String.class, new XC_MethodHook() {
@@ -857,8 +892,8 @@ public class WatermarkBypassHook implements BaseHook {
             } catch (Throwable ignored) {}
         }
 
-        // 4. Hook X.00kn (v47.1.4) and X.00kq (v47.6.3) .s2(Context, String) to ensure getExternalFilesDir never returns null
-        String[] utilClasses = {"X.00kn", "X.00kq"};
+        // 4. Hook X.00kn (v47.1.4), X.00kq (v47.6.3), X.00oX (v47.9.3) .s2(Context, String) to ensure getExternalFilesDir never returns null
+        String[] utilClasses = {"X.00kn", "X.00kq", "X.00oX"};
         for (String cls : utilClasses) {
             try {
                 XposedHelpers.findAndHookMethod(cls, classLoader, "s2", Context.class, String.class, new XC_MethodHook() {

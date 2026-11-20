@@ -29,90 +29,103 @@ public class FeedFilterHook implements BaseHook {
     }
 
     private void hookFeedItemList(ClassLoader classLoader) {
-        final String feedItemListClass = "com.ss.android.ugc.aweme.feed.model.FeedItemList";
-        try {
-            Class<?> clazz = XposedHelpers.findClassIfExists(feedItemListClass, classLoader);
-            if (clazz == null) return;
+        String[] listClasses = {
+                "com.ss.android.ugc.aweme.feed.model.FeedItemList",
+                "com.ss.android.ugc.aweme.follow.presenter.FollowFeedList",
+                "com.ss.android.ugc.aweme.detail.model.BatchDetailList",
+                "com.ss.android.ugc.aweme.explore.data.ExploreAwemeList"
+        };
 
-            XC_MethodHook getListHook = new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    Object feedItemList = param.thisObject;
-                    if (feedItemList == null) return;
+        XC_MethodHook getListHook = new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                Object feedItemList = param.thisObject;
+                if (feedItemList == null) return;
 
-                    Object result = param.getResult();
-                    if (result instanceof List) {
-                        List<?> list = (List<?>) result;
-                        if (list.isEmpty()) return;
-                        if (Boolean.TRUE.equals(XposedHelpers.getAdditionalInstanceField(list, "tiktok_enhancer_clean"))) {
+                Object result = param.getResult();
+                if (result instanceof List) {
+                    List<?> list = (List<?>) result;
+                    if (list.isEmpty()) return;
+                    if (Boolean.TRUE.equals(XposedHelpers.getAdditionalInstanceField(list, "tiktok_enhancer_clean"))) {
+                        return;
+                    }
+
+                    boolean isProf = isProfileFeed(feedItemList, list);
+                    boolean hasBlocked = ModuleConfig.blockCountries
+                            && ModuleConfig.blockedCountries != null
+                            && !ModuleConfig.blockedCountries.isEmpty();
+
+                    // Profile feed exclusion: only bypass if NO country blocking is configured
+                    if (isProf && !hasBlocked) {
+                        return;
+                    }
+
+                    List<Object> clean = filterList(list, feedItemList);
+                    XposedHelpers.setAdditionalInstanceField(clean, "tiktok_enhancer_clean", Boolean.TRUE);
+                    XposedHelpers.setAdditionalInstanceField(list, "tiktok_enhancer_clean", Boolean.TRUE);
+
+                    // If clean is empty, DO NOT replace with empty list on FYP (prevents "Something went wrong").
+                    // But on profile feeds, an empty list is normal ("No videos yet").
+                    if (clean.size() != list.size()) {
+                        if (!clean.isEmpty() || isProf) {
+                            try { XposedHelpers.setBooleanField(feedItemList, "hasAd", false); } catch (Throwable ignored) {}
+                            try { XposedHelpers.setObjectField(feedItemList, "preloadAds", null); } catch (Throwable ignored) {}
+                            try { XposedHelpers.setObjectField(feedItemList, "items", clean); } catch (Throwable ignored) {}
+                            param.setResult(clean);
+                        }
+                    }
+                }
+            }
+        };
+
+        XC_MethodHook setListHook = new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                if (param.args != null && param.args.length > 0 && param.args[0] instanceof List) {
+                    List<?> incoming = (List<?>) param.args[0];
+                    if (incoming != null && !incoming.isEmpty()) {
+                        if (Boolean.TRUE.equals(XposedHelpers.getAdditionalInstanceField(incoming, "tiktok_enhancer_clean"))) {
                             return;
                         }
-
-                        boolean isProf = isProfileFeed(feedItemList, list);
+                        boolean isProf = isProfileFeed(param.thisObject, incoming);
                         boolean hasBlocked = ModuleConfig.blockCountries
                                 && ModuleConfig.blockedCountries != null
                                 && !ModuleConfig.blockedCountries.isEmpty();
 
-                        // Profile feed exclusion: only bypass if NO country blocking is configured
                         if (isProf && !hasBlocked) {
                             return;
                         }
-
-                        List<Object> clean = filterList(list, feedItemList);
+                        List<Object> clean = filterList(incoming, param.thisObject);
                         XposedHelpers.setAdditionalInstanceField(clean, "tiktok_enhancer_clean", Boolean.TRUE);
-                        XposedHelpers.setAdditionalInstanceField(list, "tiktok_enhancer_clean", Boolean.TRUE);
-
-                        // If clean is empty, DO NOT replace with empty list on FYP (prevents "Something went wrong").
-                        // But on profile feeds, an empty list is normal ("No videos yet").
-                        if (clean.size() != list.size()) {
+                        XposedHelpers.setAdditionalInstanceField(incoming, "tiktok_enhancer_clean", Boolean.TRUE);
+                        if (clean.size() != incoming.size()) {
                             if (!clean.isEmpty() || isProf) {
-                                try { XposedHelpers.setBooleanField(feedItemList, "hasAd", false); } catch (Throwable ignored) {}
-                                try { XposedHelpers.setObjectField(feedItemList, "preloadAds", null); } catch (Throwable ignored) {}
-                                try { XposedHelpers.setObjectField(feedItemList, "items", clean); } catch (Throwable ignored) {}
-                                param.setResult(clean);
+                                param.args[0] = clean;
                             }
                         }
                     }
                 }
-            };
+            }
+        };
 
-            XposedHelpers.findAndHookMethod(clazz, "getItems", getListHook);
+        for (String clsName : listClasses) {
             try {
-                XposedHelpers.findAndHookMethod(clazz, "getAwemeList", getListHook);
-            } catch (Throwable ignored) {}
-
-            XposedHelpers.findAndHookMethod(clazz, "setItems", List.class, new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    if (param.args != null && param.args.length > 0 && param.args[0] instanceof List) {
-                        List<?> incoming = (List<?>) param.args[0];
-                        if (incoming != null && !incoming.isEmpty()) {
-                            if (Boolean.TRUE.equals(XposedHelpers.getAdditionalInstanceField(incoming, "tiktok_enhancer_clean"))) {
-                                return;
-                            }
-                            boolean isProf = isProfileFeed(param.thisObject, incoming);
-                            boolean hasBlocked = ModuleConfig.blockCountries
-                                    && ModuleConfig.blockedCountries != null
-                                    && !ModuleConfig.blockedCountries.isEmpty();
-
-                            if (isProf && !hasBlocked) {
-                                return;
-                            }
-                            List<Object> clean = filterList(incoming, param.thisObject);
-                            XposedHelpers.setAdditionalInstanceField(clean, "tiktok_enhancer_clean", Boolean.TRUE);
-                            XposedHelpers.setAdditionalInstanceField(incoming, "tiktok_enhancer_clean", Boolean.TRUE);
-                            if (clean.size() != incoming.size()) {
-                                if (!clean.isEmpty() || isProf) {
-                                    param.args[0] = clean;
-                                }
-                            }
-                        }
-                    }
+                Class<?> clazz = XposedHelpers.findClassIfExists(clsName, classLoader);
+                if (clazz != null) {
+                    try {
+                        XposedHelpers.findAndHookMethod(clazz, "getItems", getListHook);
+                    } catch (Throwable ignored) {}
+                    try {
+                        XposedHelpers.findAndHookMethod(clazz, "getAwemeList", getListHook);
+                    } catch (Throwable ignored) {}
+                    try {
+                        XposedHelpers.findAndHookMethod(clazz, "setItems", List.class, setListHook);
+                    } catch (Throwable ignored) {}
+                    XposedBridge.log(TAG + ": Hooked " + clsName + " (getItems, getAwemeList, setItems)");
                 }
-            });
-            XposedBridge.log(TAG + ": Hooked FeedItemList (getItems, getAwemeList, setItems)");
-        } catch (Throwable t) {
-            Log.d(TAG, "Hook FeedItemList failed: " + t.getMessage());
+            } catch (Throwable t) {
+                Log.d(TAG, "Hook " + clsName + " failed: " + t.getMessage());
+            }
         }
     }
 
@@ -126,18 +139,25 @@ public class FeedFilterHook implements BaseHook {
                 if (param.args != null && param.args.length > 0 && param.args[0] instanceof List) {
                     List<?> list = (List<?>) param.args[0];
                     boolean isFyp = isRecommendFeed(param.thisObject);
-                    XposedBridge.log(TAG + ": feedListMethodHook (" + param.method.getName() + ") incoming size=" + list.size() + ", isFyp=" + isFyp + ", target=" + (param.thisObject != null ? param.thisObject.getClass().getName() : "null"));
-                    if (list.isEmpty()) return;
+                    boolean isProf = isProfileOrDetailContext(param.thisObject) || isSingleAuthorProfileFeed(list);
+                    boolean hasBlocked = ModuleConfig.blockCountries
+                            && ModuleConfig.blockedCountries != null
+                            && !ModuleConfig.blockedCountries.isEmpty();
 
-                    // Strictly filter only if confirmed to be Recommend / FYP feed ("homepage_hot")
-                    if (!isFyp) return;
+                    // Filter FYP feed, or non-FYP when blocked countries / ad hiding is enabled
+                    if (!isFyp && !hasBlocked && !ModuleConfig.hideAds) return;
+
+                    XposedBridge.log(TAG + ": feedListMethodHook (" + param.method.getName() + ") incoming size=" + list.size() + ", isFyp=" + isFyp + ", isProf=" + isProf + ", target=" + (param.thisObject != null ? param.thisObject.getClass().getName() : "null"));
+                    if (list.isEmpty()) return;
 
                     List<Object> clean = filterList(list, param.thisObject);
                     XposedBridge.log(TAG + ": feedListMethodHook (" + param.method.getName() + ") filtered " + list.size() + " -> " + clean.size() + " kept");
-                    // Critical: NEVER pass an empty list if source had items!
-                    // Passing an empty list to FullFeedFragmentPanel triggers TikTok's fatal "Something went wrong" error screen.
-                    if (!clean.isEmpty() && clean.size() != list.size()) {
-                        param.args[0] = clean;
+                    // Critical: On FYP, never pass an empty list if source had items (prevents "Something went wrong").
+                    // On profile/detail feeds, empty list is fine ("No videos yet").
+                    if (clean.size() != list.size()) {
+                        if (!clean.isEmpty() || isProf) {
+                            param.args[0] = clean;
+                        }
                     }
                 }
             }

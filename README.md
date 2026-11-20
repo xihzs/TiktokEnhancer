@@ -175,8 +175,8 @@ app/build/outputs/apk/release/app-release-unsigned.apk
 ## Verified Compatibility
 
 - **Target App**: TikTok (`com.zhiliaoapp.musically`)
-- **Verified Versions**: **v47.6.3** (Build `2024706030`) & **v47.1.4** (Build `2024701040`, `arm64-v8a` & `armeabi-v7a`)
-- **Hook Integrity**: All TTNet Cronet providers, feed item models, watermark services, direct message anti-delete, ghost mode, and story hooks verified directly against v47.6.3 and v47.1.4 DEX bytecode.
+- **Verified Versions**: **v47.9.3** (Build `2024709030`), **v47.6.3** (Build `2024706030`) & **v47.1.4** (Build `2024701040`, `arm64-v8a` & `armeabi-v7a`)
+- **Hook Integrity**: All TTNet Cronet providers, feed item models, watermark services, direct message anti-delete, ghost mode, and story hooks verified directly against v47.9.3, v47.6.3, and v47.1.4 DEX bytecode.
 
 ---
 
