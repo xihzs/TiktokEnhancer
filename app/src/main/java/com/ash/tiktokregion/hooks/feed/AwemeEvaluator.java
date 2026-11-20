@@ -81,7 +81,7 @@ public final class AwemeEvaluator {
         return DECISION_KEEP;
     }
 
-    private static final java.util.regex.Pattern AD_HASHTAG_PATTERN = java.util.regex.Pattern.compile("(?i)#\\w*ad\\b");
+    private static final java.util.regex.Pattern AD_HASHTAG_PATTERN = java.util.regex.Pattern.compile("(?i)#(?:(?:[a-z0-9_]+_)?ad\\b|(?:[a-z0-9_]+_)?(?:partner|brand|collab|ambassador|shein|temu|edikted|cider|aliexpress|amazon|target|walmart)ad\\b)");
     private static final java.util.regex.Pattern PROMO_CODE_PATTERN = java.util.regex.Pattern.compile("(?i)(use\\s+(code|“|\"|')|code\\s*:\\s*|discount\\s*code|promo\\s*code|coupon\\s*code|%\\s*off|\\$\\$\\s*off)");
 
     public static boolean isSponsoredOrAdText(String text) {
@@ -152,15 +152,25 @@ public final class AwemeEvaluator {
         } catch (Throwable ignored) {}
 
         try {
-            Object linkAd = XposedHelpers.callMethod(aweme, "getLinkAdData");
-            if (linkAd == null) linkAd = XposedHelpers.getObjectField(aweme, "linkAdData");
-            if (linkAd != null) return true;
+            Object linkAd = XposedHelpers.getObjectField(aweme, "linkAdData");
+            if (linkAd == null) linkAd = XposedHelpers.callMethod(aweme, "getLinkAdData");
+            if (linkAd != null) {
+                Object btnText = XposedHelpers.getObjectField(linkAd, "buttonText");
+                if (btnText instanceof String && !((String) btnText).trim().isEmpty()) return true;
+                Object webUrl = XposedHelpers.getObjectField(linkAd, "webUrl");
+                if (webUrl instanceof String && !((String) webUrl).trim().isEmpty()) return true;
+            }
         } catch (Throwable ignored) {}
 
         try {
-            Object promoteModel = XposedHelpers.callMethod(aweme, "getPromoteModel");
-            if (promoteModel == null) promoteModel = XposedHelpers.getObjectField(aweme, "promoteModel");
-            if (promoteModel != null) return true;
+            Object promoteModel = XposedHelpers.getObjectField(aweme, "promoteModel");
+            if (promoteModel == null) promoteModel = XposedHelpers.callMethod(aweme, "getPromoteModel");
+            if (promoteModel != null) {
+                Object icon = XposedHelpers.callMethod(promoteModel, "getPromoteIconText");
+                if (icon instanceof String && !((String) icon).trim().isEmpty()) return true;
+                Object label = XposedHelpers.callMethod(promoteModel, "getPromoteLabelText");
+                if (label instanceof String && !((String) label).trim().isEmpty()) return true;
+            }
         } catch (Throwable ignored) {}
 
         try {
@@ -169,21 +179,25 @@ public final class AwemeEvaluator {
         } catch (Throwable ignored) {}
 
         try {
-            Object commAuth = XposedHelpers.callMethod(aweme, "getCommerceVideoAuthInfo");
-            if (commAuth == null) commAuth = XposedHelpers.getObjectField(aweme, "mCommerceVideoAuthInfo");
-            if (commAuth != null) return true;
-        } catch (Throwable ignored) {}
-
-        try {
             Object commVideo = XposedHelpers.callMethod(aweme, "getCommercialVideoInfo");
             if (commVideo == null) commVideo = XposedHelpers.getObjectField(aweme, "commercialVideoInfo");
-            if (commVideo != null) return true;
+            if (commVideo != null) {
+                Object ibeInfos = XposedHelpers.getObjectField(commVideo, "ibeInfos");
+                if (ibeInfos instanceof List && !((List<?>) ibeInfos).isEmpty()) return true;
+                Object ibeMeta = XposedHelpers.getObjectField(commVideo, "ibeMetaInfo");
+                if (ibeMeta instanceof String && !((String) ibeMeta).trim().isEmpty()) return true;
+            }
         } catch (Throwable ignored) {}
 
         try {
             Object commSticker = XposedHelpers.callMethod(aweme, "getCommerceStickerInfo");
             if (commSticker == null) commSticker = XposedHelpers.getObjectField(aweme, "commerceStickerInfo");
-            if (commSticker != null) return true;
+            if (commSticker != null) {
+                Object openUrl = XposedHelpers.getObjectField(commSticker, "openUrl");
+                if (openUrl instanceof String && !((String) openUrl).trim().isEmpty()) return true;
+                Object letters = XposedHelpers.getObjectField(commSticker, "letters");
+                if (letters instanceof String && !((String) letters).trim().isEmpty()) return true;
+            }
         } catch (Throwable ignored) {}
 
         try {
@@ -225,7 +239,7 @@ public final class AwemeEvaluator {
             if (uploadMisc instanceof String) {
                 String s = ((String) uploadMisc).toLowerCase(Locale.ROOT);
                 if (s.contains("\"is_promoted\":true") || s.contains("\"is_ad\":true")
-                        || s.contains("\"has_ad\":true") || s.contains("\"is_commerce\":true")) {
+                        || s.contains("\"has_ad\":true")) {
                     return true;
                 }
             }
@@ -237,86 +251,61 @@ public final class AwemeEvaluator {
     public static boolean isPromotedMusic(Object aweme) {
         if (aweme == null) return false;
 
-        // 1. Aweme promotional flags
-        try {
-            Object promoMusic = XposedHelpers.callMethod(aweme, "isWithPromotionalMusic");
-            if (isTruthy(promoMusic)) return true;
-        } catch (Throwable ignored) {}
+        // 1. Aweme promotional flags & fields (check raw fields first to bypass any getter hooks)
         try {
             Object promoMusicField = XposedHelpers.getObjectField(aweme, "withPromotionalMusic");
             if (isTruthy(promoMusicField)) return true;
         } catch (Throwable ignored) {}
-
         try {
-            Object promoId = XposedHelpers.callMethod(aweme, "getMusicPromoId");
-            if (promoId instanceof String && !((String) promoId).trim().isEmpty()) return true;
+            Object promoMusic = XposedHelpers.callMethod(aweme, "isWithPromotionalMusic");
+            if (isTruthy(promoMusic)) return true;
         } catch (Throwable ignored) {}
+
         try {
             Object promoIdField = XposedHelpers.getObjectField(aweme, "musicPromoId");
             if (promoIdField instanceof String && !((String) promoIdField).trim().isEmpty()) return true;
         } catch (Throwable ignored) {}
-
         try {
-            Object tagInfo = XposedHelpers.callMethod(aweme, "getMusicPromoTagInfo");
+            Object promoId = XposedHelpers.callMethod(aweme, "getMusicPromoId");
+            if (promoId instanceof String && !((String) promoId).trim().isEmpty()) return true;
+        } catch (Throwable ignored) {}
+
+        // 2. Aweme musicPromoTagInfo (matches VideoMusicTitleAssem.os exactly)
+        try {
+            Object tagInfo = XposedHelpers.getObjectField(aweme, "musicPromoTagInfo");
+            if (tagInfo == null) tagInfo = XposedHelpers.callMethod(aweme, "getMusicPromoTagInfo");
             if (tagInfo != null) {
                 Object text = XposedHelpers.getObjectField(tagInfo, "text");
                 if (text instanceof String && !((String) text).trim().isEmpty()) return true;
             }
         } catch (Throwable ignored) {}
-        try {
-            Object tagInfoField = XposedHelpers.getObjectField(aweme, "musicPromoTagInfo");
-            if (tagInfoField != null) {
-                Object text = XposedHelpers.getObjectField(tagInfoField, "text");
-                if (text instanceof String && !((String) text).trim().isEmpty()) return true;
-            }
-        } catch (Throwable ignored) {}
 
-        // 2. Music promotional metadata
+        // 3. Music promotional metadata
         Object music = null;
         try {
-            music = XposedHelpers.callMethod(aweme, "getMusic");
+            music = XposedHelpers.getObjectField(aweme, "music");
         } catch (Throwable ignored) {}
+        if (music == null) {
+            try {
+                music = XposedHelpers.callMethod(aweme, "getMusic");
+            } catch (Throwable ignored) {}
+        }
         if (music == null) {
             try {
                 music = XposedHelpers.callMethod(aweme, "getAddedSoundMusicInfo");
             } catch (Throwable ignored) {}
         }
-        if (music == null) {
-            try {
-                music = XposedHelpers.getObjectField(aweme, "music");
-            } catch (Throwable ignored) {}
-        }
 
         if (music != null) {
             try {
-                Object isComm = XposedHelpers.callMethod(music, "isCommerceMusic");
-                if (isTruthy(isComm)) return true;
-            } catch (Throwable ignored) {}
-            try {
-                Object isCommField = XposedHelpers.getObjectField(music, "isCommerceMusic");
-                if (isTruthy(isCommField)) return true;
-            } catch (Throwable ignored) {}
-
-            try {
-                Object commExclusive = XposedHelpers.callMethod(music, "getCommerceExclusive");
-                if (isTruthy(commExclusive)) return true;
-            } catch (Throwable ignored) {}
-
-            try {
-                Object pId = XposedHelpers.callMethod(music, "getPromoId");
-                if (pId instanceof String && !((String) pId).trim().isEmpty()) return true;
-            } catch (Throwable ignored) {}
-            try {
                 Object pId = XposedHelpers.getObjectField(music, "promoId");
+                if (pId == null) pId = XposedHelpers.callMethod(music, "getPromoId");
                 if (pId instanceof String && !((String) pId).trim().isEmpty()) return true;
             } catch (Throwable ignored) {}
 
-            try {
-                Object pTag = XposedHelpers.callMethod(music, "getPromotionTag");
-                if (pTag instanceof String && !((String) pTag).trim().isEmpty()) return true;
-            } catch (Throwable ignored) {}
             try {
                 Object pTag = XposedHelpers.getObjectField(music, "promotionTag");
+                if (pTag == null) pTag = XposedHelpers.callMethod(music, "getPromotionTag");
                 if (pTag instanceof String && !((String) pTag).trim().isEmpty()) return true;
             } catch (Throwable ignored) {}
 
@@ -326,7 +315,7 @@ public final class AwemeEvaluator {
                     for (Object tagObj : (List<?>) tags) {
                         if (tagObj == null) continue;
                         String s = tagObj.toString().toLowerCase(Locale.ROOT);
-                        if (s.contains("promot") || s.contains("sponsor") || s.contains("commercial")) return true;
+                        if (s.contains("promoted music") || s.contains("promoted sound") || s.contains("sponsored music")) return true;
                     }
                 }
             } catch (Throwable ignored) {}
@@ -345,8 +334,8 @@ public final class AwemeEvaluator {
                 Object extra = XposedHelpers.callMethod(music, "getExtra");
                 if (extra instanceof String) {
                     String ex = ((String) extra).toLowerCase(Locale.ROOT);
-                    if (ex.contains("\"is_promoted\":true") || ex.contains("\"promo_tag\"")
-                            || ex.contains("\"promotion\"") || ex.contains("\"commerce\"")) {
+                    if (ex.contains("\"is_promoted\":true") || ex.contains("\"is_music_promo\":true")
+                            || ex.contains("\"promoted_music\":true") || ex.contains("\"music_promo_id\"")) {
                         return true;
                     }
                 }
@@ -356,18 +345,18 @@ public final class AwemeEvaluator {
                 Object logExtra = XposedHelpers.callMethod(music, "getLogExtra");
                 if (logExtra instanceof String) {
                     String lx = ((String) logExtra).toLowerCase(Locale.ROOT);
-                    if (lx.contains("\"is_promoted\":true") || lx.contains("\"promo_tag\"")
-                            || lx.contains("\"promotion\"") || lx.contains("\"commerce\"")) {
+                    if (lx.contains("\"is_promoted\":true") || lx.contains("\"is_music_promo\":true")
+                            || lx.contains("\"promoted_music\":true") || lx.contains("\"music_promo_id\"")) {
                         return true;
                     }
                 }
             } catch (Throwable ignored) {}
         }
 
-        // 3. Anchor promotional indicators
+        // 4. Anchor promotional indicators
         try {
-            Object anchors = XposedHelpers.callMethod(aweme, "getAnchors");
-            if (anchors == null) anchors = XposedHelpers.getObjectField(aweme, "anchors");
+            Object anchors = XposedHelpers.getObjectField(aweme, "anchors");
+            if (anchors == null) anchors = XposedHelpers.callMethod(aweme, "getAnchors");
             if (anchors instanceof List) {
                 for (Object anchor : (List<?>) anchors) {
                     if (anchor == null) continue;
@@ -375,8 +364,6 @@ public final class AwemeEvaluator {
                     if (kw instanceof String && isPromoKeyword((String) kw)) return true;
                     Object desc = XposedHelpers.getObjectField(anchor, "description");
                     if (desc instanceof String && isPromoKeyword((String) desc)) return true;
-                    Object extra = XposedHelpers.getObjectField(anchor, "extra");
-                    if (extra instanceof String && isPromoKeyword((String) extra)) return true;
                 }
             }
         } catch (Throwable ignored) {}

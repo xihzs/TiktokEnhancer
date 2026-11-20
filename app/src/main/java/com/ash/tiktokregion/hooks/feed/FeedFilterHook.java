@@ -437,6 +437,82 @@ public class FeedFilterHook implements BaseHook {
                     }
                 }
             });
+
+            XposedHelpers.findAndHookMethod(awemeClass, classLoader, "getMusicPromoTagInfo", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    if (ModuleConfig.hideAds) {
+                        param.setResult(null);
+                    }
+                }
+            });
+
+            XposedHelpers.findAndHookMethod(awemeClass, classLoader, "isWithPromotionalMusic", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    if (ModuleConfig.hideAds) {
+                        param.setResult(false);
+                    }
+                }
+            });
+
+            XposedHelpers.findAndHookMethod(awemeClass, classLoader, "getWithPromotionalMusic$common_model_release", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    if (ModuleConfig.hideAds) {
+                        param.setResult(false);
+                    }
+                }
+            });
+
+            XposedHelpers.findAndHookMethod(awemeClass, classLoader, "getMusicPromoId", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    if (ModuleConfig.hideAds) {
+                        param.setResult(null);
+                    }
+                }
+            });
+        } catch (Throwable ignored) {}
+
+        // Hook Music promo tags
+        try {
+            Class<?> musicClass = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.music.model.Music", classLoader);
+            if (musicClass != null) {
+                XposedHelpers.findAndHookMethod(musicClass, "getPromotionTag", new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        if (ModuleConfig.hideAds) {
+                            param.setResult(null);
+                        }
+                    }
+                });
+                XposedHelpers.findAndHookMethod(musicClass, "getPromoId", new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        if (ModuleConfig.hideAds) {
+                            param.setResult(null);
+                        }
+                    }
+                });
+            }
+        } catch (Throwable ignored) {}
+
+        // Hook VideoMusicTitleAssem.os(Aweme) to suppress Promoted Music UI badge entirely
+        try {
+            Class<?> assemClass = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.feed.assem.music.VideoMusicTitleAssem", classLoader);
+            if (assemClass != null) {
+                Class<?> awemeClazz = XposedHelpers.findClass(awemeClass, classLoader);
+                XposedHelpers.findAndHookMethod(assemClass, "os", awemeClazz, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        if (ModuleConfig.hideAds) {
+                            param.setResult(false);
+                        }
+                    }
+                });
+                XposedBridge.log(TAG + ": Hooked VideoMusicTitleAssem.os to suppress Promoted Music badge");
+            }
         } catch (Throwable ignored) {}
     }
 }
