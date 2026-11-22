@@ -163,14 +163,22 @@ public class FeedFilterHook implements BaseHook {
             }
         };
 
-        // Hook onRefreshResult (x), onLoadMoreResult (Lk), and init/restore (LLLFF) in FullFeedFragmentPanel
+        // Hook FeedPanel list pipeline across TikTok versions (v47.1.4/47.6.3: x, Lk, LLLFF; v47.9.3: rH, nl, LLLILZJ, w, y)
+        String[] panelMethods = {"x", "Lk", "LLLFF", "rH", "nl", "LLLILZJ", "w", "y"};
+        List<String> hookedPanelMethods = new ArrayList<>();
         try {
-            XposedHelpers.findAndHookMethod(panelClass, classLoader, "x", List.class, boolean.class, feedListMethodHook);
-            XposedHelpers.findAndHookMethod(panelClass, classLoader, "Lk", List.class, boolean.class, feedListMethodHook);
-            XposedHelpers.findAndHookMethod(panelClass, classLoader, "LLLFF", List.class, boolean.class, feedListMethodHook);
-            XposedBridge.log(TAG + ": Hooked FullFeedFragmentPanel feed pipeline (x, Lk, LLLFF)");
+            Class<?> panelClazz = XposedHelpers.findClassIfExists(panelClass, classLoader);
+            if (panelClazz != null) {
+                for (String mName : panelMethods) {
+                    try {
+                        XposedHelpers.findAndHookMethod(panelClazz, mName, List.class, boolean.class, feedListMethodHook);
+                        hookedPanelMethods.add(mName);
+                    } catch (Throwable ignored) {}
+                }
+            }
+            XposedBridge.log(TAG + ": Hooked FullFeedFragmentPanel methods: " + hookedPanelMethods);
         } catch (Throwable t) {
-            Log.d(TAG, "Hook FullFeedFragmentPanel failed: " + t.getMessage());
+            XposedBridge.log(TAG + ": Hook FullFeedFragmentPanel failed: " + t.getMessage());
         }
 
         // Hook dynamic card insertion in BaseListFragmentPanel (LLJILJIL)
@@ -203,9 +211,11 @@ public class FeedFilterHook implements BaseHook {
                         break;
                     }
                 }
+            } else {
+                XposedBridge.log(TAG + ": BaseListFragmentPanel not found in classLoader");
             }
         } catch (Throwable t) {
-            Log.d(TAG, "Hook BaseListFragmentPanel.LLJILJIL failed: " + t.getMessage());
+            XposedBridge.log(TAG + ": Hook BaseListFragmentPanel.LLJILJIL failed: " + t.getMessage());
         }
     }
 
@@ -233,12 +243,12 @@ public class FeedFilterHook implements BaseHook {
 
         for (Object item : sourceList) {
             if (item == null) continue;
-            int decision = AwemeEvaluator.evaluate(item, isFyp, isColdStart);
+            int decision = AwemeEvaluator.evaluate(item, isFyp, isColdStart, isProfile);
             String desc = "";
             try { Object d = XposedHelpers.callMethod(item, "getDesc"); if (d != null) desc = d.toString(); } catch (Throwable ignored) {}
             String author = "";
             try { Object a = XposedHelpers.callMethod(item, "getAuthor"); if (a != null) { Object n = XposedHelpers.callMethod(a, "getNickname"); if (n != null) author = n.toString(); } } catch (Throwable ignored) {}
-            XposedBridge.log(TAG + ": evaluate item [" + author + " | " + desc + "] -> decision=" + decision);
+            XposedBridge.log(TAG + ": evaluate item [" + author + " | " + desc + "] -> decision=" + decision + (isProfile ? " (profile)" : ""));
             if (decision == AwemeEvaluator.DECISION_KEEP) {
                 kept.add(item);
             }
@@ -418,9 +428,14 @@ public class FeedFilterHook implements BaseHook {
 
     private void hookAwemeModel(ClassLoader classLoader) {
         final String awemeClass = "com.ss.android.ugc.aweme.feed.model.Aweme";
+        Class<?> awemeClazz = XposedHelpers.findClassIfExists(awemeClass, classLoader);
+        if (awemeClazz == null) {
+            XposedBridge.log(TAG + ": Aweme class not found in classLoader");
+            return;
+        }
 
         try {
-            XposedHelpers.findAndHookMethod(awemeClass, classLoader, "isAd", new XC_MethodHook() {
+            XposedHelpers.findAndHookMethod(awemeClazz, "isAd", new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                     if (ModuleConfig.hideAds) {
@@ -428,8 +443,12 @@ public class FeedFilterHook implements BaseHook {
                     }
                 }
             });
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": Hook Aweme.isAd failed: " + t.getMessage());
+        }
 
-            XposedHelpers.findAndHookMethod(awemeClass, classLoader, "getAwemeRawAd", new XC_MethodHook() {
+        try {
+            XposedHelpers.findAndHookMethod(awemeClazz, "getAwemeRawAd", new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                     if (ModuleConfig.hideAds) {
@@ -437,8 +456,12 @@ public class FeedFilterHook implements BaseHook {
                     }
                 }
             });
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": Hook Aweme.getAwemeRawAd failed: " + t.getMessage());
+        }
 
-            XposedHelpers.findAndHookMethod(awemeClass, classLoader, "getMusicPromoTagInfo", new XC_MethodHook() {
+        try {
+            XposedHelpers.findAndHookMethod(awemeClazz, "getMusicPromoTagInfo", new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                     if (ModuleConfig.hideAds) {
@@ -446,8 +469,13 @@ public class FeedFilterHook implements BaseHook {
                     }
                 }
             });
+            XposedBridge.log(TAG + ": Hooked Aweme.getMusicPromoTagInfo()");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": Hook Aweme.getMusicPromoTagInfo failed: " + t.getMessage());
+        }
 
-            XposedHelpers.findAndHookMethod(awemeClass, classLoader, "isWithPromotionalMusic", new XC_MethodHook() {
+        try {
+            XposedHelpers.findAndHookMethod(awemeClazz, "isWithPromotionalMusic", new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                     if (ModuleConfig.hideAds) {
@@ -455,46 +483,88 @@ public class FeedFilterHook implements BaseHook {
                     }
                 }
             });
+            XposedBridge.log(TAG + ": Hooked Aweme.isWithPromotionalMusic()");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": Hook Aweme.isWithPromotionalMusic failed: " + t.getMessage());
+        }
 
-            XposedHelpers.findAndHookMethod(awemeClass, classLoader, "getWithPromotionalMusic$common_model_release", new XC_MethodHook() {
+        try {
+            XposedHelpers.findAndHookMethod(awemeClazz, "getWithPromotionalMusic$common_model_release", new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                     if (ModuleConfig.hideAds) {
                         param.setResult(false);
-                    }
-                }
-            });
-
-            XposedHelpers.findAndHookMethod(awemeClass, classLoader, "getMusicPromoId", new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    if (ModuleConfig.hideAds) {
-                        param.setResult(null);
                     }
                 }
             });
         } catch (Throwable ignored) {}
 
+        try {
+            XposedHelpers.findAndHookMethod(awemeClazz, "getMusicPromoId", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    if (ModuleConfig.hideAds) {
+                        param.setResult(null);
+                    }
+                }
+            });
+            XposedBridge.log(TAG + ": Hooked Aweme.getMusicPromoId()");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": Hook Aweme.getMusicPromoId failed: " + t.getMessage());
+        }
+
+        // Hook MusicPromoTagInfo constructors so Promoted Music badges never render even across version renames
+        try {
+            Class<?> tagClass = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.music.model.MusicPromoTagInfo", classLoader);
+            if (tagClass != null) {
+                XposedBridge.hookAllConstructors(tagClass, new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                        Object self = param.thisObject;
+                        if (self == null) return;
+                        try {
+                            Object txt = XposedHelpers.getObjectField(self, "text");
+                            if (txt instanceof String && !((String) txt).trim().isEmpty()) {
+                                XposedHelpers.setAdditionalInstanceField(self, "tiktok_enhancer_is_promo_music", Boolean.TRUE);
+                                if (ModuleConfig.hideAds) {
+                                    XposedHelpers.setObjectField(self, "text", null);
+                                    XposedHelpers.setObjectField(self, "schemaUrl", null);
+                                    XposedHelpers.setObjectField(self, "showMusicTitle", Boolean.FALSE);
+                                }
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                });
+                XposedBridge.log(TAG + ": Hooked MusicPromoTagInfo constructors");
+            }
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": Hook MusicPromoTagInfo failed: " + t.getMessage());
+        }
+
         // Hook Music promo tags
         try {
             Class<?> musicClass = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.music.model.Music", classLoader);
             if (musicClass != null) {
-                XposedHelpers.findAndHookMethod(musicClass, "getPromotionTag", new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        if (ModuleConfig.hideAds) {
-                            param.setResult(null);
+                try {
+                    XposedHelpers.findAndHookMethod(musicClass, "getPromotionTag", new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            if (ModuleConfig.hideAds) {
+                                param.setResult(null);
+                            }
                         }
-                    }
-                });
-                XposedHelpers.findAndHookMethod(musicClass, "getPromoId", new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        if (ModuleConfig.hideAds) {
-                            param.setResult(null);
+                    });
+                } catch (Throwable ignored) {}
+                try {
+                    XposedHelpers.findAndHookMethod(musicClass, "getPromoId", new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            if (ModuleConfig.hideAds) {
+                                param.setResult(null);
+                            }
                         }
-                    }
-                });
+                    });
+                } catch (Throwable ignored) {}
             }
         } catch (Throwable ignored) {}
 
@@ -502,17 +572,24 @@ public class FeedFilterHook implements BaseHook {
         try {
             Class<?> assemClass = XposedHelpers.findClassIfExists("com.ss.android.ugc.aweme.feed.assem.music.VideoMusicTitleAssem", classLoader);
             if (assemClass != null) {
-                Class<?> awemeClazz = XposedHelpers.findClass(awemeClass, classLoader);
-                XposedHelpers.findAndHookMethod(assemClass, "os", awemeClazz, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        if (ModuleConfig.hideAds) {
-                            param.setResult(false);
+                try {
+                    XposedHelpers.findAndHookMethod(assemClass, "os", awemeClazz, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            if (ModuleConfig.hideAds) {
+                                param.setResult(false);
+                            }
                         }
-                    }
-                });
-                XposedBridge.log(TAG + ": Hooked VideoMusicTitleAssem.os to suppress Promoted Music badge");
+                    });
+                    XposedBridge.log(TAG + ": Hooked VideoMusicTitleAssem.os to suppress Promoted Music badge");
+                } catch (Throwable t) {
+                    XposedBridge.log(TAG + ": VideoMusicTitleAssem.os not found (" + t.getMessage() + ")");
+                }
+            } else {
+                XposedBridge.log(TAG + ": VideoMusicTitleAssem not found in initial classLoader");
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": Hook VideoMusicTitleAssem failed: " + t.getMessage());
+        }
     }
 }

@@ -32,6 +32,7 @@ public class WatermarkBypassHook implements BaseHook {
     private static final String TAG = "TikTokWatermark";
     private static volatile Object sCurrentAweme = null;
     private static volatile Object sLastPlayedPlayAddr = null;
+    private static volatile boolean sPurgedBvc2Cache = false;
 
     @Override
     public void hook(ClassLoader classLoader) {
@@ -254,25 +255,36 @@ public class WatermarkBypassHook implements BaseHook {
                 if (video == null) return;
 
                 try {
-                    Object playAddr = null;
-                    if (ModuleConfig.forceHighestQuality) {
-                        playAddr = VideoQualityHook.getHighestQualityPlayAddr(video);
-                    }
-                    if (playAddr == null) {
-                        playAddr = XposedHelpers.callMethod(video, "getPlayAddr");
-                    }
+                    String sourceTag = "highestCompatible";
+                    Object playAddr = VideoQualityHook.getHighestCompatibleDownloadPlayAddr(video);
                     if (playAddr == null) {
                         playAddr = XposedHelpers.callMethod(video, "getPlayAddrH264");
+                        sourceTag = "getPlayAddrH264";
+                    }
+                    if (playAddr == null) {
+                        playAddr = XposedHelpers.callMethod(video, "getH264PlayAddr");
+                        sourceTag = "getH264PlayAddr";
                     }
                     if (playAddr == null) {
                         playAddr = XposedHelpers.callMethod(video, "getPlayAddrBytevc1");
+                        if (!VideoQualityHook.isCompatiblePlayAddr(playAddr)) playAddr = null;
+                        sourceTag = "getPlayAddrBytevc1";
                     }
                     if (playAddr == null) {
+                        Object rawPlay = XposedHelpers.callMethod(video, "getPlayAddr");
+                        if (VideoQualityHook.isCompatiblePlayAddr(rawPlay)) {
+                            playAddr = rawPlay;
+                            sourceTag = "getPlayAddr";
+                        }
+                    }
+                    if (playAddr == null && VideoQualityHook.isCompatiblePlayAddr(sLastPlayedPlayAddr)) {
                         playAddr = sLastPlayedPlayAddr;
+                        sourceTag = "sLastPlayed";
                     }
                     if (playAddr != null) {
                         sLastPlayedPlayAddr = playAddr;
                         param.setResult(playAddr);
+                        XposedBridge.log(TAG + ": " + param.method.getName() + " -> " + sourceTag);
                     }
                 } catch (Throwable ignored) {}
             }
@@ -290,6 +302,50 @@ public class WatermarkBypassHook implements BaseHook {
                 Log.d(TAG, "Video." + method + " hook failed: " + t.getMessage());
             }
         }
+    }
+
+    private static void purgeStaleByteVC2CacheOnce(final Context ctx) {
+        if (sPurgedBvc2Cache || ctx == null) return;
+        sPurgedBvc2Cache = true;
+        new Thread(() -> {
+            try {
+                File extFiles = ctx.getExternalFilesDir(null);
+                if (extFiles == null) return;
+                File shareOut = new File(extFiles, "share/out");
+                if (!shareOut.exists() || !shareOut.isDirectory()) return;
+                File[] files = shareOut.listFiles();
+                if (files == null) return;
+                int removed = 0;
+                for (File f : files) {
+                    if (f != null && f.isFile() && f.getName().endsWith(".mp4") && isByteVC2File(f)) {
+                        if (f.delete()) removed++;
+                    }
+                }
+                if (removed > 0) {
+                    XposedBridge.log(TAG + ": Purged " + removed + " stale ByteVC2 (bvc2) cached download(s) from share/out");
+                }
+            } catch (Throwable ignored) {}
+        }).start();
+    }
+
+    private static boolean isByteVC2File(File file) {
+        if (file == null || !file.exists()) return false;
+        try (java.io.FileInputStream fis = new java.io.FileInputStream(file)) {
+            int maxRead = (int) Math.min(file.length(), 16384);
+            byte[] buf = new byte[maxRead];
+            int read = 0;
+            while (read < maxRead) {
+                int n = fis.read(buf, read, maxRead - read);
+                if (n <= 0) break;
+                read += n;
+            }
+            for (int i = 0; i <= read - 4; i++) {
+                if (buf[i] == 'b' && buf[i + 1] == 'v' && buf[i + 2] == 'c' && buf[i + 3] == '2') {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {}
+        return false;
     }
 
     private void hookWatermarkService(ClassLoader classLoader) {
@@ -324,6 +380,10 @@ public class WatermarkBypassHook implements BaseHook {
                     if (inputPath != null && outPath != null && listener != null) {
                         File inputFile = new File(inputPath);
                         if (inputFile.exists() && inputFile.length() > 0) {
+                            if (isByteVC2File(inputFile)) {
+                                XposedBridge.log(TAG + ": inputFile is ByteVC2 (bvc2), letting TikTok transcode without watermark for Gallery compatibility");
+                                return;
+                            }
                             File outFile = new File(outPath);
                             if (outFile.exists()) {
                                 outFile.delete();
@@ -609,6 +669,9 @@ public class WatermarkBypassHook implements BaseHook {
                 XposedBridge.hookAllMethods(shareExtClass, "LJII", new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        if (param.args != null && param.args.length > 0 && param.args[0] instanceof Context) {
+                            purgeStaleByteVC2CacheOnce((Context) param.args[0]);
+                        }
                         if (param.args != null && param.args.length >= 4) {
                             if (ModuleConfig.bypassDownloadRestriction || ModuleConfig.downloadStory) {
                                 param.setResult(true);
@@ -621,6 +684,9 @@ public class WatermarkBypassHook implements BaseHook {
                 XposedBridge.hookAllMethods(shareExtClass, "LJJJI", new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        if (param.args != null && param.args.length > 0 && param.args[0] instanceof Context) {
+                            purgeStaleByteVC2CacheOnce((Context) param.args[0]);
+                        }
                         if (param.args != null && param.args.length >= 4) {
                             if (ModuleConfig.bypassDownloadRestriction || ModuleConfig.downloadStory) {
                                 param.setResult(true);

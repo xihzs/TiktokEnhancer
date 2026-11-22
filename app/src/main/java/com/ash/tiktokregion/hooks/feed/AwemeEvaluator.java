@@ -32,12 +32,16 @@ public final class AwemeEvaluator {
     private AwemeEvaluator() {}
 
     public static int evaluate(Object aweme, boolean isFyp, boolean isColdStart) {
+        return evaluate(aweme, isFyp, isColdStart, false);
+    }
+
+    public static int evaluate(Object aweme, boolean isFyp, boolean isColdStart, boolean isProfile) {
         if (aweme == null) {
             return DECISION_KEEP;
         }
 
-        // 1. Check Ad / Commercial (hard discard everywhere)
-        if (ModuleConfig.hideAds && isAdAweme(aweme)) {
+        // 1. Check Ad / Commercial (hard discard on feeds, NEVER drop creator's own profile posts)
+        if (!isProfile && ModuleConfig.hideAds && isAdAweme(aweme)) {
             return DECISION_DISCARD_AD;
         }
 
@@ -61,7 +65,7 @@ public final class AwemeEvaluator {
         }
 
         // 4. Check Force Region (Strict vs Smart) - ONLY applies to FYP recommendation feed!
-        if (isFyp) {
+        if (isFyp && !isProfile) {
             boolean strict = ModuleConfig.strictForceRegion;
             boolean smart = !isColdStart && !ModuleConfig.strictForceRegion && ModuleConfig.forceRegion;
             if (strict || smart) {
@@ -106,49 +110,70 @@ public final class AwemeEvaluator {
     }
 
     public static boolean isAdAweme(Object aweme) {
-        if (aweme == null) return false;
+        String reason = getAdReason(aweme);
+        if (reason != null) {
+            String desc = "";
+            try {
+                Object d = XposedHelpers.getObjectField(aweme, "desc");
+                if (d == null) d = XposedHelpers.callMethod(aweme, "getDesc");
+                if (d != null) desc = d.toString();
+                if (desc.length() > 40) desc = desc.substring(0, 40);
+            } catch (Throwable ignored) {}
+            XposedBridge.log("TikTokFeedFilter: isAdAweme=true reason=" + reason + " desc=[" + desc + "]");
+            return true;
+        }
+        return false;
+    }
+
+    public static String getAdReason(Object aweme) {
+        if (aweme == null) return null;
 
         try {
             Object isAd = XposedHelpers.callMethod(aweme, "isAd");
-            if (isTruthy(isAd)) return true;
+            if (isTruthy(isAd)) return "isAd_method";
         } catch (Throwable ignored) {}
 
         try {
             Object isAdField = XposedHelpers.getObjectField(aweme, "isAd");
-            if (isTruthy(isAdField)) return true;
+            if (isTruthy(isAdField)) return "isAd_field";
+        } catch (Throwable ignored) {}
+
+        try {
+            Object isAdPriv = XposedHelpers.getObjectField(aweme, "_isAd");
+            if (isTruthy(isAdPriv)) return "_isAd_field";
         } catch (Throwable ignored) {}
 
         try {
             Object rawAd = XposedHelpers.callMethod(aweme, "getAwemeRawAd");
-            if (rawAd != null) return true;
+            if (rawAd != null) return "awemeRawAd_method";
         } catch (Throwable ignored) {}
 
         try {
             Object rawAdField = XposedHelpers.getObjectField(aweme, "awemeRawAd");
-            if (rawAdField != null) return true;
+            if (rawAdField != null) return "awemeRawAd_field";
         } catch (Throwable ignored) {}
 
         try {
             Object type = XposedHelpers.callMethod(aweme, "getAwemeType");
             if (type instanceof Number) {
                 int t = ((Number) type).intValue();
-                if (t == 2 || t == 101 || t == 34 || t == 35) return true;
+                if (t == 2 || t == 101 || t == 34 || t == 35) return "awemeType=" + t;
             }
         } catch (Throwable ignored) {}
 
         try {
             Object isSoftAd = XposedHelpers.callMethod(aweme, "isSoftAd");
-            if (isTruthy(isSoftAd)) return true;
+            if (isTruthy(isSoftAd)) return "isSoftAd_method";
         } catch (Throwable ignored) {}
 
         try {
             Object isSoftAdField = XposedHelpers.getObjectField(aweme, "_isSoftAd");
-            if (isTruthy(isSoftAdField)) return true;
+            if (isTruthy(isSoftAdField)) return "_isSoftAd_field";
         } catch (Throwable ignored) {}
 
         try {
             Object isPaid = XposedHelpers.callMethod(aweme, "isPaidContent");
-            if (isTruthy(isPaid)) return true;
+            if (isTruthy(isPaid)) return "isPaidContent";
         } catch (Throwable ignored) {}
 
         try {
@@ -156,9 +181,9 @@ public final class AwemeEvaluator {
             if (linkAd == null) linkAd = XposedHelpers.callMethod(aweme, "getLinkAdData");
             if (linkAd != null) {
                 Object btnText = XposedHelpers.getObjectField(linkAd, "buttonText");
-                if (btnText instanceof String && !((String) btnText).trim().isEmpty()) return true;
+                if (btnText instanceof String && !((String) btnText).trim().isEmpty()) return "linkAd_btn=" + btnText;
                 Object webUrl = XposedHelpers.getObjectField(linkAd, "webUrl");
-                if (webUrl instanceof String && !((String) webUrl).trim().isEmpty()) return true;
+                if (webUrl instanceof String && !((String) webUrl).trim().isEmpty()) return "linkAd_url=" + webUrl;
             }
         } catch (Throwable ignored) {}
 
@@ -166,16 +191,9 @@ public final class AwemeEvaluator {
             Object promoteModel = XposedHelpers.getObjectField(aweme, "promoteModel");
             if (promoteModel == null) promoteModel = XposedHelpers.callMethod(aweme, "getPromoteModel");
             if (promoteModel != null) {
-                Object icon = XposedHelpers.callMethod(promoteModel, "getPromoteIconText");
-                if (icon instanceof String && !((String) icon).trim().isEmpty()) return true;
-                Object label = XposedHelpers.callMethod(promoteModel, "getPromoteLabelText");
-                if (label instanceof String && !((String) label).trim().isEmpty()) return true;
+                Object isPromoAdLabel = XposedHelpers.getObjectField(promoteModel, "isPromoteAdLabel");
+                if (isTruthy(isPromoAdLabel)) return "promoteModel_isPromoteAdLabel";
             }
-        } catch (Throwable ignored) {}
-
-        try {
-            Object promoteIcon = XposedHelpers.callMethod(aweme, "getPromoteIconText");
-            if (promoteIcon instanceof String && !((String) promoteIcon).trim().isEmpty()) return true;
         } catch (Throwable ignored) {}
 
         try {
@@ -183,9 +201,9 @@ public final class AwemeEvaluator {
             if (commVideo == null) commVideo = XposedHelpers.getObjectField(aweme, "commercialVideoInfo");
             if (commVideo != null) {
                 Object ibeInfos = XposedHelpers.getObjectField(commVideo, "ibeInfos");
-                if (ibeInfos instanceof List && !((List<?>) ibeInfos).isEmpty()) return true;
+                if (ibeInfos instanceof List && !((List<?>) ibeInfos).isEmpty()) return "ibeInfos";
                 Object ibeMeta = XposedHelpers.getObjectField(commVideo, "ibeMetaInfo");
-                if (ibeMeta instanceof String && !((String) ibeMeta).trim().isEmpty()) return true;
+                if (ibeMeta instanceof String && !((String) ibeMeta).trim().isEmpty()) return "ibeMetaInfo=" + ibeMeta;
             }
         } catch (Throwable ignored) {}
 
@@ -194,33 +212,33 @@ public final class AwemeEvaluator {
             if (commSticker == null) commSticker = XposedHelpers.getObjectField(aweme, "commerceStickerInfo");
             if (commSticker != null) {
                 Object openUrl = XposedHelpers.getObjectField(commSticker, "openUrl");
-                if (openUrl instanceof String && !((String) openUrl).trim().isEmpty()) return true;
+                if (openUrl instanceof String && !((String) openUrl).trim().isEmpty()) return "commSticker_openUrl=" + openUrl;
                 Object letters = XposedHelpers.getObjectField(commSticker, "letters");
-                if (letters instanceof String && !((String) letters).trim().isEmpty()) return true;
+                if (letters instanceof String && !((String) letters).trim().isEmpty()) return "commSticker_letters=" + letters;
             }
         } catch (Throwable ignored) {}
 
         try {
             Object brandAccounts = XposedHelpers.callMethod(aweme, "getBrandContentAccounts");
             if (brandAccounts == null) brandAccounts = XposedHelpers.getObjectField(aweme, "brandContentAccounts");
-            if (brandAccounts instanceof List && !((List<?>) brandAccounts).isEmpty()) return true;
+            if (brandAccounts instanceof List && !((List<?>) brandAccounts).isEmpty()) return "brandContentAccounts";
         } catch (Throwable ignored) {}
 
         try {
             Object fakeUser = XposedHelpers.callMethod(aweme, "withFakeUser");
-            if (isTruthy(fakeUser)) return true;
+            if (isTruthy(fakeUser)) return "withFakeUser";
         } catch (Throwable ignored) {}
 
         try {
             Object promoMusic = XposedHelpers.callMethod(aweme, "isWithPromotionalMusic");
-            if (isTruthy(promoMusic)) return true;
+            if (isTruthy(promoMusic)) return "isWithPromotionalMusic";
         } catch (Throwable ignored) {}
 
-        if (isPromotedMusic(aweme)) return true;
+        if (isPromotedMusic(aweme)) return "isPromotedMusic";
 
         try {
             Object isLiveAd = XposedHelpers.callMethod(aweme, "isLiveAd");
-            if (isTruthy(isLiveAd)) return true;
+            if (isTruthy(isLiveAd)) return "isLiveAd";
         } catch (Throwable ignored) {}
 
         // Sponsored / Promotional Captions & Hashtags (e.g. #ediktedad, discount codes)
@@ -228,7 +246,7 @@ public final class AwemeEvaluator {
             Object desc = XposedHelpers.callMethod(aweme, "getDesc");
             if (desc == null) desc = XposedHelpers.getObjectField(aweme, "desc");
             if (desc instanceof String && isSponsoredOrAdText((String) desc)) {
-                return true;
+                return "desc_sponsored";
             }
         } catch (Throwable ignored) {}
 
@@ -240,12 +258,12 @@ public final class AwemeEvaluator {
                 String s = ((String) uploadMisc).toLowerCase(Locale.ROOT);
                 if (s.contains("\"is_promoted\":true") || s.contains("\"is_ad\":true")
                         || s.contains("\"has_ad\":true")) {
-                    return true;
+                    return "uploadMisc_ad";
                 }
             }
         } catch (Throwable ignored) {}
 
-        return false;
+        return null;
     }
 
     public static boolean isPromotedMusic(Object aweme) {
@@ -270,11 +288,14 @@ public final class AwemeEvaluator {
             if (promoId instanceof String && !((String) promoId).trim().isEmpty()) return true;
         } catch (Throwable ignored) {}
 
-        // 2. Aweme musicPromoTagInfo (matches VideoMusicTitleAssem.os exactly)
+        // 2. Aweme musicPromoTagInfo (matches VideoMusicTitleAssem.os / constructor marker)
         try {
             Object tagInfo = XposedHelpers.getObjectField(aweme, "musicPromoTagInfo");
             if (tagInfo == null) tagInfo = XposedHelpers.callMethod(aweme, "getMusicPromoTagInfo");
             if (tagInfo != null) {
+                if (Boolean.TRUE.equals(XposedHelpers.getAdditionalInstanceField(tagInfo, "tiktok_enhancer_is_promo_music"))) {
+                    return true;
+                }
                 Object text = XposedHelpers.getObjectField(tagInfo, "text");
                 if (text instanceof String && !((String) text).trim().isEmpty()) return true;
             }
